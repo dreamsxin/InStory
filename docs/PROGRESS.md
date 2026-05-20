@@ -56,6 +56,8 @@
 - 新增 `StoryStore`，将 stories、worlds、characters、story_anchors 写入 SQLite 表。
 - `StoryCatalog` 改为从 SQLite 读取故事配置，并在空库时从 `stories.seed.json` 自动导入。
 - 新增 `StoryStore` 单元测试。
+- 新增 `docs/PRODUCT_PLAN.md`，将 README 中的产品规划内容迁入独立文档。
+- README 收敛为开源项目入口，仅保留项目概览、当前状态、技术栈、代码结构、文档导航和开发启动说明。
 
 ### 验证结果
 
