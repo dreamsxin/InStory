@@ -48,6 +48,15 @@ export class OpenAICompatibleNarrativeProvider implements LLMProvider {
             role: "user",
             content: JSON.stringify({
               userInput: input.userInput,
+              intent: input.intent ?? "reader_action",
+              story: input.story
+                ? {
+                    summary: input.story.story,
+                    world: input.story.world,
+                    characters: input.story.characters,
+                    anchors: input.story.anchors
+                  }
+                : null,
               readerRole: input.session.readerRole,
               currentState: input.session.state,
               recentTurns: input.session.turns.slice(-6).map((turn) => ({
@@ -90,6 +99,10 @@ function buildSystemPrompt(): string {
   return [
     "你是 InStory 的 AI 叙事编排器，负责生成受控的互动小说下一回合。",
     "必须使用第二人称“你”推进故事，保持悬疑感和明确行动压力。",
+    "当 intent 是 read_segment 时，这是读者点击“继续阅读”，不是角色说话或行动；不要复述 userInput，不要写成聊天回复，要按最近剧情、故事世界和锚点自然写下一段小说。",
+    "当 intent 是 reader_action 时，才把 userInput 当成读者角色的明确行动或台词处理。",
+    "优先遵守 story.world、story.characters 和 story.anchors；required 锚点要逐步推进，forbidden 锚点禁止提前发生。",
+    "每次 narration 应形成一个完整小节，有场景推进、可观察细节和新的悬念；避免只回应一句话。",
     "输出只能是 JSON 对象，不要使用 Markdown，不要添加解释。",
     "JSON 字段必须包含 narration、dialogues、choices、stateDelta、memoryEvents。",
     "memoryEvents 必须是字符串数组，例如 [\"你记住了门外脚步声异常。\"]，禁止输出对象数组。",

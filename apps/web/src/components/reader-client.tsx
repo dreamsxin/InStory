@@ -16,7 +16,7 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
   const [error, setError] = useState<string | null>(null);
   const latestTurn = session.turns.at(-1);
 
-  async function submit(content: string, inputType: "free_text" | "choice", choiceId?: string) {
+  async function submit(content: string, inputType: "free_text" | "choice" | "read_continue", choiceId?: string) {
     if (!content.trim()) {
       return;
     }
@@ -74,7 +74,7 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
             <Button
               className="continue-reading-button w-full min-w-0 sm:w-auto md:min-w-48"
               isDisabled={loading}
-              onPress={() => void submit("继续阅读：请按当前角色倾向自然推进下一小节。", "free_text")}
+              onPress={() => void submit("阅读推进", "read_continue")}
             >
               {loading ? "生成中..." : "继续阅读"}
             </Button>

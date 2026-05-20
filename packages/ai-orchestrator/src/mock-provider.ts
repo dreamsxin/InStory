@@ -4,10 +4,14 @@ import type { GenerateNarrativeInput, LLMProvider } from "./provider.js";
 export class MockNarrativeProvider implements LLMProvider {
   async generateNarrative(input: GenerateNarrativeInput): Promise<NarrativeResult> {
     const turn = input.session.state.turnCount + 1;
+    const latestChoice = input.session.turns.at(-1)?.choices[0]?.text ?? "顺着当前线索继续观察";
+    const isReadSegment = input.intent === "read_segment";
     const clue = turn === 1 ? "门外来客知道你的名字" : `第 ${turn} 回合留下的异常细节`;
 
     return {
-      narration: `你刚做出决定，屋外的雨声忽然压低了一瞬。${input.userInput} 这句话像一枚石子落进黑暗，屏风后传来极轻的呼吸声。陆清河抬手示意你别动，目光却越过你，看向那扇没有关严的门。`,
+      narration: isReadSegment
+        ? `雨声顺着窗缝渗进屋内，旧宅的黑暗像被慢慢翻开的一页。你没有急着发问，只沿着上一幕留下的线索继续往前。${latestChoice} 这件事在心里沉下去时，门外的脚步声忽然停住，屏风后的呼吸也随之变轻。陆清河抬手示意你别动，目光却越过你，看向那扇没有关严的门。`
+        : `你刚做出决定，屋外的雨声忽然压低了一瞬。${input.userInput} 这句话像一枚石子落进黑暗，屏风后传来极轻的呼吸声。陆清河抬手示意你别动，目光却越过你，看向那扇没有关严的门。`,
       dialogues: [
         {
           speaker: "陆清河",
@@ -44,7 +48,11 @@ export class MockNarrativeProvider implements LLMProvider {
           heard_footsteps: true
         }
       },
-      memoryEvents: [`第 ${turn} 回合，玩家选择「${input.userInput}」，并获得线索：${clue}。`]
+      memoryEvents: [
+        isReadSegment
+          ? `第 ${turn} 回合，故事按上一幕线索自然推进，并获得线索：${clue}。`
+          : `第 ${turn} 回合，玩家选择「${input.userInput}」，并获得线索：${clue}。`
+      ]
     };
   }
 }

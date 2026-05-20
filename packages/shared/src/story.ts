@@ -1,6 +1,6 @@
 export type EntryMode = "existing_character" | "custom_role" | "blind";
 
-export type TurnInputType = "free_text" | "choice";
+export type TurnInputType = "free_text" | "choice" | "read_continue";
 
 export type RiskLevel = "low" | "medium" | "high";
 

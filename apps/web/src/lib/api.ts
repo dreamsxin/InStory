@@ -246,7 +246,7 @@ export async function getSession(sessionId: string): Promise<StorySession> {
 export async function createTurn(params: {
   sessionId: string;
   content: string;
-  inputType: "free_text" | "choice";
+  inputType: "free_text" | "choice" | "read_continue";
   choiceId?: string | null;
 }): Promise<CreateTurnResponse> {
   const response = await fetch(`${API_BASE}/api/sessions/${params.sessionId}/turns`, {

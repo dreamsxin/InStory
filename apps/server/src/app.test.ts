@@ -117,6 +117,26 @@ describe("server API", () => {
     );
   });
 
+  it("advances reading segments without storing the old instruction prompt", async () => {
+    const created = await createSession();
+    const sessionId = created.session.id;
+
+    const turnResponse = await app.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/turns`,
+      payload: {
+        inputType: "read_continue",
+        content: "阅读推进"
+      }
+    });
+    const turnBody = turnResponse.json<CreateTurnResponse>();
+
+    expect(turnResponse.statusCode).toBe(200);
+    expect(turnBody.turn.inputType).toBe("read_continue");
+    expect(turnBody.turn.input).toBe("阅读推进");
+    expect(turnBody.turn.narration).not.toContain("继续阅读：请按当前角色倾向自然推进下一小节");
+  });
+
   it("returns one latest reading record per story", async () => {
     const older = await createSession();
     await createSession();

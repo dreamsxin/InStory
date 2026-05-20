@@ -1,8 +1,10 @@
-import type { NarrativeResult, StorySession } from "@instory/shared";
+import type { NarrativeResult, StoryDetail, StorySession } from "@instory/shared";
 
 export interface GenerateNarrativeInput {
   session: StorySession;
+  story?: StoryDetail;
   userInput: string;
+  intent?: "reader_action" | "read_segment";
 }
 
 export interface LLMProvider {

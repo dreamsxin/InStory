@@ -419,7 +419,9 @@ export async function buildApp(options: BuildAppOptions) {
 
     const result = await options.modelRuntime.getProvider().generateNarrative({
       session,
-      userInput: parsed.data.content
+      story: options.storyCatalog.findStory(session.storyId) ?? undefined,
+      userInput: parsed.data.content,
+      intent: parsed.data.inputType === "read_continue" ? "read_segment" : "reader_action"
     });
     const nextState = applyStateDelta(session.state, result.stateDelta);
     const now = new Date().toISOString();

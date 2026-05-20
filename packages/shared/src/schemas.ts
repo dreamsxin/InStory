@@ -46,7 +46,7 @@ export const createReaderProfileRequestSchema = readerProfileSchema
   });
 
 export const createTurnRequestSchema = z.object({
-  inputType: z.enum(["free_text", "choice"]),
+  inputType: z.enum(["free_text", "choice", "read_continue"]),
   content: z.string().min(1).max(2000),
   choiceId: z.string().nullish()
 });
