@@ -14,6 +14,7 @@ describe("ReaderProfileStore", () => {
     try {
       const profile = store.create({
         ownerId: "local-reader",
+        visibility: "private",
         name: "林向晚",
         gender: "女",
         personality: "冷静、好奇、习惯先观察再行动。",
@@ -24,7 +25,8 @@ describe("ReaderProfileStore", () => {
       expect(profile.id).toMatch(/^profile_/);
       expect(store.findById(profile.id)).toMatchObject({
         name: "林向晚",
-        ownerId: "local-reader"
+        ownerId: "local-reader",
+        visibility: "private"
       });
       expect(store.listByOwner("local-reader")).toHaveLength(1);
       expect(store.listByOwner("other-reader")).toHaveLength(0);
@@ -32,12 +34,14 @@ describe("ReaderProfileStore", () => {
       const updated = store.update(profile.id, "local-reader", {
         name: "林向晚修订",
         gender: null,
+        visibility: "public",
         personality: "冷静、果断。",
         avatarUrl: null,
         description: "重新设定后的入戏角色。"
       });
       expect(updated).toMatchObject({
         id: profile.id,
+        visibility: "public",
         name: "林向晚修订",
         gender: null,
         avatarUrl: null
@@ -45,6 +49,7 @@ describe("ReaderProfileStore", () => {
       expect(store.update(profile.id, "other-reader", {
         name: "越权",
         gender: null,
+        visibility: "public",
         personality: "越权",
         avatarUrl: null,
         description: "越权"

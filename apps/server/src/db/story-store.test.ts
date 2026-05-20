@@ -18,6 +18,7 @@ describe("StoryStore", () => {
 
       expect(store.countStories()).toBe(1);
       expect(store.listStories()[0]?.id).toBe("rain-mansion");
+      expect(store.listPublicStories()[0]?.id).toBe("rain-mansion");
 
       const detail = store.findStory("rain-mansion");
       expect(detail?.world.locations).toHaveLength(3);
@@ -62,6 +63,7 @@ describe("StoryStore", () => {
         tagline: "新的故事标语",
         genre: "悬疑测试",
         coverUrl: "https://example.com/cover.png",
+        visibility: "public",
         aiFreedom: "high",
         experienceMode: "scripted",
         defaultSegmentLength: "long"
@@ -69,6 +71,7 @@ describe("StoryStore", () => {
 
       expect(updated).toMatchObject({
         id: "rain-mansion",
+        visibility: "public",
         title: "雨夜旧宅：修订版",
         coverUrl: "https://example.com/cover.png",
         aiFreedom: "high",
@@ -103,6 +106,7 @@ describe("StoryStore", () => {
         tagline: "你在午夜市集里寻找被偷走的名字。",
         genre: "奇幻悬疑",
         coverUrl: "https://example.com/moon-market.png",
+        visibility: "private",
         premise: "午夜之后，城市背面的市集会向失去名字的人开放。",
         openingLocationName: "市集入口",
         openingLocationDescription: "湿漉漉的石阶向下延伸，灯笼照出一排没有影子的摊位。",
@@ -125,7 +129,8 @@ describe("StoryStore", () => {
 
       expect(created.story).toMatchObject({
         id: "moon-market",
-        ownerId: null
+        ownerId: null,
+        visibility: "private"
       });
       expect(created.story.coverUrl).toBe("https://example.com/moon-market.png");
       expect(created.world.locations).toHaveLength(1);

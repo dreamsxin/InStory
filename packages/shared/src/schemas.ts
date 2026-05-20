@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const visibilitySchema = z.enum(["private", "public"]);
+
 export const createSessionRequestSchema = z.object({
   entryMode: z.enum(["existing_character", "custom_role", "blind"]),
   characterId: z.string().nullish(),
@@ -18,6 +20,7 @@ export const createSessionRequestSchema = z.object({
 export const readerProfileSchema = z.object({
   id: z.string().min(1),
   ownerId: z.string().min(1),
+  visibility: visibilitySchema.default("private"),
   name: z.string().min(1).max(40),
   gender: z.string().max(40).nullable(),
   personality: z.string().min(1).max(1200),
@@ -33,11 +36,13 @@ export const createReaderProfileRequestSchema = readerProfileSchema
     gender: true,
     personality: true,
     avatarUrl: true,
-    description: true
+    description: true,
+    visibility: true
   })
   .extend({
     gender: z.string().max(40).nullish(),
-    avatarUrl: z.string().max(2000).nullish()
+    avatarUrl: z.string().max(2000).nullish(),
+    visibility: visibilitySchema.default("private")
   });
 
 export const createTurnRequestSchema = z.object({
@@ -79,6 +84,7 @@ export const narrativeResultSchema = z.object({
 export const storySummarySchema = z.object({
   id: z.string().min(1),
   ownerId: z.string().min(1).nullable(),
+  visibility: visibilitySchema.default("public"),
   title: z.string().min(1),
   tagline: z.string().min(1),
   genre: z.string().min(1),
@@ -101,6 +107,7 @@ export const createStoryRequestSchema = storySummarySchema
     openingLocationDescription: z.string().min(1).max(1000),
     worldRules: z.array(z.string().min(1).max(500)).max(20),
     castProfileIds: z.array(z.string().min(1)).max(12).optional(),
+    visibility: visibilitySchema.default("private"),
     aiFreedom: z.enum(["low", "medium", "high"]).default("medium")
   });
 

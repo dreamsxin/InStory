@@ -814,6 +814,18 @@ a {
   gap: 8px;
 }
 
+.tag-row.compact {
+  margin-top: 6px;
+  gap: 6px;
+}
+
+.story-management-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .tag {
   border: 1px solid var(--line);
   background: #fbfcfd;

@@ -33,6 +33,10 @@ export class StoryCatalog {
     return this.store.listStories();
   }
 
+  listPublicStories(): StorySummary[] {
+    return this.store.listPublicStories();
+  }
+
   listStoriesByOwner(ownerId: string): StorySummary[] {
     return this.store.listStoriesByOwner(ownerId);
   }

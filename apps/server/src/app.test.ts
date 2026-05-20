@@ -155,6 +155,7 @@ describe("server API", () => {
       payload: {
         name: "林向晚",
         gender: "女",
+        visibility: "private",
         personality: "冷静、敏感、习惯先观察再行动。",
         avatarUrl: "https://example.com/avatar.png",
         description: "现代法医，被卷入雨夜旧宅。"
@@ -197,6 +198,7 @@ describe("server API", () => {
       payload: {
         name: "林向晚修订",
         gender: null,
+        visibility: "public",
         personality: "冷静、果断。",
         avatarUrl: null,
         description: "重写后的角色背景。"
@@ -206,6 +208,7 @@ describe("server API", () => {
     expect(updatedProfile.json()).toMatchObject({
       profile: {
         id: profile.id,
+        visibility: "public",
         name: "林向晚修订",
         gender: null,
         avatarUrl: null
@@ -375,6 +378,7 @@ describe("server API", () => {
         tagline: "你在雨声里改写旧宅命运。",
         genre: "悬疑互动",
         coverUrl: "https://example.com/rain-cover.png",
+        visibility: "public",
         aiFreedom: "high",
         experienceMode: "scripted",
         defaultSegmentLength: "long"
@@ -386,6 +390,7 @@ describe("server API", () => {
       story: {
         id: "rain-mansion",
         ownerId: null,
+        visibility: "public",
         title: "雨夜旧宅：作者修订",
         tagline: "你在雨声里改写旧宅命运。",
         genre: "悬疑互动",
@@ -410,6 +415,7 @@ describe("server API", () => {
         tagline: "missing",
         genre: "missing",
         coverUrl: null,
+        visibility: "public",
         aiFreedom: "low",
         experienceMode: "coauthored",
         defaultSegmentLength: "standard"
@@ -425,6 +431,7 @@ describe("server API", () => {
       payload: {
         name: "林向晚",
         gender: "女",
+        visibility: "private",
         personality: "冷静、敏锐、习惯观察细节。",
         avatarUrl: null,
         description: "被卷入市集的现代法医。"
@@ -446,6 +453,7 @@ describe("server API", () => {
         openingLocationDescription: "湿漉漉的石阶向下延伸，灯笼照出一排没有影子的摊位。",
         worldRules: ["不能直接说出真名", "交易必须付出记忆"],
         castProfileIds: [profileId],
+        visibility: "private",
         aiFreedom: "medium",
         experienceMode: "coauthored",
         defaultSegmentLength: "standard"
@@ -457,6 +465,7 @@ describe("server API", () => {
       story: {
         id: "moon-market",
         ownerId: "local-reader",
+        visibility: "private",
         title: "月下市集",
         coverUrl: "https://example.com/moon-market.png"
       },
@@ -487,6 +496,14 @@ describe("server API", () => {
       expect.objectContaining({ id: "moon-market" })
     );
 
+    const publicStoriesBeforePublish = await app.inject({
+      method: "GET",
+      url: "/api/stories"
+    });
+    expect(publicStoriesBeforePublish.json<{ stories: Array<{ id: string }> }>().stories).not.toContainEqual(
+      expect.objectContaining({ id: "moon-market" })
+    );
+
     const updated = await app.inject({
       method: "PUT",
       url: "/api/me/stories/moon-market",
@@ -495,6 +512,7 @@ describe("server API", () => {
         tagline: "你重新进入被名字交易支配的午夜市集。",
         genre: "奇幻",
         coverUrl: null,
+        visibility: "public",
         premise: "午夜市集只接待失去名字的人，交易会改变记忆。",
         openingLocationName: "旧钟楼下",
         openingLocationDescription: "钟声停在零点，雾气从台阶下涌上来。",
@@ -509,6 +527,7 @@ describe("server API", () => {
       story: {
         id: "moon-market",
         ownerId: "local-reader",
+        visibility: "public",
         title: "月下市集：修订",
         aiFreedom: "low",
         experienceMode: "scripted",
@@ -519,6 +538,14 @@ describe("server API", () => {
       }
     });
 
+    const publicStoriesAfterPublish = await app.inject({
+      method: "GET",
+      url: "/api/stories"
+    });
+    expect(publicStoriesAfterPublish.json<{ stories: Array<{ id: string }> }>().stories).toContainEqual(
+      expect.objectContaining({ id: "moon-market" })
+    );
+
     const updateSeedStory = await app.inject({
       method: "PUT",
       url: "/api/me/stories/rain-mansion",
@@ -527,6 +554,7 @@ describe("server API", () => {
         tagline: "不能修改",
         genre: "悬疑",
         coverUrl: null,
+        visibility: "public",
         premise: "不能修改",
         openingLocationName: "不能修改",
         openingLocationDescription: "不能修改",
@@ -547,6 +575,7 @@ describe("server API", () => {
         tagline: "重复",
         genre: "测试",
         coverUrl: null,
+        visibility: "private",
         premise: "重复",
         openingLocationName: "入口",
         openingLocationDescription: "入口",

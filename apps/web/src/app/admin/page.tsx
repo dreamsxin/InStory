@@ -133,6 +133,7 @@ export default async function AdminPage({
                 storyId={item.story.id}
                 tagline={item.story.tagline}
                 title={item.story.title}
+                visibility={item.story.visibility}
               />
             ))}
           </div>

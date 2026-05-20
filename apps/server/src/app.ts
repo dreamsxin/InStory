@@ -163,7 +163,7 @@ export async function buildApp(options: BuildAppOptions) {
   }));
 
   app.get("/api/stories", async () => ({
-    stories: options.storyCatalog.listStories()
+    stories: options.storyCatalog.listPublicStories()
   }));
 
   app.get("/api/me/stories", async () => ({

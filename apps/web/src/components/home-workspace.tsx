@@ -14,12 +14,11 @@ import {
   updateStoryAction
 } from "@/app/actions";
 
-type HomeTab = "stories" | "profiles" | "continue" | "create";
+type HomeTab = "stories" | "continue" | "create";
 type CreateTab = "profiles" | "stories";
 
 const navItems: Array<{ id: HomeTab; label: string; hint: string }> = [
   { id: "stories", label: "故事", hint: "Worlds" },
-  { id: "profiles", label: "角色", hint: "Profiles" },
   { id: "continue", label: "继续", hint: "Reading" },
   { id: "create", label: "创作", hint: "Create" }
 ];
@@ -84,7 +83,6 @@ export function HomeWorkspace({
 
       <section className="mobile-tab-panel">
         {activeTab === "stories" ? <StoriesView profiles={profiles} stories={stories} /> : null}
-        {activeTab === "profiles" ? <ProfilesView profiles={profiles} /> : null}
         {activeTab === "continue" ? <ContinueView profiles={profiles} stories={stories} /> : null}
         {activeTab === "create" ? <CreateView myStoryDetails={myStoryDetails} profiles={profiles} /> : null}
       </section>
@@ -121,41 +119,6 @@ function StoriesView({ profiles, stories }: { profiles: ReaderProfile[]; stories
           <StoryLauncher key={story.id} profiles={profiles} story={story} />
         ))}
       </div>
-    </div>
-  );
-}
-
-function ProfilesView({ profiles }: { profiles: ReaderProfile[] }) {
-  return (
-    <div className="app-section two-column-section">
-      <Card className="profile-panel">
-        <Card.Header className="section-heading">
-          <div>
-            <span className="eyebrow">Profiles</span>
-            <h2>我的角色</h2>
-          </div>
-        </Card.Header>
-        <Card.Content>
-          {profiles.length ? (
-            <div className="profile-list">
-              {profiles.map((profile) => (
-                <article className="profile-card large" key={profile.id}>
-                  <AvatarSeed name={profile.name} src={profile.avatarUrl} />
-                  <div>
-                    <strong>{profile.name}</strong>
-                    <p>{profile.personality}</p>
-                    <Chip color="accent" size="sm" variant="soft">{profile.gender ?? "未设定性别"}</Chip>
-                  </div>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <p className="muted">还没有角色。切到“创作”创建一个入戏身份。</p>
-          )}
-        </Card.Content>
-      </Card>
-
-      <CreateProfilePanel />
     </div>
   );
 }
@@ -229,12 +192,15 @@ function CreatorProfilesPanel({ profiles }: { profiles: ReaderProfile[] }) {
               {profiles.map((profile) => (
                 <details className="management-details" key={profile.id}>
                   <summary className="profile-card large management-summary">
-                  <AvatarSeed name={profile.name} src={profile.avatarUrl} />
-                  <div>
-                    <strong>{profile.name}</strong>
-                    <p>{profile.description}</p>
-                    <Chip color="accent" size="sm" variant="soft">{profile.gender ?? "未设定性别"}</Chip>
-                  </div>
+                    <AvatarSeed name={profile.name} src={profile.avatarUrl} />
+                    <div>
+                      <strong>{profile.name}</strong>
+                      <p>{profile.description}</p>
+                      <div className="tag-row compact">
+                        <Chip color="accent" size="sm" variant="soft">{profile.gender ?? "未设定性别"}</Chip>
+                        <Chip size="sm" variant="soft">{visibilityLabel(profile.visibility)}</Chip>
+                      </div>
+                    </div>
                   </summary>
                   <ProfileEditForm profile={profile} />
                 </details>
@@ -270,7 +236,10 @@ function CreatorStoriesPanel({ myStoryDetails, profiles }: { myStoryDetails: Sto
                       <strong>{detail.story.title}</strong>
                       <p>{detail.story.tagline}</p>
                     </div>
-                    <Chip size="sm" variant="soft">{detail.story.genre}</Chip>
+                    <div className="story-management-chips">
+                      <Chip size="sm" variant="soft">{detail.story.genre}</Chip>
+                      <Chip size="sm" variant="soft">{visibilityLabel(detail.story.visibility)}</Chip>
+                    </div>
                   </summary>
                   <StoryEditForm detail={detail} />
                 </details>
@@ -309,6 +278,19 @@ function ProfileEditForm({ profile }: { profile: ReaderProfile }) {
           <Label>头像 URL</Label>
           <Input defaultValue={profile.avatarUrl ?? ""} />
         </TextField>
+        <Select defaultSelectedKey={profile.visibility} name="visibility">
+          <Label>可见性</Label>
+          <Select.Trigger>
+            <Select.Value />
+            <Select.Indicator />
+          </Select.Trigger>
+          <Select.Popover>
+            <ListBox>
+              <ListBox.Item id="private" textValue="仅自己可见">仅自己可见<ListBox.ItemIndicator /></ListBox.Item>
+              <ListBox.Item id="public" textValue="公开可展示">公开可展示<ListBox.ItemIndicator /></ListBox.Item>
+            </ListBox>
+          </Select.Popover>
+        </Select>
         <TextField isRequired name="description">
           <Label>身份背景</Label>
           <TextArea defaultValue={profile.description} maxLength={2000} rows={3} />
@@ -355,6 +337,19 @@ function StoryEditForm({ detail }: { detail: StoryDetail }) {
             <Label>封面图 URL</Label>
             <Input defaultValue={detail.story.coverUrl ?? ""} />
           </TextField>
+          <Select defaultSelectedKey={detail.story.visibility} name="visibility">
+            <Label>可见性</Label>
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="private" textValue="仅自己可见">仅自己可见<ListBox.ItemIndicator /></ListBox.Item>
+                <ListBox.Item id="public" textValue="公开到故事探索">公开到故事探索<ListBox.ItemIndicator /></ListBox.Item>
+              </ListBox>
+            </Select.Popover>
+          </Select>
         </section>
 
         <section className="form-section">
@@ -484,6 +479,19 @@ function CreateStoryPanel({ profiles }: { profiles: ReaderProfile[] }) {
               <Label>封面图 URL</Label>
               <Input placeholder="用于故事卡片展示，后续可接上传或 AI 生图" />
             </TextField>
+            <Select defaultSelectedKey="private" name="visibility">
+              <Label>可见性</Label>
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="private" textValue="仅自己可见">仅自己可见<ListBox.ItemIndicator /></ListBox.Item>
+                  <ListBox.Item id="public" textValue="公开到故事探索">公开到故事探索<ListBox.ItemIndicator /></ListBox.Item>
+                </ListBox>
+              </Select.Popover>
+            </Select>
           </section>
 
           <section className="form-section">
@@ -619,6 +627,19 @@ function CreateProfilePanel() {
             <Label>头像 URL</Label>
             <Input placeholder="后续可接 AI 生成形象" />
           </TextField>
+          <Select defaultSelectedKey="private" name="visibility">
+            <Label>可见性</Label>
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="private" textValue="仅自己可见">仅自己可见<ListBox.ItemIndicator /></ListBox.Item>
+                <ListBox.Item id="public" textValue="公开可展示">公开可展示<ListBox.ItemIndicator /></ListBox.Item>
+              </ListBox>
+            </Select.Popover>
+          </Select>
           <TextField isRequired name="description">
             <Label>身份背景</Label>
             <TextArea maxLength={2000} placeholder="现代法医，被卷入雨夜旧宅谜案。" rows={3} />
@@ -645,4 +666,8 @@ function AvatarSeed({ name, src }: { name: string; src: string | null }) {
       <Avatar.Fallback>{name.slice(0, 1)}</Avatar.Fallback>
     </Avatar>
   );
+}
+
+function visibilityLabel(visibility: "private" | "public") {
+  return visibility === "public" ? "公开" : "仅自己可见";
 }

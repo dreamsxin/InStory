@@ -74,7 +74,8 @@ export function StorySummaryForm({
   locationsCount,
   storyId,
   tagline,
-  title
+  title,
+  visibility
 }: {
   aiFreedom: AIFreedom;
   anchorsCount: number;
@@ -87,6 +88,7 @@ export function StorySummaryForm({
   storyId: string;
   tagline: string;
   title: string;
+  visibility: "private" | "public";
 }) {
   return (
     <form className="story-editor-row" action={updateStorySummaryAction}>
@@ -107,6 +109,19 @@ export function StorySummaryForm({
         <Label>封面 URL</Label>
         <Input />
       </TextField>
+      <Select defaultSelectedKey={visibility} name="visibility">
+        <Label>可见性</Label>
+        <Select.Trigger>
+          <Select.Value />
+          <Select.Indicator />
+        </Select.Trigger>
+        <Select.Popover>
+          <ListBox>
+            <ListBox.Item id="public" textValue="public">public<ListBox.ItemIndicator /></ListBox.Item>
+            <ListBox.Item id="private" textValue="private">private<ListBox.ItemIndicator /></ListBox.Item>
+          </ListBox>
+        </Select.Popover>
+      </Select>
       <Select defaultSelectedKey={aiFreedom} name="aiFreedom">
         <Label>AI 自由度</Label>
         <Select.Trigger>

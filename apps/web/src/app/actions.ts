@@ -16,13 +16,15 @@ export async function createReaderProfileAction(formData: FormData) {
   const personality = String(formData.get("personality") ?? "").trim();
   const avatarUrl = String(formData.get("avatarUrl") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
+  const visibility = formData.get("visibility") === "public" ? "public" : "private";
 
   await createReaderProfile({
     name,
     gender: gender || null,
     personality,
     avatarUrl: avatarUrl || null,
-    description
+    description,
+    visibility
   });
 
   revalidatePath("/");
@@ -35,13 +37,15 @@ export async function updateReaderProfileAction(formData: FormData) {
   const personality = String(formData.get("personality") ?? "").trim();
   const avatarUrl = String(formData.get("avatarUrl") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
+  const visibility = formData.get("visibility") === "public" ? "public" : "private";
 
   await updateReaderProfile(profileId, {
     name,
     gender: gender || null,
     personality,
     avatarUrl: avatarUrl || null,
-    description
+    description,
+    visibility
   });
 
   revalidatePath("/");
@@ -63,6 +67,7 @@ export async function createStoryAction(formData: FormData) {
   const openingLocationName = String(formData.get("openingLocationName") ?? "").trim();
   const openingLocationDescription = String(formData.get("openingLocationDescription") ?? "").trim();
   const castProfileIds = formData.getAll("castProfileIds").map((value) => String(value));
+  const visibility = formData.get("visibility") === "public" ? "public" : "private";
   const worldRules = String(formData.get("worldRules") ?? "")
     .split(/\r?\n/)
     .map((item) => item.trim())
@@ -88,6 +93,7 @@ export async function createStoryAction(formData: FormData) {
     openingLocationDescription,
     worldRules,
     castProfileIds,
+    visibility,
     aiFreedom: aiFreedom as "low" | "medium" | "high",
     experienceMode: experienceMode as "scripted" | "coauthored" | "improvised",
     defaultSegmentLength: defaultSegmentLength as "short" | "standard" | "long"
@@ -109,6 +115,7 @@ export async function updateStoryAction(formData: FormData) {
     .split(/\r?\n/)
     .map((item) => item.trim())
     .filter(Boolean);
+  const visibility = formData.get("visibility") === "public" ? "public" : "private";
   const aiFreedom = formData.get("aiFreedom") === "high" || formData.get("aiFreedom") === "low"
     ? String(formData.get("aiFreedom"))
     : "medium";
@@ -128,6 +135,7 @@ export async function updateStoryAction(formData: FormData) {
     openingLocationName,
     openingLocationDescription,
     worldRules,
+    visibility,
     aiFreedom: aiFreedom as "low" | "medium" | "high",
     experienceMode: experienceMode as "scripted" | "coauthored" | "improvised",
     defaultSegmentLength: defaultSegmentLength as "short" | "standard" | "long"

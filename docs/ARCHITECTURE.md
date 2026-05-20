@@ -242,6 +242,7 @@ StoryPublishStatus
 type Story = {
   id: string;
   ownerId: string | null;
+  visibility: "private" | "public";
   title: string;
   tagline: string;
   genre: string;
@@ -252,7 +253,7 @@ type Story = {
 };
 ```
 
-`ownerId` 表示故事归属。种子故事和平台示例故事可以为 `null`，普通用户在客户端创作入口创建的故事必须由服务端写入当前用户标识。客户端不能提交或覆盖 `ownerId`。
+`ownerId` 表示故事归属。种子故事和平台示例故事可以为 `null`，普通用户在客户端创作入口创建的故事必须由服务端写入当前用户标识。客户端不能提交或覆盖 `ownerId`。`visibility` 控制是否进入公共故事探索，新建用户故事默认 `private`，平台示例故事默认 `public`。
 
 `World` MVP 字段：
 
@@ -691,7 +692,7 @@ PUT /api/me/stories/:storyId
 DELETE /api/me/stories/:storyId
 ```
 
-`GET /api/me/stories` 只返回当前用户创建的故事，用于客户端 `创作 -> 我的故事`。`GET /api/stories` 仍然是探索入口，返回所有可进入的故事。
+`GET /api/me/stories` 只返回当前用户创建的故事，用于客户端 `创作 -> 我的故事`。`GET /api/stories` 是探索入口，只返回平台示例故事或 `visibility = "public"` 的用户故事。
 
 创建故事请求不包含 `ownerId`，由服务端按当前用户写入：
 
@@ -702,6 +703,7 @@ DELETE /api/me/stories/:storyId
   "tagline": "你在午夜市集里寻找被偷走的名字。",
   "genre": "奇幻悬疑",
   "coverUrl": null,
+  "visibility": "private",
   "premise": "午夜市集只接待遗失重要之物的人。",
   "openingLocationName": "市集入口",
   "openingLocationDescription": "纸灯笼在雾里摇晃。",

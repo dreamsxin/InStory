@@ -3,6 +3,7 @@ import type { AppDatabase } from "./app-database.js";
 
 export interface CreateReaderProfileInput {
   ownerId: string;
+  visibility?: ReaderProfile["visibility"];
   name: string;
   gender?: string | null;
   personality: string;
@@ -36,6 +37,7 @@ export class ReaderProfileStore {
     const profile: ReaderProfile = {
       id: `profile_${crypto.randomUUID()}`,
       ownerId: input.ownerId,
+      visibility: input.visibility ?? "private",
       name: input.name,
       gender: input.gender?.trim() || null,
       personality: input.personality,
@@ -59,7 +61,7 @@ export class ReaderProfileStore {
       .prepare("SELECT payload FROM reader_profiles WHERE owner_id = ? ORDER BY updated_at DESC")
       .all(ownerId) as Array<{ payload: string }>;
 
-    return rows.map((row) => JSON.parse(row.payload) as ReaderProfile);
+    return rows.map((row) => normalizeReaderProfile(JSON.parse(row.payload) as ReaderProfile));
   }
 
   findById(profileId: string): ReaderProfile | null {
@@ -67,7 +69,7 @@ export class ReaderProfileStore {
       | { payload: string }
       | undefined;
 
-    return row ? (JSON.parse(row.payload) as ReaderProfile) : null;
+    return row ? normalizeReaderProfile(JSON.parse(row.payload) as ReaderProfile) : null;
   }
 
   update(profileId: string, ownerId: string, input: UpdateReaderProfileInput): ReaderProfile | null {
@@ -79,6 +81,7 @@ export class ReaderProfileStore {
     const now = new Date().toISOString();
     const updated: ReaderProfile = {
       ...current,
+      visibility: input.visibility ?? "private",
       name: input.name,
       gender: input.gender?.trim() || null,
       personality: input.personality,
@@ -101,4 +104,11 @@ export class ReaderProfileStore {
 
     return result.changes > 0;
   }
+}
+
+function normalizeReaderProfile(profile: ReaderProfile): ReaderProfile {
+  return {
+    ...profile,
+    visibility: profile.visibility ?? "private"
+  };
 }

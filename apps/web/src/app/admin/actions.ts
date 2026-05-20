@@ -50,6 +50,7 @@ export async function updateStorySummaryAction(formData: FormData) {
   const tagline = String(formData.get("tagline") ?? "").trim();
   const genre = String(formData.get("genre") ?? "").trim();
   const coverUrl = String(formData.get("coverUrl") ?? "").trim();
+  const visibility = formData.get("visibility") === "private" ? "private" : "public";
   const aiFreedom = formData.get("aiFreedom") === "high" || formData.get("aiFreedom") === "low"
     ? String(formData.get("aiFreedom"))
     : "medium";
@@ -65,6 +66,7 @@ export async function updateStorySummaryAction(formData: FormData) {
     tagline,
     genre,
     coverUrl: coverUrl || null,
+    visibility,
     aiFreedom: aiFreedom as "low" | "medium" | "high",
     experienceMode: experienceMode as "scripted" | "coauthored" | "improvised",
     defaultSegmentLength: defaultSegmentLength as "short" | "standard" | "long"

@@ -90,6 +90,10 @@ export class StoryStore {
     return rows.map((row) => normalizeStorySummary(JSON.parse(row.payload) as StorySummary));
   }
 
+  listPublicStories(): StorySummary[] {
+    return this.listStories().filter((story) => story.ownerId === null || story.visibility === "public");
+  }
+
   listStoriesByOwner(ownerId: string): StorySummary[] {
     return this.listStories().filter((story) => story.ownerId === ownerId);
   }
@@ -134,6 +138,7 @@ export class StoryStore {
     const story: StorySummary = {
       id: input.id,
       ownerId,
+      visibility: input.visibility ?? "private",
       title: input.title,
       tagline: input.tagline,
       genre: input.genre,
@@ -188,6 +193,7 @@ export class StoryStore {
 
     const story: StorySummary = {
       ...current.story,
+      visibility: input.visibility,
       title: input.title,
       tagline: input.tagline,
       genre: input.genre,
@@ -294,6 +300,7 @@ function normalizeStorySummary(story: StorySummary): StorySummary {
   return {
     ...story,
     ownerId: story.ownerId ?? null,
+    visibility: story.visibility ?? (story.ownerId === null ? "public" : "private"),
     coverUrl: story.coverUrl ?? null,
     experienceMode: story.experienceMode ?? "coauthored",
     defaultSegmentLength: story.defaultSegmentLength ?? "standard"

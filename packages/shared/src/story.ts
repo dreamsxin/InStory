@@ -8,9 +8,12 @@ export type ExperienceMode = "scripted" | "coauthored" | "improvised";
 
 export type SegmentLengthPreset = "short" | "standard" | "long";
 
+export type Visibility = "private" | "public";
+
 export interface StorySummary {
   id: string;
   ownerId: string | null;
+  visibility: Visibility;
   title: string;
   tagline: string;
   genre: string;
@@ -31,12 +34,14 @@ export interface CreateStoryRequest {
   openingLocationDescription: string;
   worldRules: string[];
   castProfileIds?: string[];
+  visibility?: Visibility;
   aiFreedom: "low" | "medium" | "high";
   experienceMode: ExperienceMode;
   defaultSegmentLength: SegmentLengthPreset;
 }
 
 export interface UpdateStoryRequest {
+  visibility: Visibility;
   title: string;
   tagline: string;
   genre: string;
@@ -99,6 +104,7 @@ export interface ReaderRole {
 export interface ReaderProfile {
   id: string;
   ownerId: string;
+  visibility: Visibility;
   name: string;
   gender: string | null;
   personality: string;
