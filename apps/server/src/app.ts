@@ -114,22 +114,6 @@ export async function buildApp(options: BuildAppOptions) {
     stories: options.storyCatalog.listStories().map((story) => options.storyCatalog.findStory(story.id))
   }));
 
-  app.post("/api/admin/stories", async (request, reply) => {
-    const parsed = createStoryRequestSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
-    }
-
-    try {
-      const story = options.storyCatalog.createStory(parsed.data);
-      return reply.code(201).send({ story });
-    } catch (error) {
-      return reply.code(409).send({
-        error: error instanceof Error ? error.message : "Failed to create story"
-      });
-    }
-  });
-
   app.put("/api/admin/stories/:storyId", async (request, reply) => {
     const { storyId } = request.params as { storyId: string };
     const parsed = updateStorySummarySchema.safeParse(request.body);
@@ -171,6 +155,22 @@ export async function buildApp(options: BuildAppOptions) {
   app.get("/api/stories", async () => ({
     stories: options.storyCatalog.listStories()
   }));
+
+  app.post("/api/stories", async (request, reply) => {
+    const parsed = createStoryRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
+    }
+
+    try {
+      const story = options.storyCatalog.createStory(parsed.data);
+      return reply.code(201).send({ story });
+    } catch (error) {
+      return reply.code(409).send({
+        error: error instanceof Error ? error.message : "Failed to create story"
+      });
+    }
+  });
 
   app.get("/api/stories/:storyId", async (request, reply) => {
     const { storyId } = request.params as { storyId: string };

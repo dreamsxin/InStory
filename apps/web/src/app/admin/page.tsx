@@ -6,7 +6,7 @@ import {
   getAdminStatus,
   getAdminStories
 } from "@/lib/api";
-import { CreateStoryForm, ModelConfigForm, StorySummaryForm } from "@/components/admin-forms";
+import { ModelConfigForm, StorySummaryForm } from "@/components/admin-forms";
 import { BrandMark } from "@/components/brand-mark";
 import Link from "next/link";
 
@@ -118,10 +118,6 @@ export default async function AdminPage({
       <Card className="panel" id="stories">
         <Card.Content>
           <h2>故事配置</h2>
-          <div className="admin-subpanel">
-            <h3>创建故事草稿</h3>
-            <CreateStoryForm />
-          </div>
           <div className="story-editor-list">
             {stories.map((item) => (
               <StorySummaryForm

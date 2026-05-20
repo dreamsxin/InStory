@@ -381,10 +381,10 @@ describe("server API", () => {
     expect(missing.statusCode).toBe(404);
   });
 
-  it("creates a minimal story through admin API", async () => {
+  it("creates a minimal story through client story API", async () => {
     const created = await app.inject({
       method: "POST",
-      url: "/api/admin/stories",
+      url: "/api/stories",
       payload: {
         id: "moon-market",
         title: "月下市集",
@@ -422,7 +422,7 @@ describe("server API", () => {
 
     const duplicate = await app.inject({
       method: "POST",
-      url: "/api/admin/stories",
+      url: "/api/stories",
       payload: {
         id: "moon-market",
         title: "重复故事",

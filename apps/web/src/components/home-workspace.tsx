@@ -1,12 +1,11 @@
 "use client";
 
-import { Avatar, Button, Card, Chip, Input, Label, TextArea, TextField } from "@heroui/react";
-import Link from "next/link";
+import { Avatar, Button, Card, Chip, Input, Label, ListBox, Select, TextArea, TextField } from "@heroui/react";
 import { useState } from "react";
 import type { ReaderProfile, StorySummary } from "@instory/shared";
 import { BrandMark } from "@/components/brand-mark";
 import { StoryLauncher } from "@/components/story-launcher";
-import { createReaderProfileAction } from "@/app/actions";
+import { createReaderProfileAction, createStoryAction } from "@/app/actions";
 
 type HomeTab = "stories" | "profiles" | "continue" | "create";
 
@@ -52,7 +51,6 @@ export function HomeWorkspace({
               {item.label}
             </button>
           ))}
-          <Link className="nav-pill" href="/admin">控制台</Link>
         </nav>
       </div>
 
@@ -172,15 +170,108 @@ function CreateView() {
   return (
     <div className="app-section two-column-section">
       <CreateProfilePanel />
-      <Card className="profile-panel">
-        <Card.Content>
-          <span className="eyebrow">Creator</span>
-          <h2>故事世界创作</h2>
-          <p className="muted">MVP 阶段先在控制台编辑故事基础配置。世界、角色和锚点编辑会在后续进入客户端创作模块。</p>
-          <Link className="secondary center-action" href="/admin">打开控制台</Link>
-        </Card.Content>
-      </Card>
+      <CreateStoryPanel />
     </div>
+  );
+}
+
+function CreateStoryPanel() {
+  return (
+    <Card className="profile-panel create-story-panel">
+      <Card.Header>
+        <div>
+          <span className="eyebrow">Create Story</span>
+          <h2>创建故事世界</h2>
+        </div>
+      </Card.Header>
+      <Card.Content>
+        <form className="profile-form embedded" action={createStoryAction}>
+          <div className="form-grid">
+            <TextField isRequired name="id">
+              <Label>故事 ID</Label>
+              <Input maxLength={80} placeholder="moon-market" />
+            </TextField>
+            <TextField isRequired name="title">
+              <Label>标题</Label>
+              <Input maxLength={80} placeholder="月下市集" />
+            </TextField>
+          </div>
+          <div className="form-grid">
+            <TextField isRequired name="genre">
+              <Label>类型</Label>
+              <Input maxLength={40} placeholder="奇幻悬疑" />
+            </TextField>
+            <TextField isRequired name="tagline">
+              <Label>一句话钩子</Label>
+              <Input maxLength={160} placeholder="你在午夜市集里寻找被偷走的名字。" />
+            </TextField>
+          </div>
+          <TextField isRequired name="premise">
+            <Label>世界前提</Label>
+            <TextArea maxLength={4000} placeholder="这个世界如何运转，读者会被卷入什么冲突。" rows={4} />
+          </TextField>
+          <div className="form-grid">
+            <TextField isRequired name="openingLocationName">
+              <Label>起点地点</Label>
+              <Input maxLength={80} placeholder="市集入口" />
+            </TextField>
+            <TextField isRequired name="openingLocationDescription">
+              <Label>起点场景</Label>
+              <TextArea maxLength={1000} placeholder="读者进入故事后看到的第一幕。" rows={3} />
+            </TextField>
+          </div>
+          <TextField name="worldRules">
+            <Label>世界规则</Label>
+            <TextArea maxLength={4000} placeholder={"每行一条规则\n例如：不能直接说出真名。"} rows={3} />
+          </TextField>
+          <div className="story-setting-grid">
+            <Select defaultSelectedKey="coauthored" name="experienceMode">
+              <Label>入戏体验</Label>
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="scripted" textValue="剧本入戏">剧本入戏<ListBox.ItemIndicator /></ListBox.Item>
+                  <ListBox.Item id="coauthored" textValue="共演入戏">共演入戏<ListBox.ItemIndicator /></ListBox.Item>
+                  <ListBox.Item id="improvised" textValue="即兴入戏">即兴入戏<ListBox.ItemIndicator /></ListBox.Item>
+                </ListBox>
+              </Select.Popover>
+            </Select>
+            <Select defaultSelectedKey="standard" name="defaultSegmentLength">
+              <Label>生成长度</Label>
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="short" textValue="短段">短段<ListBox.ItemIndicator /></ListBox.Item>
+                  <ListBox.Item id="standard" textValue="标准小节">标准小节<ListBox.ItemIndicator /></ListBox.Item>
+                  <ListBox.Item id="long" textValue="长小节">长小节<ListBox.ItemIndicator /></ListBox.Item>
+                </ListBox>
+              </Select.Popover>
+            </Select>
+            <Select defaultSelectedKey="medium" name="aiFreedom">
+              <Label>AI 自由度</Label>
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="low" textValue="低">低<ListBox.ItemIndicator /></ListBox.Item>
+                  <ListBox.Item id="medium" textValue="中">中<ListBox.ItemIndicator /></ListBox.Item>
+                  <ListBox.Item id="high" textValue="高">高<ListBox.ItemIndicator /></ListBox.Item>
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </div>
+          <Button type="submit">创建故事</Button>
+        </form>
+      </Card.Content>
+    </Card>
   );
 }
 

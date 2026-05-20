@@ -413,6 +413,13 @@ a {
   gap: 6px;
 }
 
+.form-grid,
+.story-setting-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
 .primary {
   border: 0;
   background: var(--accent);
@@ -830,21 +837,6 @@ a {
   display: grid;
   gap: 12px;
   margin-top: 14px;
-}
-
-.admin-subpanel {
-  display: grid;
-  gap: 10px;
-  margin-top: 14px;
-  margin-bottom: 18px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--panel-strong);
-}
-
-.admin-subpanel h3 {
-  margin: 0;
 }
 
 .story-editor-row {

@@ -118,6 +118,23 @@ export async function createReaderProfile(input: {
   return data.profile;
 }
 
+export async function createStory(input: CreateStoryRequest): Promise<StoryDetail> {
+  const response = await fetch(`${API_BASE}/api/stories`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(input)
+  });
+
+  if (!response.ok) {
+    throw new Error("创建故事失败");
+  }
+
+  const data = (await response.json()) as { story: StoryDetail };
+  return data.story;
+}
+
 export async function getStoryDetail(storyId: string): Promise<StoryDetail> {
   const response = await fetch(`${API_BASE}/api/stories/${storyId}`, { cache: "no-store" });
   if (!response.ok) {
@@ -191,14 +208,6 @@ export async function verifyAdminModelConfig(): Promise<AdminModelVerificationRe
 export async function getAdminStories(): Promise<StoryDetail[]> {
   const data = await adminGet<{ stories: StoryDetail[] }>("/api/admin/stories");
   return data.stories;
-}
-
-export async function createAdminStory(input: CreateStoryRequest): Promise<StoryDetail> {
-  const data = await adminRequest<{ story: StoryDetail }>("/api/admin/stories", {
-    method: "POST",
-    body: JSON.stringify(input)
-  });
-  return data.story;
 }
 
 export async function updateAdminStorySummary(
