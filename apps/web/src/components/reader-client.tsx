@@ -2,7 +2,7 @@
 
 import { Button, Card, Chip, Label, TextArea, TextField } from "@heroui/react";
 import type { SessionTurn, StorySession, WorldState } from "@instory/shared";
-import { createTurn, rewindSession } from "@/lib/api";
+import { createTurn, resetSession, rewindSession } from "@/lib/api";
 import { BrandMark } from "@/components/brand-mark";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -111,7 +111,14 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
             <Button size="sm" variant="ghost" onPress={() => setActivePanel(null)}>关闭</Button>
           </div>
           {activePanel === "status" ? <StatePanel state={session.state} /> : null}
-          {activePanel === "memory" ? <TimelinePanel session={session} onRewind={(timelineNodeId) => void rewindToNode(timelineNodeId)} /> : null}
+          {activePanel === "memory" ? (
+            <TimelinePanel
+              loading={loading}
+              session={session}
+              onReset={() => void resetCurrentSession()}
+              onRewind={(timelineNodeId) => void rewindToNode(timelineNodeId)}
+            />
+          ) : null}
           {activePanel === "action" && latestTurn ? (
             <ActionPanel
               error={error}
@@ -142,10 +149,24 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
       setLoading(false);
     }
   }
+
+  async function resetCurrentSession() {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const nextSession = await resetSession(session.id);
+      router.push(`/story/${nextSession.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "重置失败");
+    } finally {
+      setLoading(false);
+    }
+  }
 }
 
 function panelTitle(panel: Exclude<ReaderPanel, null>) {
-  return panel === "status" ? "当前状态" : panel === "memory" ? "记忆书签" : "入戏行动";
+  return panel === "status" ? "当前状态" : panel === "memory" ? "存档记忆" : "入戏行动";
 }
 
 function TurnView({ turn }: { turn: SessionTurn }) {
@@ -188,18 +209,36 @@ function StatePanel({ state }: { state: WorldState }) {
   );
 }
 
-function TimelinePanel({ onRewind, session }: { onRewind: (timelineNodeId: string) => void; session: StorySession }) {
+function TimelinePanel({
+  loading,
+  onReset,
+  onRewind,
+  session
+}: {
+  loading: boolean;
+  onReset: () => void;
+  onRewind: (timelineNodeId: string) => void;
+  session: StorySession;
+}) {
   return (
     <Card className="panel">
       <Card.Content>
-        <h2>记忆书签</h2>
+        <div className="memory-panel-heading">
+          <div>
+            <h2>存档记忆</h2>
+            <p className="muted">选择一个记忆恢复为新分支，或重新开启本故事。</p>
+          </div>
+          <Button isDisabled={loading} size="sm" type="button" variant="outline" onPress={onReset}>
+            重置会话
+          </Button>
+        </div>
         <div className="timeline">
           {session.timeline.map((node) => (
             <div className="timeline-item" key={node.id}>
               <strong>{node.title}</strong>
               <p className="muted">{node.summary}</p>
-              <Button size="sm" type="button" variant="outline" onPress={() => onRewind(node.id)}>
-                回到这里
+              <Button isDisabled={loading} size="sm" type="button" variant="outline" onPress={() => onRewind(node.id)}>
+                恢复此存档
               </Button>
             </div>
           ))}

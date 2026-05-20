@@ -501,6 +501,76 @@ export async function buildApp(options: BuildAppOptions) {
     };
   });
 
+  app.post("/api/sessions/:sessionId/reset", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string };
+    const session = options.sessionStore.findById(sessionId);
+
+    if (!session) {
+      return reply.code(404).send({ error: "Session not found" });
+    }
+
+    const storyDetail = options.storyCatalog.findStory(session.storyId);
+    if (!storyDetail) {
+      return reply.code(404).send({ error: "Story not found" });
+    }
+
+    const now = new Date().toISOString();
+    const newSessionId = `sess_${crypto.randomUUID()}`;
+    const initialState = createInitialState();
+    const openingTurn: SessionTurn = {
+      id: "turn_0",
+      sessionId: newSessionId,
+      inputType: "free_text",
+      input: "重新开始",
+      narration: "你醒来时，窗外正落着细雨。陌生的旧宅木梁低垂，空气里有潮湿的檀香味。门外有人停下脚步，像是在确认你的呼吸。",
+      dialogues: [
+        {
+          speaker: "陆清河",
+          text: "醒了就别出声。今晚，这座宅子不认生人。"
+        }
+      ],
+      choices: [
+        {
+          id: "opening_c1",
+          text: "询问自己为何在这里",
+          risk: "medium"
+        },
+        {
+          id: "opening_c2",
+          text: "先观察房间里的线索",
+          risk: "low"
+        }
+      ],
+      stateSnapshot: initialState,
+      createdAt: now
+    };
+    const openingNode: TimelineNode = {
+      id: "node_0",
+      sessionId: newSessionId,
+      turnId: openingTurn.id,
+      title: initialState.scene,
+      summary: "你重新开始故事，在雨夜旧宅醒来。",
+      stateSnapshot: initialState,
+      createdAt: now
+    };
+    const resetSession: StorySession = {
+      id: newSessionId,
+      storyId: session.storyId,
+      readerRole: session.readerRole,
+      state: initialState,
+      turns: [openingTurn],
+      timeline: [openingNode],
+      createdAt: now,
+      updatedAt: now
+    };
+
+    options.sessionStore.save(resetSession);
+
+    return {
+      session: resetSession
+    };
+  });
+
   return app;
 }
 

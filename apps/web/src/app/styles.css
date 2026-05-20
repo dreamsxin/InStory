@@ -920,6 +920,21 @@ a {
   margin-top: 12px;
 }
 
+.memory-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.memory-panel-heading h2 {
+  margin-bottom: 4px;
+}
+
+.memory-panel-heading p {
+  margin: 0;
+}
+
 .timeline-item {
   border-left: 3px solid var(--blue);
   padding-left: 10px;

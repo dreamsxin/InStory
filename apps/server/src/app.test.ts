@@ -204,6 +204,24 @@ describe("server API", () => {
     expect(missingNode.statusCode).toBe(400);
   });
 
+  it("resets a session with the same reader role", async () => {
+    const created = await createSession();
+
+    const reset = await app.inject({
+      method: "POST",
+      url: `/api/sessions/${created.session.id}/reset`
+    });
+    const body = reset.json<{ session: StorySession }>();
+
+    expect(reset.statusCode).toBe(200);
+    expect(body.session.id).not.toBe(created.session.id);
+    expect(body.session.storyId).toBe(created.session.storyId);
+    expect(body.session.readerRole).toEqual(created.session.readerRole);
+    expect(body.session.turns).toHaveLength(1);
+    expect(body.session.timeline).toHaveLength(1);
+    expect(body.session.turns[0]?.input).toBe("重新开始");
+  });
+
   it("returns clear errors for missing resources and invalid requests", async () => {
     const missingStory = await app.inject({
       method: "GET",
