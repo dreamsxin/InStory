@@ -187,6 +187,17 @@ export interface StorySession {
   updatedAt: string;
 }
 
+export interface ReaderSessionListItem {
+  id: string;
+  storyId: string;
+  storyTitle: string;
+  readerRoleName: string;
+  latestSummary: string;
+  turnCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CreateSessionRequest {
   entryMode: EntryMode;
   characterId?: string | null;

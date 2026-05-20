@@ -14,6 +14,7 @@ import type {
   CharacterProfile,
   CreateSessionResponse,
   CreateTurnResponse,
+  ReaderSessionListItem,
   ReaderProfile,
   SessionTurn,
   StorySession,
@@ -169,6 +170,17 @@ export async function buildApp(options: BuildAppOptions) {
   app.get("/api/me/stories", async () => ({
     stories: options.storyCatalog.listStoriesByOwner(LOCAL_READER_ID)
   }));
+
+  app.get("/api/me/sessions", async (request) => {
+    const query = request.query as { limit?: string };
+    const limit = Number(query.limit ?? 20);
+    return {
+      sessions: options.sessionStore
+        .listRecent(Number.isFinite(limit) ? limit : 20)
+        .map((item) => createReaderSessionListItem(item.id, options))
+        .filter((item): item is ReaderSessionListItem => item !== null)
+    };
+  });
 
   app.put("/api/me/stories/:storyId", async (request, reply) => {
     const { storyId } = request.params as { storyId: string };
@@ -495,6 +507,26 @@ function createCastCharacters({
       goals: ["参与故事互动", "根据自身设定回应读者行动"],
       constraints: splitProfileText(profile.description)
     }));
+}
+
+function createReaderSessionListItem(sessionId: string, options: BuildAppOptions): ReaderSessionListItem | null {
+  const session = options.sessionStore.findById(sessionId);
+  if (!session) {
+    return null;
+  }
+
+  const story = options.storyCatalog.findStory(session.storyId)?.story;
+  const latestTurn = session.turns.at(-1);
+  return {
+    id: session.id,
+    storyId: session.storyId,
+    storyTitle: story?.title ?? session.storyId,
+    readerRoleName: session.readerRole.name,
+    latestSummary: latestTurn?.narration ?? "刚刚进入故事。",
+    turnCount: session.turns.length,
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt
+  };
 }
 
 function splitProfileText(value: string): string[] {

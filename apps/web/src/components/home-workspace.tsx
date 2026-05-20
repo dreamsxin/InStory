@@ -3,7 +3,7 @@
 import { Avatar, Button, Card, Chip, Input, Label, ListBox, Select, TextArea, TextField } from "@heroui/react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { ReaderProfile, StoryDetail, StorySummary } from "@instory/shared";
+import type { ReaderProfile, ReaderSessionListItem, StoryDetail, StorySummary } from "@instory/shared";
 import { BrandMark } from "@/components/brand-mark";
 import { StoryLauncher } from "@/components/story-launcher";
 import { createSession } from "@/lib/api";
@@ -30,10 +30,12 @@ const TRIAL_DEFAULT_ROLE_KEY = "__trial_default__";
 export function HomeWorkspace({
   myStoryDetails,
   profiles,
+  sessions,
   stories
 }: {
   myStoryDetails: StoryDetail[];
   profiles: ReaderProfile[];
+  sessions: ReaderSessionListItem[];
   stories: StorySummary[];
 }) {
   const [activeTab, setActiveTab] = useState<HomeTab>("stories");
@@ -87,7 +89,7 @@ export function HomeWorkspace({
 
       <section className="mobile-tab-panel">
         {activeTab === "stories" ? <StoriesView profiles={profiles} stories={stories} /> : null}
-        {activeTab === "continue" ? <ContinueView profiles={profiles} stories={stories} /> : null}
+        {activeTab === "continue" ? <ContinueView sessions={sessions} /> : null}
         {activeTab === "create" ? <CreateView myStoryDetails={myStoryDetails} profiles={profiles} /> : null}
       </section>
 
@@ -127,19 +129,42 @@ function StoriesView({ profiles, stories }: { profiles: ReaderProfile[]; stories
   );
 }
 
-function ContinueView({ profiles, stories }: { profiles: ReaderProfile[]; stories: StorySummary[] }) {
+function ContinueView({ sessions }: { sessions: ReaderSessionListItem[] }) {
   return (
-    <Card className="app-section empty-state-panel">
-      <Card.Content>
-        <span className="eyebrow">Continue</span>
-        <h2>继续阅读</h2>
-        <p className="muted">会话列表会在后续接入。现在可以从故事世界选择 {profiles.length ? "已有角色" : "默认角色"} 进入。</p>
-        <div className="quick-card-row">
-          <Chip variant="soft">{stories.length} 个故事世界</Chip>
-          <Chip variant="soft">{profiles.length} 个我的角色</Chip>
+    <div className="app-section">
+      <div className="section-heading">
+        <div>
+          <span className="eyebrow">Continue</span>
+          <h2 className="section-title">继续阅读</h2>
         </div>
-      </Card.Content>
-    </Card>
+        <Chip size="sm" variant="soft">{sessions.length} 个阅读进度</Chip>
+      </div>
+      {sessions.length ? (
+        <div className="session-list">
+          {sessions.map((session) => (
+            <article className="session-card" key={session.id}>
+              <div>
+                <span className="eyebrow">{session.readerRoleName}</span>
+                <h3>{session.storyTitle}</h3>
+                <p>{session.latestSummary}</p>
+                <div className="tag-row compact">
+                  <Chip size="sm" variant="soft">{session.turnCount} 回合</Chip>
+                  <Chip size="sm" variant="soft">{formatUpdatedAt(session.updatedAt)}</Chip>
+                </div>
+              </div>
+              <a className="button-link" href={`/story/${session.id}`}>继续</a>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <Card className="empty-state-panel">
+          <Card.Content>
+            <h2>还没有阅读进度</h2>
+            <p className="muted">从“故事”选择一个世界进入后，会在这里显示最近进度。</p>
+          </Card.Content>
+        </Card>
+      )}
+    </div>
   );
 }
 
@@ -750,4 +775,13 @@ function AvatarSeed({ name, src }: { name: string; src: string | null }) {
 
 function visibilityLabel(visibility: "private" | "public") {
   return visibility === "public" ? "公开" : "仅自己可见";
+}
+
+function formatUpdatedAt(value: string) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(value));
 }

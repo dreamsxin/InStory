@@ -3,6 +3,7 @@ import type {
   CreateSessionResponse,
   CreateTurnResponse,
   ReaderProfile,
+  ReaderSessionListItem,
   StoryDetail,
   StorySession,
   StorySummary,
@@ -108,6 +109,15 @@ export async function listReaderProfiles(): Promise<ReaderProfile[]> {
   }
   const data = (await response.json()) as { profiles: ReaderProfile[] };
   return data.profiles;
+}
+
+export async function listReaderSessions(limit = 20): Promise<ReaderSessionListItem[]> {
+  const response = await fetch(`${API_BASE}/api/me/sessions?limit=${limit}`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("加载继续阅读列表失败");
+  }
+  const data = (await response.json()) as { sessions: ReaderSessionListItem[] };
+  return data.sessions;
 }
 
 export async function createReaderProfile(input: {

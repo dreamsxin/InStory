@@ -97,6 +97,19 @@ describe("server API", () => {
     expect(loaded.statusCode).toBe(200);
     expect(loadedBody.session.turns).toHaveLength(2);
     expect(loadedBody.session.state.clues).toEqual(turnBody.state.clues);
+
+    const recentSessions = await app.inject({
+      method: "GET",
+      url: "/api/me/sessions"
+    });
+    expect(recentSessions.statusCode).toBe(200);
+    expect(recentSessions.json<{ sessions: Array<{ id: string; storyTitle: string; readerRoleName: string }> }>().sessions).toContainEqual(
+      expect.objectContaining({
+        id: sessionId,
+        storyTitle: "雨夜旧宅",
+        readerRoleName: "陆清河"
+      })
+    );
   });
 
   it("creates a rewind branch from a timeline node", async () => {
