@@ -1,6 +1,5 @@
 "use client";
 
-import { Button, Card, CardContent, Chip, Label, TextArea, TextField } from "@heroui/react";
 import type { SessionTurn, StorySession, WorldState } from "@instory/shared";
 import { createTurn } from "@/lib/api";
 import { BrandMark } from "@/components/brand-mark";
@@ -81,16 +80,15 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
         {latestTurn ? (
           <div className="choices">
             {latestTurn.choices.map((choice) => (
-              <Button
+              <button
                 className="choice"
                 type="button"
                 key={choice.id}
-                isDisabled={loading}
-                variant="outline"
-                onPress={() => void submit(choice.text, "choice", choice.id)}
+                disabled={loading}
+                onClick={() => void submit(choice.text, "choice", choice.id)}
               >
                 {choice.text} <span className="muted">({choice.risk})</span>
-              </Button>
+              </button>
             ))}
           </div>
         ) : null}
@@ -102,19 +100,16 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
             void submit(text, "free_text");
           }}
         >
-          <TextField name="action" isDisabled={loading}>
-            <Label>行动</Label>
-            <TextArea
-              value={text}
-              onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setText(event.target.value)}
-              placeholder="输入你想说的话，或想做的动作..."
-              rows={2}
-            />
-          </TextField>
+          <textarea
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            placeholder="输入你想说的话，或想做的动作..."
+            disabled={loading}
+          />
           {error ? <p className="error">{error}</p> : null}
-          <Button isDisabled={loading || !text.trim()} type="submit">
+          <button className="primary" type="submit" disabled={loading || !text.trim()}>
             {loading ? "生成中..." : "提交行动"}
-          </Button>
+          </button>
         </form>
       </section>
 
@@ -123,9 +118,9 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
         <TimelinePanel session={session} />
       </aside>
 
-      <Button className="reader-chrome-toggle" type="button" variant="outline" onPress={() => setChromeVisible((visible) => !visible)}>
+      <button className="reader-chrome-toggle" type="button" onClick={() => setChromeVisible((visible) => !visible)}>
         {chromeVisible ? "专注阅读" : "显示菜单"}
-      </Button>
+      </button>
     </main>
   );
 }
@@ -145,45 +140,41 @@ function TurnView({ turn }: { turn: SessionTurn }) {
 
 function StatePanel({ state }: { state: WorldState }) {
   return (
-    <Card className="panel">
-      <CardContent>
-        <h2>状态</h2>
-        <ul className="stat-list">
-          <li>场景：{state.scene}</li>
-          <li>位置：{state.location}</li>
-          <li>回合：{state.turnCount}</li>
-        </ul>
-        <h3>情绪</h3>
-        <div className="tag-row">
-          {Object.entries(state.emotion).map(([key, value]) => (
-            <Chip key={key} size="sm" variant="soft">
-              {key}: {value}
-            </Chip>
-          ))}
-        </div>
-        <h3>线索</h3>
-        <div className="tag-row">
-          {state.clues.length ? state.clues.map((clue) => <Chip key={clue} size="sm" variant="soft">{clue}</Chip>) : <span className="muted">暂无</span>}
-        </div>
-      </CardContent>
-    </Card>
+    <section className="panel">
+      <h2>状态</h2>
+      <ul className="stat-list">
+        <li>场景：{state.scene}</li>
+        <li>位置：{state.location}</li>
+        <li>回合：{state.turnCount}</li>
+      </ul>
+      <h3>情绪</h3>
+      <div className="tag-row">
+        {Object.entries(state.emotion).map(([key, value]) => (
+          <span className="tag" key={key}>
+            {key}: {value}
+          </span>
+        ))}
+      </div>
+      <h3>线索</h3>
+      <div className="tag-row">
+        {state.clues.length ? state.clues.map((clue) => <span className="tag" key={clue}>{clue}</span>) : <span className="muted">暂无</span>}
+      </div>
+    </section>
   );
 }
 
 function TimelinePanel({ session }: { session: StorySession }) {
   return (
-    <Card className="panel">
-      <CardContent>
-        <h2>记忆书签</h2>
-        <div className="timeline">
-          {session.timeline.map((node) => (
-            <div className="timeline-item" key={node.id}>
-              <strong>{node.title}</strong>
-              <p className="muted">{node.summary}</p>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+    <section className="panel">
+      <h2>记忆书签</h2>
+      <div className="timeline">
+        {session.timeline.map((node) => (
+          <div className="timeline-item" key={node.id}>
+            <strong>{node.title}</strong>
+            <p className="muted">{node.summary}</p>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
