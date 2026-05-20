@@ -33,7 +33,7 @@ export async function buildApp(options: BuildAppOptions) {
   });
 
   app.addHook("onClose", async () => {
-    options.sessionStore.close();
+    // Storage lifecycle is owned by the process or test harness.
   });
 
   app.get("/api/health", async () => ({

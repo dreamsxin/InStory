@@ -3,12 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { StorySession } from "@instory/shared";
+import { AppDatabase } from "./app-database.js";
 import { SessionStore } from "./session-store.js";
 
 describe("SessionStore", () => {
   it("persists and reads story sessions from SQLite", () => {
     const dir = mkdtempSync(join(tmpdir(), "instory-session-store-"));
-    const store = new SessionStore(join(dir, "test.sqlite"));
+    const database = new AppDatabase(join(dir, "test.sqlite"));
+    const store = new SessionStore(database);
 
     try {
       const session = createSession({
@@ -31,14 +33,15 @@ describe("SessionStore", () => {
         }
       ]);
     } finally {
-      store.close();
+      database.close();
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
   it("updates an existing session payload", () => {
     const dir = mkdtempSync(join(tmpdir(), "instory-session-store-"));
-    const store = new SessionStore(join(dir, "test.sqlite"));
+    const database = new AppDatabase(join(dir, "test.sqlite"));
+    const store = new SessionStore(database);
 
     try {
       store.save(
@@ -57,7 +60,7 @@ describe("SessionStore", () => {
 
       expect(store.findById("sess_test")).toEqual(updated);
     } finally {
-      store.close();
+      database.close();
       rmSync(dir, { recursive: true, force: true });
     }
   });

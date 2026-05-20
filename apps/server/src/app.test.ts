@@ -6,19 +6,22 @@ import { MockNarrativeProvider } from "@instory/ai-orchestrator";
 import type { CreateSessionResponse, CreateTurnResponse, StoryDetail, StorySession } from "@instory/shared";
 import { buildApp } from "./app.js";
 import { StoryCatalog } from "./data/story-catalog.js";
+import { AppDatabase } from "./db/app-database.js";
 import { SessionStore } from "./db/session-store.js";
 
 type TestApp = Awaited<ReturnType<typeof buildApp>>;
 
 let app: TestApp;
+let database: AppDatabase;
 let tempDir: string;
 
 beforeEach(async () => {
   tempDir = mkdtempSync(join(tmpdir(), "instory-api-"));
+  database = new AppDatabase(join(tempDir, "api.sqlite"));
   app = await buildApp({
     provider: new MockNarrativeProvider(),
-    sessionStore: new SessionStore(join(tempDir, "api.sqlite")),
-    storyCatalog: new StoryCatalog(),
+    sessionStore: new SessionStore(database),
+    storyCatalog: new StoryCatalog(database),
     modelConfig: {
       provider: "mock",
       apiKeyConfigured: false
@@ -28,7 +31,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await app.close();
+  await app?.close();
+  database?.close();
   rmSync(tempDir, { recursive: true, force: true });
 });
 
@@ -209,13 +213,15 @@ describe("server API", () => {
 
   it("protects admin routes when an admin token is configured", async () => {
     await app.close();
+    database.close();
     rmSync(tempDir, { recursive: true, force: true });
 
     tempDir = mkdtempSync(join(tmpdir(), "instory-api-"));
+    database = new AppDatabase(join(tempDir, "api.sqlite"));
     app = await buildApp({
       provider: new MockNarrativeProvider(),
-      sessionStore: new SessionStore(join(tempDir, "api.sqlite")),
-      storyCatalog: new StoryCatalog(),
+      sessionStore: new SessionStore(database),
+      storyCatalog: new StoryCatalog(database),
       modelConfig: {
         provider: "mock",
         apiKeyConfigured: false

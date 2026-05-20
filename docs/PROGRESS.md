@@ -52,6 +52,10 @@
 - Admin API 测试覆盖状态、模型配置、故事配置、会话审计、审核占位和鉴权。
 - 新增 Web `/admin` 极简只读控制台，展示运行状态、模型配置、存储路径、故事配置、最近会话和审核事件占位。
 - 新增 InStory 图标资产，用作 Web favicon、客户端品牌 logo 和 512px 备用图标。
+- 新增共享 `AppDatabase` SQLite 连接层。
+- 新增 `StoryStore`，将 stories、worlds、characters、story_anchors 写入 SQLite 表。
+- `StoryCatalog` 改为从 SQLite 读取故事配置，并在空库时从 `stories.seed.json` 自动导入。
+- 新增 `StoryStore` 单元测试。
 
 ### 验证结果
 
@@ -65,7 +69,7 @@
 ### 已知问题
 
 - `npm audit` 报告 2 个 moderate，来源是 `next@16.2.6` 依赖的 `postcss`。当前 `npm audit fix --force` 会降级到破坏性旧版本，暂不执行。
-- 故事、世界、角色和锚点已迁移为 JSON 种子数据，尚未进入 SQLite 表。
+- 故事、世界、角色和锚点已进入 SQLite 表，但仍以 JSON payload 存储，尚未拆成完全关系化字段。
 - SQLite 当前使用 Node.js 内置 `node:sqlite`，在 Node 24 下可能出现实验性 API 提示。
 - AI 叙事暂时使用 Mock provider，尚未接入真实模型。
 - 真实模型 Provider 已接入配置，但尚未用实际 API Key 做端到端验证。
@@ -73,7 +77,7 @@
 ### 下一步
 
 1. 增加真实模型端到端验证用例。
-2. 将故事、角色、锚点种子数据迁移到 SQLite 表。
-3. 在 Web 作者工具中展示/编辑故事配置。
-4. 增加 Web 阅读器交互测试。
-5. 为 `/admin` 增加页面级测试。
+2. 在 Web 作者工具中展示/编辑故事配置。
+3. 增加 Web 阅读器交互测试。
+4. 为 `/admin` 增加页面级测试。
+5. 将故事配置 JSON payload 逐步拆成可查询字段。

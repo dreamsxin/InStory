@@ -1,7 +1,5 @@
-import { mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import type { StorySession } from "@instory/shared";
+import type { AppDatabase } from "./app-database.js";
 
 export interface SessionListItem {
   id: string;
@@ -12,16 +10,11 @@ export interface SessionListItem {
 }
 
 export class SessionStore {
-  private readonly db: DatabaseSync;
-  readonly databasePath: string;
+  private readonly database: AppDatabase;
 
-  constructor(databasePath: string) {
-    const resolvedPath = resolve(databasePath);
-    this.databasePath = resolvedPath;
-    mkdirSync(dirname(resolvedPath), { recursive: true });
-
-    this.db = new DatabaseSync(resolvedPath);
-    this.db.exec(`
+  constructor(database: AppDatabase) {
+    this.database = database;
+    this.database.db.exec(`
       CREATE TABLE IF NOT EXISTS reader_sessions (
         id TEXT PRIMARY KEY,
         story_id TEXT NOT NULL,
@@ -33,7 +26,7 @@ export class SessionStore {
   }
 
   save(session: StorySession): void {
-    this.db
+    this.database.db
       .prepare(
         `
         INSERT INTO reader_sessions (id, story_id, payload, created_at, updated_at)
@@ -48,7 +41,7 @@ export class SessionStore {
   }
 
   findById(id: string): StorySession | null {
-    const row = this.db.prepare("SELECT payload FROM reader_sessions WHERE id = ?").get(id) as
+    const row = this.database.db.prepare("SELECT payload FROM reader_sessions WHERE id = ?").get(id) as
       | { payload: string }
       | undefined;
 
@@ -60,12 +53,12 @@ export class SessionStore {
   }
 
   count(): number {
-    const row = this.db.prepare("SELECT COUNT(*) AS count FROM reader_sessions").get() as { count: number };
+    const row = this.database.db.prepare("SELECT COUNT(*) AS count FROM reader_sessions").get() as { count: number };
     return row.count;
   }
 
   listRecent(limit = 20): SessionListItem[] {
-    const rows = this.db
+    const rows = this.database.db
       .prepare(
         `
         SELECT id, story_id AS storyId, payload, created_at AS createdAt, updated_at AS updatedAt
@@ -94,7 +87,7 @@ export class SessionStore {
     });
   }
 
-  close(): void {
-    this.db.close();
+  get databasePath(): string {
+    return this.database.databasePath;
   }
 }

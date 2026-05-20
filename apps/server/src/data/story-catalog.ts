@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { storySeedSchema } from "@instory/shared";
+import { StoryStore } from "../db/story-store.js";
+import type { AppDatabase } from "../db/app-database.js";
 import type { CharacterProfile, StoryAnchor, StoryDetail, StorySummary, WorldProfile } from "@instory/shared";
 
 interface StorySeed {
@@ -12,44 +14,37 @@ interface StorySeed {
 }
 
 export class StoryCatalog {
-  private readonly seed: StorySeed;
+  private readonly store: StoryStore;
 
-  constructor(seedPath = defaultSeedPath()) {
-    const raw = readFileSync(seedPath, "utf8");
-    this.seed = storySeedSchema.parse(JSON.parse(raw));
+  constructor(database: AppDatabase, seedPath = defaultSeedPath()) {
+    this.store = new StoryStore(database);
+    this.store.seedIfEmpty(loadSeed(seedPath));
   }
 
   listStories(): StorySummary[] {
-    return this.seed.stories;
+    return this.store.listStories();
   }
 
   findStory(storyId: string): StoryDetail | null {
-    const story = this.seed.stories.find((item) => item.id === storyId);
-    const world = this.seed.worlds.find((item) => item.storyId === storyId);
-
-    if (!story || !world) {
-      return null;
-    }
-
-    return {
-      story,
-      world,
-      characters: this.findCharacters(storyId),
-      anchors: this.findAnchors(storyId)
-    };
+    return this.store.findStory(storyId);
   }
 
   findCharacters(storyId: string): CharacterProfile[] {
-    return this.seed.characters.filter((item) => item.storyId === storyId);
+    return this.findStory(storyId)?.characters ?? [];
   }
 
   findAnchors(storyId: string): StoryAnchor[] {
-    return this.seed.anchors.filter((item) => item.storyId === storyId);
+    return this.findStory(storyId)?.anchors ?? [];
   }
 
   findCharacter(characterId: string): CharacterProfile | null {
-    return this.seed.characters.find((item) => item.id === characterId) ?? null;
+    return this.store.findCharacter(characterId);
   }
+}
+
+export function loadSeed(seedPath = defaultSeedPath()): StorySeed {
+  const raw = readFileSync(seedPath, "utf8");
+  return storySeedSchema.parse(JSON.parse(raw));
 }
 
 function defaultSeedPath(): string {
