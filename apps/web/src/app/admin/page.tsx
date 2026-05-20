@@ -1,0 +1,182 @@
+import {
+  getAdminModelConfig,
+  getAdminModerationEvents,
+  getAdminSessions,
+  getAdminStatus,
+  getAdminStories
+} from "@/lib/api";
+
+export default async function AdminPage() {
+  const [status, modelConfig, stories, sessions, moderationEvents] = await Promise.all([
+    getAdminStatus(),
+    getAdminModelConfig(),
+    getAdminStories(),
+    getAdminSessions(),
+    getAdminModerationEvents()
+  ]);
+
+  return (
+    <main className="admin-page">
+      <header className="admin-header">
+        <div className="brand">
+          <h1>InStory 控制台</h1>
+          <p className="muted">模型、内容、会话和审核的 MVP 只读视图</p>
+        </div>
+      </header>
+
+      <section className="admin-kpis">
+        <Metric label="服务" value={status.service} />
+        <Metric label="存储" value={status.storage.type} />
+        <Metric label="故事数" value={status.counts.stories.toString()} />
+        <Metric label="会话数" value={status.counts.sessions.toString()} />
+      </section>
+
+      <section className="admin-grid">
+        <article className="panel">
+          <h2>模型配置</h2>
+          <dl className="admin-list">
+            <div>
+              <dt>Provider</dt>
+              <dd>{modelConfig.provider}</dd>
+            </div>
+            <div>
+              <dt>Base URL</dt>
+              <dd>{modelConfig.baseUrl ?? "未配置"}</dd>
+            </div>
+            <div>
+              <dt>Model</dt>
+              <dd>{modelConfig.model ?? "未配置"}</dd>
+            </div>
+            <div>
+              <dt>API Key</dt>
+              <dd>{modelConfig.apiKeyConfigured ? "已配置" : "未配置"}</dd>
+            </div>
+          </dl>
+        </article>
+
+        <article className="panel">
+          <h2>存储状态</h2>
+          <dl className="admin-list">
+            <div>
+              <dt>类型</dt>
+              <dd>{status.storage.type}</dd>
+            </div>
+            <div>
+              <dt>路径</dt>
+              <dd className="breakable">{status.storage.databasePath}</dd>
+            </div>
+          </dl>
+        </article>
+      </section>
+
+      <section className="panel">
+        <h2>故事配置</h2>
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>故事</th>
+                <th>类型</th>
+                <th>世界地点</th>
+                <th>角色</th>
+                <th>锚点</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stories.map((item) => (
+                <tr key={item.story.id}>
+                  <td>
+                    <strong>{item.story.title}</strong>
+                    <span className="muted">{item.story.tagline}</span>
+                  </td>
+                  <td>{item.story.genre}</td>
+                  <td>{item.world.locations.length}</td>
+                  <td>{item.characters.length}</td>
+                  <td>{item.anchors.length}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="panel">
+        <h2>最近会话</h2>
+        {sessions.length ? (
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>会话</th>
+                  <th>故事</th>
+                  <th>回合</th>
+                  <th>更新时间</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sessions.map((session) => (
+                  <tr key={session.id}>
+                    <td className="mono">{session.id}</td>
+                    <td>{session.storyId}</td>
+                    <td>{session.turnCount}</td>
+                    <td>{formatDate(session.updatedAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="muted">暂无会话。</p>
+        )}
+      </section>
+
+      <section className="panel">
+        <h2>审核事件</h2>
+        {moderationEvents.length ? (
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>类型</th>
+                  <th>状态</th>
+                  <th>时间</th>
+                </tr>
+              </thead>
+              <tbody>
+                {moderationEvents.map((event) => (
+                  <tr key={event.id}>
+                    <td className="mono">{event.id}</td>
+                    <td>{event.type}</td>
+                    <td>{event.status}</td>
+                    <td>{formatDate(event.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="muted">暂无审核事件。MVP 阶段先保留接口和视图占位。</p>
+        )}
+      </section>
+    </main>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <article className="metric">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </article>
+  );
+}
+
+function formatDate(value: string): string {
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(value));
+}

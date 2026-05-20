@@ -7,6 +7,41 @@ import type {
 } from "@instory/shared";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000";
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? process.env.NEXT_PUBLIC_ADMIN_TOKEN;
+
+export interface AdminStatus {
+  service: string;
+  storage: {
+    type: string;
+    databasePath: string;
+  };
+  counts: {
+    stories: number;
+    sessions: number;
+  };
+}
+
+export interface AdminModelConfig {
+  provider: "mock" | "openai-compatible";
+  baseUrl: string | null;
+  model: string | null;
+  apiKeyConfigured: boolean;
+}
+
+export interface AdminSessionListItem {
+  id: string;
+  storyId: string;
+  createdAt: string;
+  updatedAt: string;
+  turnCount: number;
+}
+
+export interface AdminModerationEvent {
+  id: string;
+  type: string;
+  status: string;
+  createdAt: string;
+}
 
 export async function listStories(): Promise<StorySummary[]> {
   const response = await fetch(`${API_BASE}/api/stories`, { cache: "no-store" });
@@ -76,4 +111,45 @@ export async function createTurn(params: {
   }
 
   return (await response.json()) as CreateTurnResponse;
+}
+
+export async function getAdminStatus(): Promise<AdminStatus> {
+  return adminGet<AdminStatus>("/api/admin/status");
+}
+
+export async function getAdminModelConfig(): Promise<AdminModelConfig> {
+  return adminGet<AdminModelConfig>("/api/admin/models");
+}
+
+export async function getAdminStories(): Promise<StoryDetail[]> {
+  const data = await adminGet<{ stories: StoryDetail[] }>("/api/admin/stories");
+  return data.stories;
+}
+
+export async function getAdminSessions(limit = 20): Promise<AdminSessionListItem[]> {
+  const data = await adminGet<{ sessions: AdminSessionListItem[] }>(`/api/admin/sessions?limit=${limit}`);
+  return data.sessions;
+}
+
+export async function getAdminModerationEvents(): Promise<AdminModerationEvent[]> {
+  const data = await adminGet<{ events: AdminModerationEvent[] }>("/api/admin/moderation/events");
+  return data.events;
+}
+
+async function adminGet<T>(path: string): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (ADMIN_TOKEN) {
+    headers.Authorization = `Bearer ${ADMIN_TOKEN}`;
+  }
+
+  const response = await fetch(`${API_BASE}${path}`, {
+    cache: "no-store",
+    headers
+  });
+
+  if (!response.ok) {
+    throw new Error(`Admin API 请求失败：${response.status}`);
+  }
+
+  return (await response.json()) as T;
 }

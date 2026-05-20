@@ -671,6 +671,9 @@ npm run dev:web
 默认地址：
 
 - Web: `http://localhost:3000`
+- Admin 控制台: `http://localhost:3000/admin`
+
+如果服务端设置了 `ADMIN_TOKEN`，Web 服务也需要设置同样的 `ADMIN_TOKEN`，用于服务端渲染 `/admin` 时请求 Admin API。
 
 ### 常用检查
 
