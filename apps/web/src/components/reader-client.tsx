@@ -49,8 +49,8 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
   }
 
   return (
-    <main className="shell reader-shell reader-shell-focus">
-      <section className="reader reader-stage">
+    <main className="reader-shell reader-shell-focus h-dvh w-full overflow-hidden">
+      <section className="reader reader-stage h-dvh w-full min-w-0 p-0 sm:p-4 md:p-8">
         <div className="topbar reader-topbar reader-chrome-hidden">
           <div className="brand-row">
             <BrandMark size={40} />
@@ -61,10 +61,8 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
           </div>
         </div>
 
-        <div className="reader-scroll">
-          <div
-            className="turns reading-surface"
-          >
+        <div className="reader-scroll w-full min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
+          <div className="turns reading-surface w-full min-w-0 sm:max-w-[760px]">
             {session.turns.map((turn) => (
               <TurnView key={turn.id} turn={turn} />
             ))}
@@ -72,15 +70,16 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
         </div>
 
         {latestTurn ? (
-          <div className="reading-intervention-bar">
+          <div className="reading-intervention-bar w-full sm:w-auto sm:min-w-[360px] md:min-w-96">
             <Button
-              className="continue-reading-button"
+              className="continue-reading-button w-full min-w-0 sm:w-auto md:min-w-48"
               isDisabled={loading}
               onPress={() => void submit("继续阅读：请按当前角色倾向自然推进下一小节。", "free_text")}
             >
               {loading ? "生成中..." : "继续阅读"}
             </Button>
             <Button
+              className="w-full min-w-0 sm:w-auto md:min-w-36"
               isDisabled={loading}
               variant="outline"
               onPress={() => setActivePanel((panel) => (panel === "action" ? null : "action"))}
@@ -91,20 +90,20 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
         ) : null}
       </section>
 
-      <nav className="reader-tool-dock" aria-label="阅读工具">
-        <Button size="sm" variant={activePanel === "status" ? "secondary" : "outline"} onPress={() => setActivePanel((panel) => (panel === "status" ? null : "status"))}>
+      <nav className="reader-tool-dock w-full sm:w-auto" aria-label="阅读工具">
+        <Button className="w-full min-w-0 sm:w-auto" size="sm" variant={activePanel === "status" ? "secondary" : "outline"} onPress={() => setActivePanel((panel) => (panel === "status" ? null : "status"))}>
           状态
         </Button>
-        <Button size="sm" variant={activePanel === "memory" ? "secondary" : "outline"} onPress={() => setActivePanel((panel) => (panel === "memory" ? null : "memory"))}>
+        <Button className="w-full min-w-0 sm:w-auto" size="sm" variant={activePanel === "memory" ? "secondary" : "outline"} onPress={() => setActivePanel((panel) => (panel === "memory" ? null : "memory"))}>
           记忆
         </Button>
-        <Button size="sm" variant={activePanel === "action" ? "secondary" : "outline"} onPress={() => setActivePanel((panel) => (panel === "action" ? null : "action"))}>
+        <Button className="w-full min-w-0 sm:w-auto" size="sm" variant={activePanel === "action" ? "secondary" : "outline"} onPress={() => setActivePanel((panel) => (panel === "action" ? null : "action"))}>
           行动
         </Button>
       </nav>
 
       {activePanel ? (
-        <aside className="reader-context-panel" aria-label="阅读辅助面板">
+        <aside className="reader-context-panel w-full sm:w-[360px]" aria-label="阅读辅助面板">
           <div className="reader-context-panel-header">
             <strong>{panelTitle(activePanel)}</strong>
             <Button size="sm" variant="ghost" onPress={() => setActivePanel(null)}>关闭</Button>
@@ -134,10 +133,10 @@ function panelTitle(panel: Exclude<ReaderPanel, null>) {
 
 function TurnView({ turn }: { turn: SessionTurn }) {
   return (
-    <article className="turn">
-      <p>{turn.narration}</p>
+    <article className="turn w-full min-w-0">
+      <p className="reader-paragraph">{turn.narration}</p>
       {turn.dialogues.map((dialogue) => (
-        <p className="dialogue" key={`${turn.id}_${dialogue.speaker}_${dialogue.text}`}>
+        <p className="reader-paragraph dialogue" key={`${turn.id}_${dialogue.speaker}_${dialogue.text}`}>
           <strong>{dialogue.speaker}</strong>：{dialogue.text}
         </p>
       ))}
