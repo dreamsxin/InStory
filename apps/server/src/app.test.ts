@@ -285,6 +285,21 @@ describe("server API", () => {
     });
     expect(invalid.statusCode).toBe(400);
   });
+
+  it("verifies the active admin model provider", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/admin/models/verify"
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      ok: true,
+      provider: "mock",
+      choices: 3,
+      memoryEvents: 1
+    });
+  });
 });
 
 async function createSession(): Promise<CreateSessionResponse> {

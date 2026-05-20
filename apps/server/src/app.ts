@@ -89,6 +89,17 @@ export async function buildApp(options: BuildAppOptions) {
     }
   });
 
+  app.post("/api/admin/models/verify", async (request, reply) => {
+    try {
+      return await options.modelRuntime.verify();
+    } catch (error) {
+      return reply.code(502).send({
+        ok: false,
+        error: error instanceof Error ? error.message : "Model verification failed"
+      });
+    }
+  });
+
   app.get("/api/admin/stories", async () => ({
     stories: options.storyCatalog.listStories().map((story) => options.storyCatalog.findStory(story.id))
   }));

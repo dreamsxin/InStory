@@ -6,9 +6,14 @@ import {
   getAdminStories
 } from "@/lib/api";
 import { BrandMark } from "@/components/brand-mark";
-import { updateModelConfigAction } from "./actions";
+import { updateModelConfigAction, verifyModelConfigAction } from "./actions";
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const query = await searchParams;
   const [status, modelConfig, stories, sessions, moderationEvents] = await Promise.all([
     getAdminStatus(),
     getAdminModelConfig(),
@@ -65,6 +70,10 @@ export default async function AdminPage() {
             </label>
             <button className="primary" type="submit">保存模型配置</button>
           </form>
+          <form className="admin-form compact" action={verifyModelConfigAction}>
+            <button className="secondary" type="submit">验证当前 Provider</button>
+          </form>
+          <VerificationNotice query={query} />
           <dl className="admin-list">
             <div>
               <dt>Provider</dt>
@@ -196,6 +205,30 @@ export default async function AdminPage() {
       </section>
     </main>
   );
+}
+
+function VerificationNotice({ query }: { query: Record<string, string | string[] | undefined> }) {
+  const status = readQuery(query.verify);
+  if (!status) {
+    return null;
+  }
+
+  if (status === "ok") {
+    return (
+      <p className="notice success">
+        验证通过：{readQuery(query.provider)}，耗时 {readQuery(query.latencyMs)}ms，返回 {readQuery(query.choices)} 个选项。
+      </p>
+    );
+  }
+
+  return <p className="notice error">验证失败：{readQuery(query.message) ?? "请检查 Provider 配置"}</p>;
+}
+
+function readQuery(value: string | string[] | undefined): string | null {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+  return value ?? null;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

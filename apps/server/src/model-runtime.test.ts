@@ -38,4 +38,31 @@ describe("ModelRuntime", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("verifies the active provider output schema", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "instory-model-runtime-"));
+    const database = new AppDatabase(join(dir, "runtime.sqlite"));
+    const store = new ModelConfigStore(database);
+
+    try {
+      const runtime = new ModelRuntime(store, {
+        provider: "mock",
+        updatedAt: "2026-05-20T00:00:00.000Z"
+      });
+
+      const result = await runtime.verify();
+
+      expect(result).toMatchObject({
+        ok: true,
+        provider: "mock",
+        choices: 3,
+        memoryEvents: 1
+      });
+      expect(result.narrationLength).toBeGreaterThan(0);
+      expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+    } finally {
+      database.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

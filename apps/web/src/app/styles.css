@@ -291,6 +291,10 @@ button {
   margin-top: 14px;
 }
 
+.admin-form.compact {
+  margin-top: 10px;
+}
+
 .admin-form label {
   display: grid;
   gap: 6px;
@@ -319,6 +323,31 @@ button {
 
 .admin-form .checkbox-line input {
   width: auto;
+}
+
+.secondary {
+  border: 1px solid var(--line);
+  background: #faf7f0;
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: 6px;
+}
+
+.notice {
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 12px 0 0;
+}
+
+.notice.success {
+  background: #e8f3ec;
+  color: var(--green);
+  border: 1px solid #b9d8c5;
+}
+
+.notice.error {
+  background: #f7e9e7;
+  border: 1px solid #dfbbb6;
 }
 
 .admin-list div {

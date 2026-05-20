@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { updateAdminModelConfig } from "@/lib/api";
+import { redirect } from "next/navigation";
+import { updateAdminModelConfig, verifyAdminModelConfig } from "@/lib/api";
 
 export async function updateModelConfigAction(formData: FormData) {
   const provider = formData.get("provider") === "openai-compatible" ? "openai-compatible" : "mock";
@@ -19,4 +20,26 @@ export async function updateModelConfigAction(formData: FormData) {
   });
 
   revalidatePath("/admin");
+}
+
+export async function verifyModelConfigAction() {
+  let params: URLSearchParams;
+
+  try {
+    const result = await verifyAdminModelConfig();
+    params = new URLSearchParams({
+      verify: "ok",
+      provider: result.provider,
+      latencyMs: result.latencyMs.toString(),
+      choices: result.choices.toString(),
+      checkedAt: result.checkedAt
+    });
+  } catch (error) {
+    params = new URLSearchParams({
+      verify: "failed",
+      message: error instanceof Error ? error.message : "模型验证失败"
+    });
+  }
+
+  redirect(`/admin?${params.toString()}`);
 }

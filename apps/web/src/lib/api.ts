@@ -44,6 +44,17 @@ export interface AdminModerationEvent {
   createdAt: string;
 }
 
+export interface AdminModelVerificationResult {
+  ok: true;
+  provider: "mock" | "openai-compatible";
+  model: string | null;
+  latencyMs: number;
+  narrationLength: number;
+  choices: number;
+  memoryEvents: number;
+  checkedAt: string;
+}
+
 export async function listStories(): Promise<StorySummary[]> {
   const response = await fetch(`${API_BASE}/api/stories`, { cache: "no-store" });
   if (!response.ok) {
@@ -135,6 +146,13 @@ export async function updateAdminModelConfig(input: {
   });
 }
 
+export async function verifyAdminModelConfig(): Promise<AdminModelVerificationResult> {
+  return adminRequest<AdminModelVerificationResult>("/api/admin/models/verify", {
+    method: "POST",
+    body: JSON.stringify({})
+  });
+}
+
 export async function getAdminStories(): Promise<StoryDetail[]> {
   const data = await adminGet<{ stories: StoryDetail[] }>("/api/admin/stories");
   return data.stories;
@@ -176,8 +194,30 @@ async function adminRequest<T>(
   });
 
   if (!response.ok) {
-    throw new Error(`Admin API 请求失败：${response.status}`);
+    const errorMessage = await readAdminError(response);
+    throw new Error(errorMessage ?? `Admin API 请求失败：${response.status}`);
   }
 
   return (await response.json()) as T;
+}
+
+async function readAdminError(response: Response): Promise<string | null> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    return null;
+  }
+
+  try {
+    const data = (await response.json()) as { error?: unknown; message?: unknown };
+    if (typeof data.error === "string") {
+      return data.error;
+    }
+    if (typeof data.message === "string") {
+      return data.message;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
 }

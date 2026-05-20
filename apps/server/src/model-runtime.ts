@@ -1,4 +1,6 @@
 import { createLLMProvider, type LLMProvider } from "@instory/ai-orchestrator";
+import { narrativeResultSchema, type StorySession } from "@instory/shared";
+import { createInitialState } from "@instory/story-engine";
 import type {
   ModelProviderName,
   ModelConfigStore,
@@ -41,6 +43,30 @@ export class ModelRuntime {
     return this.getPublicConfig();
   }
 
+  async verify(): Promise<ModelVerificationResult> {
+    const startedAt = Date.now();
+    const result = await this.provider.generateNarrative({
+      session: createVerificationSession(),
+      userInput: "我压低声音问陆清河：外面是谁？"
+    });
+    const parsed = narrativeResultSchema.safeParse(result);
+
+    if (!parsed.success) {
+      throw new Error(`Model output failed schema validation: ${parsed.error.message}`);
+    }
+
+    return {
+      ok: true,
+      provider: this.config.provider,
+      model: this.config.model ?? null,
+      latencyMs: Date.now() - startedAt,
+      narrationLength: result.narration.length,
+      choices: result.choices.length,
+      memoryEvents: result.memoryEvents.length,
+      checkedAt: new Date().toISOString()
+    };
+  }
+
   private createProvider(config: StoredModelConfig): LLMProvider {
     return createLLMProvider({
       provider: config.provider,
@@ -49,6 +75,17 @@ export class ModelRuntime {
       model: config.model
     });
   }
+}
+
+export interface ModelVerificationResult {
+  ok: true;
+  provider: ModelProviderName;
+  model: string | null;
+  latencyMs: number;
+  narrationLength: number;
+  choices: number;
+  memoryEvents: number;
+  checkedAt: string;
 }
 
 export function createInitialModelConfig(env: NodeJS.ProcessEnv): StoredModelConfig {
@@ -88,5 +125,58 @@ function toPublicConfig(config: StoredModelConfig): PublicModelConfig {
     model: config.model ?? null,
     apiKeyConfigured: Boolean(config.apiKey),
     updatedAt: config.updatedAt
+  };
+}
+
+function createVerificationSession(): StorySession {
+  const state = createInitialState();
+
+  return {
+    id: "verify_session",
+    storyId: "rain-mansion",
+    readerRole: {
+      mode: "existing_character",
+      characterId: "lu_qinghe",
+      name: "陆清河",
+      description: "旧宅管事"
+    },
+    state,
+    turns: [
+      {
+        id: "turn_0",
+        sessionId: "verify_session",
+        inputType: "free_text",
+        input: "进入故事",
+        narration: "你醒来时，窗外正落着细雨。门外有人停下脚步。",
+        dialogues: [
+          {
+            speaker: "陆清河",
+            text: "醒了就别出声。今晚，这座宅子不认生人。"
+          }
+        ],
+        choices: [
+          {
+            id: "opening_c1",
+            text: "询问自己为何在这里",
+            risk: "medium"
+          }
+        ],
+        stateSnapshot: state,
+        createdAt: "2026-05-20T00:00:00.000Z"
+      }
+    ],
+    timeline: [
+      {
+        id: "node_0",
+        sessionId: "verify_session",
+        turnId: "turn_0",
+        title: "雨夜醒来",
+        summary: "你在雨夜旧宅醒来，陆清河提醒你不要出声。",
+        stateSnapshot: state,
+        createdAt: "2026-05-20T00:00:00.000Z"
+      }
+    ],
+    createdAt: "2026-05-20T00:00:00.000Z",
+    updatedAt: "2026-05-20T00:00:00.000Z"
   };
 }
