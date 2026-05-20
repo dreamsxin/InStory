@@ -265,22 +265,22 @@ function ProfileEditForm({ profile }: { profile: ReaderProfile }) {
       <form className="profile-form embedded" action={updateReaderProfileAction}>
         <input name="profileId" type="hidden" value={profile.id} />
         <div className="form-grid">
-          <TextField isRequired name="name">
+          <TextField defaultValue={profile.name} isRequired name="name">
             <Label>名称</Label>
-            <Input defaultValue={profile.name} maxLength={40} />
+            <Input maxLength={40} />
           </TextField>
-          <TextField name="gender">
+          <TextField defaultValue={profile.gender ?? ""} name="gender">
             <Label>性别</Label>
-            <Input defaultValue={profile.gender ?? ""} maxLength={40} />
+            <Input maxLength={40} />
           </TextField>
         </div>
-        <TextField isRequired name="personality">
+        <TextField defaultValue={profile.personality} isRequired name="personality">
           <Label>性格</Label>
-          <TextArea defaultValue={profile.personality} maxLength={1200} rows={3} />
+          <TextArea maxLength={1200} rows={3} />
         </TextField>
-        <TextField name="avatarUrl" type="url">
+        <TextField defaultValue={profile.avatarUrl ?? ""} name="avatarUrl" type="url">
           <Label>头像 URL</Label>
-          <Input defaultValue={profile.avatarUrl ?? ""} />
+          <Input />
         </TextField>
         <Select defaultSelectedKey={profile.visibility} name="visibility">
           <Label>可见性</Label>
@@ -295,9 +295,9 @@ function ProfileEditForm({ profile }: { profile: ReaderProfile }) {
             </ListBox>
           </Select.Popover>
         </Select>
-        <TextField isRequired name="description">
+        <TextField defaultValue={profile.description} isRequired name="description">
           <Label>身份背景</Label>
-          <TextArea defaultValue={profile.description} maxLength={2000} rows={3} />
+          <TextArea maxLength={2000} rows={3} />
         </TextField>
         <div className="management-actions">
           <Button type="submit">保存角色</Button>
@@ -332,22 +332,22 @@ function StoryEditForm({ detail, profiles }: { detail: StoryDetail; profiles: Re
             <h3>故事卡片</h3>
           </div>
           <div className="form-grid">
-            <TextField isRequired name="title">
+            <TextField defaultValue={detail.story.title} isRequired name="title">
               <Label>标题</Label>
-              <Input defaultValue={detail.story.title} maxLength={80} />
+              <Input maxLength={80} />
             </TextField>
-            <TextField isRequired name="genre">
+            <TextField defaultValue={detail.story.genre} isRequired name="genre">
               <Label>类型</Label>
-              <Input defaultValue={detail.story.genre} maxLength={40} />
+              <Input maxLength={40} />
             </TextField>
           </div>
-          <TextField isRequired name="tagline">
+          <TextField defaultValue={detail.story.tagline} isRequired name="tagline">
             <Label>一句话钩子</Label>
-            <Input defaultValue={detail.story.tagline} maxLength={160} />
+            <Input maxLength={160} />
           </TextField>
-          <TextField name="coverUrl" type="url">
+          <TextField defaultValue={detail.story.coverUrl ?? ""} name="coverUrl" type="url">
             <Label>封面图 URL</Label>
-            <Input defaultValue={detail.story.coverUrl ?? ""} />
+            <Input />
           </TextField>
           <Select defaultSelectedKey={detail.story.visibility} name="visibility">
             <Label>可见性</Label>
@@ -369,23 +369,23 @@ function StoryEditForm({ detail, profiles }: { detail: StoryDetail; profiles: Re
             <span className="eyebrow">世界入口</span>
             <h3>开场设定</h3>
           </div>
-          <TextField isRequired name="premise">
+          <TextField defaultValue={detail.world.premise} isRequired name="premise">
             <Label>世界前提</Label>
-            <TextArea defaultValue={detail.world.premise} maxLength={4000} rows={4} />
+            <TextArea maxLength={4000} rows={4} />
           </TextField>
           <div className="form-grid">
-            <TextField isRequired name="openingLocationName">
+            <TextField defaultValue={openingLocation?.name ?? ""} isRequired name="openingLocationName">
               <Label>起点地点</Label>
-              <Input defaultValue={openingLocation?.name ?? ""} maxLength={80} />
+              <Input maxLength={80} />
             </TextField>
-            <TextField isRequired name="openingLocationDescription">
+            <TextField defaultValue={openingLocation?.description ?? ""} isRequired name="openingLocationDescription">
               <Label>起点场景</Label>
-              <TextArea defaultValue={openingLocation?.description ?? ""} maxLength={1000} rows={3} />
+              <TextArea maxLength={1000} rows={3} />
             </TextField>
           </div>
-          <TextField name="worldRules">
+          <TextField defaultValue={detail.world.rules.join("\n")} name="worldRules">
             <Label>世界规则</Label>
-            <TextArea defaultValue={detail.world.rules.join("\n")} maxLength={4000} rows={3} />
+            <TextArea maxLength={4000} rows={3} />
           </TextField>
         </section>
 
