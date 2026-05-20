@@ -9,7 +9,15 @@ import {
   storySummarySchema
 } from "@instory/shared";
 import { applyStateDelta, createInitialState, createTimelineNode, shouldCreateTimelineNode } from "@instory/story-engine";
-import type { CreateSessionResponse, CreateTurnResponse, SessionTurn, StorySession, TimelineNode } from "@instory/shared";
+import type {
+  CharacterProfile,
+  CreateSessionResponse,
+  CreateTurnResponse,
+  ReaderProfile,
+  SessionTurn,
+  StorySession,
+  TimelineNode
+} from "@instory/shared";
 import type { StoryCatalog } from "./data/story-catalog.js";
 import type { ReaderProfileStore } from "./db/reader-profile-store.js";
 import type { SessionStore } from "./db/session-store.js";
@@ -163,7 +171,12 @@ export async function buildApp(options: BuildAppOptions) {
     }
 
     try {
-      const story = options.storyCatalog.createStory(parsed.data);
+      const castCharacters = createCastCharacters({
+        storyId: parsed.data.id,
+        profileIds: parsed.data.castProfileIds ?? [],
+        readerProfileStore: options.readerProfileStore
+      });
+      const story = options.storyCatalog.createStory(parsed.data, castCharacters);
       return reply.code(201).send({ story });
     } catch (error) {
       return reply.code(409).send({
@@ -399,4 +412,36 @@ export async function buildApp(options: BuildAppOptions) {
   });
 
   return app;
+}
+
+function createCastCharacters({
+  profileIds,
+  readerProfileStore,
+  storyId
+}: {
+  profileIds: string[];
+  readerProfileStore: ReaderProfileStore;
+  storyId: string;
+}): CharacterProfile[] {
+  const uniqueProfileIds = [...new Set(profileIds)];
+  return uniqueProfileIds
+    .map((profileId) => readerProfileStore.findById(profileId))
+    .filter((profile): profile is ReaderProfile => profile !== null)
+    .map((profile) => ({
+      id: `cast_${profile.id}`,
+      storyId,
+      name: profile.name,
+      role: profile.description,
+      personality: splitProfileText(profile.personality),
+      goals: ["参与故事互动", "根据自身设定回应读者行动"],
+      constraints: splitProfileText(profile.description)
+    }));
+}
+
+function splitProfileText(value: string): string[] {
+  return value
+    .split(/[，,。；;\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 8);
 }

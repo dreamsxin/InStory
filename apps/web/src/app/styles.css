@@ -447,6 +447,72 @@ a {
   gap: 10px;
 }
 
+.creator-console {
+  gap: 14px;
+}
+
+.creator-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.creator-tab {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: white;
+  color: var(--muted);
+  padding: 9px 14px;
+  font-weight: 700;
+}
+
+.creator-tab.active {
+  border-color: rgba(139, 47, 47, 0.28);
+  background: var(--panel-strong);
+  color: var(--text);
+}
+
+.form-section {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fbfcfd;
+}
+
+.form-section h3 {
+  margin: 0;
+}
+
+.form-section p {
+  margin: 6px 0 0;
+}
+
+.cast-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.cast-option {
+  display: grid;
+  grid-template-columns: auto 46px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: white;
+}
+
+.cast-option small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
 .primary {
   border: 0;
   background: var(--accent);

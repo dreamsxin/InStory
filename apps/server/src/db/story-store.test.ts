@@ -111,14 +111,25 @@ describe("StoryStore", () => {
         experienceMode: "coauthored",
         defaultSegmentLength: "standard"
       };
-      const created = store.createStory(input);
+      const created = store.createStory(input, [
+        {
+          id: "cast_lin",
+          storyId: "moon-market",
+          name: "林向晚",
+          role: "被卷入市集的法医",
+          personality: ["冷静", "敏锐"],
+          goals: ["找到名字"],
+          constraints: ["不会轻易相信陌生人"]
+        }
+      ]);
 
       expect(created.story.id).toBe("moon-market");
       expect(created.story.coverUrl).toBe("https://example.com/moon-market.png");
       expect(created.world.locations).toHaveLength(1);
-      expect(created.characters).toHaveLength(0);
+      expect(created.characters).toHaveLength(1);
       expect(created.anchors).toHaveLength(0);
       expect(store.countStories()).toBe(2);
+      expect(store.findStory("moon-market")?.characters[0]?.name).toBe("林向晚");
       expect(store.findStory("moon-market")?.world.rules).toEqual(["不能直接说出真名", "交易必须付出记忆"]);
       expect(() => store.createStory(input)).toThrow("Story id already exists");
     } finally {

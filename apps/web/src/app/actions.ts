@@ -30,6 +30,7 @@ export async function createStoryAction(formData: FormData) {
   const premise = String(formData.get("premise") ?? "").trim();
   const openingLocationName = String(formData.get("openingLocationName") ?? "").trim();
   const openingLocationDescription = String(formData.get("openingLocationDescription") ?? "").trim();
+  const castProfileIds = formData.getAll("castProfileIds").map((value) => String(value));
   const worldRules = String(formData.get("worldRules") ?? "")
     .split(/\r?\n/)
     .map((item) => item.trim())
@@ -54,6 +55,7 @@ export async function createStoryAction(formData: FormData) {
     openingLocationName,
     openingLocationDescription,
     worldRules,
+    castProfileIds,
     aiFreedom: aiFreedom as "low" | "medium" | "high",
     experienceMode: experienceMode as "scripted" | "coauthored" | "improvised",
     defaultSegmentLength: defaultSegmentLength as "short" | "standard" | "long"

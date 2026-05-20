@@ -29,6 +29,7 @@ export interface CreateStoryRequest {
   openingLocationName: string;
   openingLocationDescription: string;
   worldRules: string[];
+  castProfileIds?: string[];
   aiFreedom: "low" | "medium" | "high";
   experienceMode: ExperienceMode;
   defaultSegmentLength: SegmentLengthPreset;

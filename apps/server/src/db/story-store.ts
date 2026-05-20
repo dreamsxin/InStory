@@ -112,7 +112,7 @@ export class StoryStore {
     return updated;
   }
 
-  createStory(input: CreateStoryRequest): StoryDetail {
+  createStory(input: CreateStoryRequest, characters: CharacterProfile[] = []): StoryDetail {
     const existing = this.findStorySummary(input.id);
     if (existing) {
       throw new Error("Story id already exists");
@@ -147,6 +147,11 @@ export class StoryStore {
       this.database.db
         .prepare("INSERT INTO worlds (story_id, payload) VALUES (?, ?)")
         .run(world.storyId, JSON.stringify(world));
+      for (const character of characters) {
+        this.database.db
+          .prepare("INSERT INTO characters (id, story_id, payload) VALUES (?, ?, ?)")
+          .run(character.id, character.storyId, JSON.stringify(character));
+      }
       this.database.db.exec("COMMIT");
     } catch (error) {
       this.database.db.exec("ROLLBACK");
@@ -156,7 +161,7 @@ export class StoryStore {
     return {
       story,
       world,
-      characters: [],
+      characters,
       anchors: []
     };
   }

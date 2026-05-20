@@ -33,8 +33,8 @@ export class StoryCatalog {
     return this.store.updateStorySummary(storyId, input);
   }
 
-  createStory(input: CreateStoryRequest): StoryDetail {
-    return this.store.createStory(input);
+  createStory(input: CreateStoryRequest, characters: CharacterProfile[] = []): StoryDetail {
+    return this.store.createStory(input, characters);
   }
 
   findCharacters(storyId: string): CharacterProfile[] {

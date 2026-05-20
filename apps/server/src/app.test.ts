@@ -385,6 +385,19 @@ describe("server API", () => {
   });
 
   it("creates a minimal story through client story API", async () => {
+    const createdProfile = await app.inject({
+      method: "POST",
+      url: "/api/reader/profiles",
+      payload: {
+        name: "林向晚",
+        gender: "女",
+        personality: "冷静、敏锐、习惯观察细节。",
+        avatarUrl: null,
+        description: "被卷入市集的现代法医。"
+      }
+    });
+    const profileId = createdProfile.json<{ profile: { id: string } }>().profile.id;
+
     const created = await app.inject({
       method: "POST",
       url: "/api/stories",
@@ -398,6 +411,7 @@ describe("server API", () => {
         openingLocationName: "市集入口",
         openingLocationDescription: "湿漉漉的石阶向下延伸，灯笼照出一排没有影子的摊位。",
         worldRules: ["不能直接说出真名", "交易必须付出记忆"],
+        castProfileIds: [profileId],
         aiFreedom: "medium",
         experienceMode: "coauthored",
         defaultSegmentLength: "standard"
@@ -414,7 +428,11 @@ describe("server API", () => {
       world: {
         premise: "午夜之后，城市背面的市集会向失去名字的人开放。"
       },
-      characters: [],
+      characters: [
+        {
+          name: "林向晚"
+        }
+      ],
       anchors: []
     });
 

@@ -6,7 +6,7 @@ import {
   getAdminStatus,
   getAdminStories
 } from "@/lib/api";
-import { ModelConfigForm, StorySummaryForm } from "@/components/admin-forms";
+import { ModelConfigForm, StorySummaryForm } from "@/components/admin-console-forms";
 import { BrandMark } from "@/components/brand-mark";
 import Link from "next/link";
 

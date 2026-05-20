@@ -99,6 +99,7 @@ export const createStoryRequestSchema = storySummarySchema
     openingLocationName: z.string().min(1).max(80),
     openingLocationDescription: z.string().min(1).max(1000),
     worldRules: z.array(z.string().min(1).max(500)).max(20),
+    castProfileIds: z.array(z.string().min(1)).max(12).optional(),
     aiFreedom: z.enum(["low", "medium", "high"]).default("medium")
   });
 

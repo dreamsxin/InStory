@@ -202,6 +202,8 @@ ProfileAvatar
 - `ReaderProfile`：用户自己的分身，可跨故事复用。
 - `ReaderRole`：某次会话中实际使用的身份快照，来源可以是 `Character`、`ReaderProfile` 或一次性自定义角色。
 
+MVP 允许创作故事时从 `ReaderProfile` 选择故事演员。服务端创建故事时会复制一份 `Character` 快照，避免用户后续修改自己的入戏角色后影响已有故事设定。
+
 #### Creator
 
 职责：
@@ -275,6 +277,14 @@ type StoryVersion = {
 ```
 
 MVP 当前工程仍以 SQLite JSON payload 保存故事配置。实现时可以先把 `experienceMode` 与 `defaultSegmentLength` 写入 `StorySummary` payload；等 `StoryVersion` 表落地后再迁移到版本表。
+
+故事演员创建策略：
+
+```text
+ReaderProfile -> Character snapshot
+```
+
+复制字段包括名称、身份背景、性格、头像引用和约束摘要。运行时读者输入动作或对话后，AI Orchestrator 根据当前读者身份、故事演员设定、世界规则和上下文生成演员回应。
 
 商业化阶段再加入积分经济相关对象：
 
