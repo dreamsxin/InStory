@@ -7,6 +7,7 @@ import { useState } from "react";
 
 export function ReaderClient({ initialSession }: { initialSession: StorySession }) {
   const [session, setSession] = useState(initialSession);
+  const [chromeVisible, setChromeVisible] = useState(true);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,9 +45,9 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
   }
 
   return (
-    <main className="shell">
-      <section className="reader">
-        <div className="topbar">
+    <main className={`shell reader-shell ${chromeVisible ? "" : "reader-shell-focus"}`}>
+      <section className="reader reader-stage">
+        <div className={`topbar reader-topbar ${chromeVisible ? "" : "reader-chrome-hidden"}`}>
           <div className="brand-row">
             <BrandMark size={40} />
             <div className="brand">
@@ -56,7 +57,19 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
           </div>
         </div>
 
-        <div className="turns">
+        <div
+          className="turns reading-surface"
+          role="button"
+          tabIndex={0}
+          aria-label="切换阅读界面栏显示"
+          onClick={() => setChromeVisible((visible) => !visible)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              setChromeVisible((visible) => !visible);
+            }
+          }}
+        >
           {session.turns.map((turn) => (
             <TurnView key={turn.id} turn={turn} />
           ))}
@@ -79,7 +92,7 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
         ) : null}
 
         <form
-          className="composer"
+          className={`composer reader-composer ${chromeVisible ? "" : "reader-chrome-hidden"}`}
           onSubmit={(event) => {
             event.preventDefault();
             void submit(text, "free_text");
@@ -98,10 +111,14 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
         </form>
       </section>
 
-      <aside className="sidebar">
+      <aside className={`sidebar reader-sidebar ${chromeVisible ? "" : "reader-chrome-hidden"}`}>
         <StatePanel state={session.state} />
         <TimelinePanel session={session} />
       </aside>
+
+      <button className="reader-chrome-toggle" type="button" onClick={() => setChromeVisible((visible) => !visible)}>
+        {chromeVisible ? "专注阅读" : "显示菜单"}
+      </button>
     </main>
   );
 }
