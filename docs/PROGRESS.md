@@ -30,12 +30,15 @@
 - 新增 OpenAI-compatible `LLMProvider`。
 - 服务端支持通过环境变量在 Mock AI 和 OpenAI-compatible 模型之间切换。
 - 新增 `.env.example`。
+- 为 `story-engine` 增加状态机单元测试，覆盖初始状态、状态差异合并、去重、时间线节点判定和摘要回退。
+- 修正 workspace 测试脚本，允许暂未添加测试的应用包通过 `npm run test`。
 
 ### 验证结果
 
 - `npm install` 成功。
 - `npm run typecheck` 通过。
 - `npm run build` 通过。
+- `npm run test` 通过。
 - 服务端健康检查通过：`http://localhost:4000/api/health`。
 - Web 首页返回 200：`http://localhost:3000`。
 
@@ -49,6 +52,6 @@
 ### 下一步
 
 1. 增加持久化层，优先接入 PostgreSQL/SQLite 二选一的开发环境。
-2. 为 `story-engine` 增加单元测试。
-3. 完善作者配置数据结构与示例故事种子数据。
-4. 增加真实模型端到端验证用例。
+2. 完善作者配置数据结构与示例故事种子数据。
+3. 增加真实模型端到端验证用例。
+4. 增加服务端 API 测试。

@@ -7,7 +7,7 @@
     "dev": "tsx watch src/main.ts",
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",
