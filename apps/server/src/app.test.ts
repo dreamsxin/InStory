@@ -2,12 +2,13 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { MockNarrativeProvider } from "@instory/ai-orchestrator";
 import type { CreateSessionResponse, CreateTurnResponse, StoryDetail, StorySession } from "@instory/shared";
 import { buildApp } from "./app.js";
 import { StoryCatalog } from "./data/story-catalog.js";
 import { AppDatabase } from "./db/app-database.js";
+import { ModelConfigStore } from "./db/model-config-store.js";
 import { SessionStore } from "./db/session-store.js";
+import { ModelRuntime } from "./model-runtime.js";
 
 type TestApp = Awaited<ReturnType<typeof buildApp>>;
 
@@ -19,13 +20,12 @@ beforeEach(async () => {
   tempDir = mkdtempSync(join(tmpdir(), "instory-api-"));
   database = new AppDatabase(join(tempDir, "api.sqlite"));
   app = await buildApp({
-    provider: new MockNarrativeProvider(),
     sessionStore: new SessionStore(database),
     storyCatalog: new StoryCatalog(database),
-    modelConfig: {
+    modelRuntime: new ModelRuntime(new ModelConfigStore(database), {
       provider: "mock",
-      apiKeyConfigured: false
-    },
+      updatedAt: "2026-05-20T00:00:00.000Z"
+    }),
     logger: false
   });
 });
@@ -170,7 +170,7 @@ describe("server API", () => {
       url: "/api/admin/models"
     });
     expect(models.statusCode).toBe(200);
-    expect(models.json()).toEqual({
+    expect(models.json()).toMatchObject({
       provider: "mock",
       baseUrl: null,
       model: null,
@@ -219,13 +219,12 @@ describe("server API", () => {
     tempDir = mkdtempSync(join(tmpdir(), "instory-api-"));
     database = new AppDatabase(join(tempDir, "api.sqlite"));
     app = await buildApp({
-      provider: new MockNarrativeProvider(),
       sessionStore: new SessionStore(database),
       storyCatalog: new StoryCatalog(database),
-      modelConfig: {
+      modelRuntime: new ModelRuntime(new ModelConfigStore(database), {
         provider: "mock",
-        apiKeyConfigured: false
-      },
+        updatedAt: "2026-05-20T00:00:00.000Z"
+      }),
       adminToken: "secret",
       logger: false
     });
@@ -244,6 +243,47 @@ describe("server API", () => {
       }
     });
     expect(authorized.statusCode).toBe(200);
+  });
+
+  it("updates model config through admin API without exposing API key", async () => {
+    const updated = await app.inject({
+      method: "PUT",
+      url: "/api/admin/models",
+      payload: {
+        provider: "openai-compatible",
+        baseUrl: "https://api.example.com/v1",
+        model: "story-model",
+        apiKey: "secret-key"
+      }
+    });
+
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json()).toMatchObject({
+      provider: "openai-compatible",
+      baseUrl: "https://api.example.com/v1",
+      model: "story-model",
+      apiKeyConfigured: true
+    });
+    expect(JSON.stringify(updated.json())).not.toContain("secret-key");
+
+    const loaded = await app.inject({
+      method: "GET",
+      url: "/api/admin/models"
+    });
+    expect(loaded.json()).toMatchObject({
+      provider: "openai-compatible",
+      apiKeyConfigured: true
+    });
+
+    const invalid = await app.inject({
+      method: "PUT",
+      url: "/api/admin/models",
+      payload: {
+        provider: "openai-compatible",
+        baseUrl: "https://api.example.com/v1"
+      }
+    });
+    expect(invalid.statusCode).toBe(400);
   });
 });
 

@@ -6,6 +6,7 @@ import {
   getAdminStories
 } from "@/lib/api";
 import { BrandMark } from "@/components/brand-mark";
+import { updateModelConfigAction } from "./actions";
 
 export default async function AdminPage() {
   const [status, modelConfig, stories, sessions, moderationEvents] = await Promise.all([
@@ -38,6 +39,32 @@ export default async function AdminPage() {
       <section className="admin-grid">
         <article className="panel">
           <h2>模型配置</h2>
+          <form className="admin-form" action={updateModelConfigAction}>
+            <label>
+              <span>Provider</span>
+              <select name="provider" defaultValue={modelConfig.provider}>
+                <option value="mock">Mock</option>
+                <option value="openai-compatible">OpenAI-compatible</option>
+              </select>
+            </label>
+            <label>
+              <span>Base URL</span>
+              <input name="baseUrl" type="url" defaultValue={modelConfig.baseUrl ?? ""} placeholder="https://api.openai.com/v1" />
+            </label>
+            <label>
+              <span>Model</span>
+              <input name="model" type="text" defaultValue={modelConfig.model ?? ""} placeholder="gpt-4.1-mini" />
+            </label>
+            <label>
+              <span>API Key</span>
+              <input name="apiKey" type="password" placeholder={modelConfig.apiKeyConfigured ? "保持现有 Key" : "输入 API Key"} />
+            </label>
+            <label className="checkbox-line">
+              <input name="clearApiKey" type="checkbox" />
+              <span>清除已保存 API Key</span>
+            </label>
+            <button className="primary" type="submit">保存模型配置</button>
+          </form>
           <dl className="admin-list">
             <div>
               <dt>Provider</dt>
@@ -54,6 +81,10 @@ export default async function AdminPage() {
             <div>
               <dt>API Key</dt>
               <dd>{modelConfig.apiKeyConfigured ? "已配置" : "未配置"}</dd>
+            </div>
+            <div>
+              <dt>更新时间</dt>
+              <dd>{modelConfig.updatedAt ? formatDate(modelConfig.updatedAt) : "未记录"}</dd>
             </div>
           </dl>
         </article>

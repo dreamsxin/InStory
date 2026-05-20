@@ -1,24 +1,25 @@
 import cors from "@fastify/cors";
 import Fastify from "fastify";
+import { z } from "zod";
 import { createSessionRequestSchema, createTurnRequestSchema } from "@instory/shared";
 import { applyStateDelta, createInitialState, createTimelineNode, shouldCreateTimelineNode } from "@instory/story-engine";
-import type { LLMProvider } from "@instory/ai-orchestrator";
 import type { CreateSessionResponse, CreateTurnResponse, SessionTurn, StorySession, TimelineNode } from "@instory/shared";
 import type { StoryCatalog } from "./data/story-catalog.js";
 import type { SessionStore } from "./db/session-store.js";
+import type { ModelRuntime } from "./model-runtime.js";
 
-export interface RuntimeModelConfig {
-  provider: "mock" | "openai-compatible";
-  baseUrl?: string;
-  model?: string;
-  apiKeyConfigured: boolean;
-}
+const updateModelConfigSchema = z.object({
+  provider: z.enum(["mock", "openai-compatible"]),
+  baseUrl: z.string().nullish(),
+  model: z.string().nullish(),
+  apiKey: z.string().nullish(),
+  clearApiKey: z.boolean().optional()
+});
 
 export interface BuildAppOptions {
-  provider: LLMProvider;
   sessionStore: SessionStore;
   storyCatalog: StoryCatalog;
-  modelConfig: RuntimeModelConfig;
+  modelRuntime: ModelRuntime;
   adminToken?: string;
   logger?: boolean;
 }
@@ -70,11 +71,23 @@ export async function buildApp(options: BuildAppOptions) {
   }));
 
   app.get("/api/admin/models", async () => ({
-    provider: options.modelConfig.provider,
-    baseUrl: options.modelConfig.baseUrl ?? null,
-    model: options.modelConfig.model ?? null,
-    apiKeyConfigured: options.modelConfig.apiKeyConfigured
+    ...options.modelRuntime.getPublicConfig()
   }));
+
+  app.put("/api/admin/models", async (request, reply) => {
+    const parsed = updateModelConfigSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
+    }
+
+    try {
+      return options.modelRuntime.update(parsed.data);
+    } catch (error) {
+      return reply.code(400).send({
+        error: error instanceof Error ? error.message : "Failed to update model config"
+      });
+    }
+  });
 
   app.get("/api/admin/stories", async () => ({
     stories: options.storyCatalog.listStories().map((story) => options.storyCatalog.findStory(story.id))
@@ -230,7 +243,7 @@ export async function buildApp(options: BuildAppOptions) {
       return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
     }
 
-    const result = await options.provider.generateNarrative({
+    const result = await options.modelRuntime.getProvider().generateNarrative({
       session,
       userInput: parsed.data.content
     });

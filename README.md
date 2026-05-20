@@ -116,6 +116,8 @@ Authorization: Bearer dev-admin-token
 
 本地开发如果不设置 `ADMIN_TOKEN`，Admin API 默认允许访问；部署环境必须设置。
 
+模型 Provider 可在 Admin 控制台保存为 Mock 或 OpenAI-compatible。API Key 只存储在服务端 SQLite，不会在 Admin API 或页面中回显。
+
 ### 启动服务端
 
 ```bash

@@ -26,6 +26,7 @@ export interface AdminModelConfig {
   baseUrl: string | null;
   model: string | null;
   apiKeyConfigured: boolean;
+  updatedAt: string | null;
 }
 
 export interface AdminSessionListItem {
@@ -121,6 +122,19 @@ export async function getAdminModelConfig(): Promise<AdminModelConfig> {
   return adminGet<AdminModelConfig>("/api/admin/models");
 }
 
+export async function updateAdminModelConfig(input: {
+  provider: "mock" | "openai-compatible";
+  baseUrl?: string | null;
+  model?: string | null;
+  apiKey?: string | null;
+  clearApiKey?: boolean;
+}): Promise<AdminModelConfig> {
+  return adminRequest<AdminModelConfig>("/api/admin/models", {
+    method: "PUT",
+    body: JSON.stringify(input)
+  });
+}
+
 export async function getAdminStories(): Promise<StoryDetail[]> {
   const data = await adminGet<{ stories: StoryDetail[] }>("/api/admin/stories");
   return data.stories;
@@ -137,14 +151,28 @@ export async function getAdminModerationEvents(): Promise<AdminModerationEvent[]
 }
 
 async function adminGet<T>(path: string): Promise<T> {
+  return adminRequest<T>(path);
+}
+
+async function adminRequest<T>(
+  path: string,
+  init: RequestInit = {}
+): Promise<T> {
   const headers: Record<string, string> = {};
+  if (init.body) {
+    headers["Content-Type"] = "application/json";
+  }
   if (ADMIN_TOKEN) {
     headers.Authorization = `Bearer ${ADMIN_TOKEN}`;
   }
 
   const response = await fetch(`${API_BASE}${path}`, {
     cache: "no-store",
-    headers
+    ...init,
+    headers: {
+      ...headers,
+      ...init.headers
+    }
   });
 
   if (!response.ok) {

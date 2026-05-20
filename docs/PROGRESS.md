@@ -59,6 +59,8 @@
 - 新增 `docs/PRODUCT_PLAN.md`，将 README 中的产品规划内容迁入独立文档。
 - README 收敛为开源项目入口，仅保留项目概览、当前状态、技术栈、代码结构、文档导航和开发启动说明。
 - 新增 `npm run verify:llm`，用于验证 Mock 或 OpenAI-compatible `LLMProvider` 的端到端叙事输出 schema。
+- 管理后台支持保存正式 OpenAI-compatible Provider 配置，包含 Provider、Base URL、Model 和 API Key。
+- 模型配置写入 SQLite，运行时立即重建 `LLMProvider`，API Key 不通过 Admin API 回显。
 
 ### 验证结果
 
