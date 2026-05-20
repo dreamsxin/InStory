@@ -158,7 +158,7 @@ function ContinueView({ sessions }: { sessions: ReaderSessionListItem[] }) {
 }
 
 function ContinueStoryCard({ session }: { session: ReaderSessionListItem }) {
-  const story = session.story;
+  const story = session.story ?? createSessionStoryFallback(session);
 
   return (
     <Card className="story-card">
@@ -812,4 +812,19 @@ function experienceModeLabel(mode: StorySummary["experienceMode"]) {
 
 function segmentLengthLabel(length: StorySummary["defaultSegmentLength"]) {
   return length === "short" ? "短段" : length === "long" ? "长小节" : "标准小节";
+}
+
+function createSessionStoryFallback(session: ReaderSessionListItem): StorySummary {
+  return {
+    id: session.storyId,
+    ownerId: null,
+    visibility: "public",
+    title: session.storyTitle,
+    tagline: "继续上次的入戏进度",
+    genre: "故事",
+    coverUrl: null,
+    aiFreedom: "medium",
+    experienceMode: "coauthored",
+    defaultSegmentLength: "standard"
+  };
 }

@@ -191,7 +191,7 @@ export interface ReaderSessionListItem {
   id: string;
   storyId: string;
   storyTitle: string;
-  story: StorySummary;
+  story?: StorySummary;
   readerRoleName: string;
   latestSummary: string;
   turnCount: number;
