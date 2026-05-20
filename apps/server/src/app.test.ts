@@ -103,13 +103,38 @@ describe("server API", () => {
       url: "/api/me/sessions"
     });
     expect(recentSessions.statusCode).toBe(200);
-    expect(recentSessions.json<{ sessions: Array<{ id: string; storyTitle: string; readerRoleName: string }> }>().sessions).toContainEqual(
+    expect(
+      recentSessions.json<{ sessions: Array<{ id: string; storyTitle: string; story: { title: string }; readerRoleName: string }> }>().sessions
+    ).toContainEqual(
       expect.objectContaining({
         id: sessionId,
         storyTitle: "雨夜旧宅",
+        story: expect.objectContaining({
+          title: "雨夜旧宅"
+        }),
         readerRoleName: "陆清河"
       })
     );
+  });
+
+  it("returns one latest reading record per story", async () => {
+    await createSession();
+    await createSession();
+
+    const recentSessions = await app.inject({
+      method: "GET",
+      url: "/api/me/sessions"
+    });
+
+    expect(recentSessions.statusCode).toBe(200);
+    const sessions = recentSessions.json<{ sessions: Array<{ storyId: string; story: { id: string } }> }>().sessions;
+    expect(sessions.filter((session) => session.storyId === "rain-mansion")).toHaveLength(1);
+    expect(sessions[0]).toMatchObject({
+      storyId: "rain-mansion",
+      story: {
+        id: "rain-mansion"
+      }
+    });
   });
 
   it("creates a rewind branch from a timeline node", async () => {

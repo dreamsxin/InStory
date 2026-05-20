@@ -525,28 +525,7 @@ a {
   gap: 10px;
 }
 
-.session-list {
-  display: grid;
-  gap: 12px;
-}
-
-.session-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 14px;
-  align-items: center;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--panel);
-  box-shadow: var(--shadow-soft);
-  padding: 16px;
-}
-
-.session-card h3 {
-  margin: 4px 0;
-}
-
-.session-card p {
+.continue-summary {
   margin: 0;
   color: var(--muted);
   line-height: 1.55;
@@ -1343,10 +1322,6 @@ a {
   }
 
   .story-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .session-card {
     grid-template-columns: 1fr;
   }
 

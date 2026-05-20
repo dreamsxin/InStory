@@ -174,11 +174,26 @@ export async function buildApp(options: BuildAppOptions) {
   app.get("/api/me/sessions", async (request) => {
     const query = request.query as { limit?: string };
     const limit = Number(query.limit ?? 20);
+    const normalizedLimit = Number.isFinite(limit) ? Math.max(1, limit) : 20;
+    const seenStoryIds = new Set<string>();
+    const sessions: ReaderSessionListItem[] = [];
+
+    for (const item of options.sessionStore.listRecent(Math.max(normalizedLimit * 4, 40))) {
+      const sessionItem = createReaderSessionListItem(item.id, options);
+      if (!sessionItem || seenStoryIds.has(sessionItem.storyId)) {
+        continue;
+      }
+
+      seenStoryIds.add(sessionItem.storyId);
+      sessions.push(sessionItem);
+
+      if (sessions.length >= normalizedLimit) {
+        break;
+      }
+    }
+
     return {
-      sessions: options.sessionStore
-        .listRecent(Number.isFinite(limit) ? limit : 20)
-        .map((item) => createReaderSessionListItem(item.id, options))
-        .filter((item): item is ReaderSessionListItem => item !== null)
+      sessions
     };
   });
 
@@ -516,11 +531,16 @@ function createReaderSessionListItem(sessionId: string, options: BuildAppOptions
   }
 
   const story = options.storyCatalog.findStory(session.storyId)?.story;
+  if (!story) {
+    return null;
+  }
+
   const latestTurn = session.turns.at(-1);
   return {
     id: session.id,
-    storyId: session.storyId,
-    storyTitle: story?.title ?? session.storyId,
+    storyId: story.id,
+    storyTitle: story.title,
+    story,
     readerRoleName: session.readerRole.name,
     latestSummary: latestTurn?.narration ?? "刚刚进入故事。",
     turnCount: session.turns.length,

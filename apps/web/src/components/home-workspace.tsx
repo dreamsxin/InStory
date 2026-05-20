@@ -140,20 +140,9 @@ function ContinueView({ sessions }: { sessions: ReaderSessionListItem[] }) {
         <Chip size="sm" variant="soft">{sessions.length} 个阅读进度</Chip>
       </div>
       {sessions.length ? (
-        <div className="session-list">
+        <div className="story-grid">
           {sessions.map((session) => (
-            <article className="session-card" key={session.id}>
-              <div>
-                <span className="eyebrow">{session.readerRoleName}</span>
-                <h3>{session.storyTitle}</h3>
-                <p>{session.latestSummary}</p>
-                <div className="tag-row compact">
-                  <Chip size="sm" variant="soft">{session.turnCount} 回合</Chip>
-                  <Chip size="sm" variant="soft">{formatUpdatedAt(session.updatedAt)}</Chip>
-                </div>
-              </div>
-              <a className="button-link" href={`/story/${session.id}`}>继续</a>
-            </article>
+            <ContinueStoryCard key={session.id} session={session} />
           ))}
         </div>
       ) : (
@@ -165,6 +154,37 @@ function ContinueView({ sessions }: { sessions: ReaderSessionListItem[] }) {
         </Card>
       )}
     </div>
+  );
+}
+
+function ContinueStoryCard({ session }: { session: ReaderSessionListItem }) {
+  const story = session.story;
+
+  return (
+    <Card className="story-card">
+      <div className="story-cover" aria-hidden="true">
+        {story.coverUrl ? <img alt="" src={story.coverUrl} /> : <div className="story-cover-fallback">{story.title.slice(0, 1)}</div>}
+      </div>
+      <Card.Header className="story-card-header">
+        <h2>{story.title}</h2>
+        <p className="muted">{story.tagline}</p>
+      </Card.Header>
+      <Card.Content className="story-card-content">
+        <div className="tag-row">
+          <Chip size="sm" variant="soft">{story.genre}</Chip>
+          <Chip size="sm" variant="soft">AI 自由度 {story.aiFreedom}</Chip>
+          <Chip size="sm" variant="soft">{experienceModeLabel(story.experienceMode)}</Chip>
+          <Chip size="sm" variant="soft">{segmentLengthLabel(story.defaultSegmentLength)}</Chip>
+        </div>
+        <div className="tag-row compact">
+          <Chip size="sm" variant="soft">身份：{session.readerRoleName}</Chip>
+          <Chip size="sm" variant="soft">{session.turnCount} 回合</Chip>
+          <Chip size="sm" variant="soft">{formatUpdatedAt(session.updatedAt)}</Chip>
+        </div>
+        <p className="continue-summary">{session.latestSummary}</p>
+        <a className="button-link" href={`/story/${session.id}`}>继续阅读</a>
+      </Card.Content>
+    </Card>
   );
 }
 
@@ -784,4 +804,12 @@ function formatUpdatedAt(value: string) {
     hour: "2-digit",
     minute: "2-digit"
   }).format(new Date(value));
+}
+
+function experienceModeLabel(mode: StorySummary["experienceMode"]) {
+  return mode === "scripted" ? "剧本入戏" : mode === "improvised" ? "即兴入戏" : "共演入戏";
+}
+
+function segmentLengthLabel(length: StorySummary["defaultSegmentLength"]) {
+  return length === "short" ? "短段" : length === "long" ? "长小节" : "标准小节";
 }
