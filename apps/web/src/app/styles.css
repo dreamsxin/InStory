@@ -50,13 +50,15 @@ a {
 }
 
 .shell {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
 }
 
 .mobile-tab-shell {
-  padding-bottom: 86px;
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: 28px 28px 92px;
 }
 
 .reader {
@@ -65,7 +67,7 @@ a {
 
 .app-shell,
 .admin-shell {
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .sidebar {
@@ -93,6 +95,10 @@ a {
   border-radius: 16px;
   padding: 12px 14px;
   box-shadow: var(--shadow-soft);
+}
+
+.mobile-app-meta {
+  display: none;
 }
 
 .app-nav {
@@ -458,10 +464,14 @@ a {
 
 .reader-shell {
   position: relative;
+  min-height: 100dvh;
 }
 
 .reader-stage {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  min-height: 100dvh;
 }
 
 .reader-topbar,
@@ -491,6 +501,12 @@ a {
 
 .reader-shell-focus .reading-surface {
   width: min(760px, 100%);
+}
+
+.reader-scroll {
+  display: grid;
+  justify-items: center;
+  min-height: 0;
 }
 
 .reading-surface {
@@ -850,6 +866,11 @@ a {
     padding: 14px;
   }
 
+  .mobile-tab-shell {
+    width: 100%;
+    padding: 12px 12px 92px;
+  }
+
   .admin-page {
     padding: 14px;
   }
@@ -877,7 +898,7 @@ a {
     grid-template-columns: repeat(4, 1fr);
     gap: 6px;
     border: 1px solid var(--line);
-    border-radius: 18px;
+    border-radius: 20px;
     background: rgba(255, 255, 255, 0.88);
     box-shadow: var(--shadow);
     padding: 8px;
@@ -886,15 +907,24 @@ a {
 
   .bottom-tabbar button {
     border: 0;
-    border-radius: 13px;
+    border-radius: 14px;
     background: transparent;
     color: var(--muted);
-    min-height: 42px;
+    min-height: 48px;
+    display: grid;
+    gap: 2px;
+    place-items: center;
   }
 
   .bottom-tabbar button[aria-current="page"] {
     background: var(--text);
     color: white;
+  }
+
+  .bottom-tabbar small {
+    font-size: 10px;
+    color: inherit;
+    opacity: 0.72;
   }
 
   .two-column-section {
@@ -914,7 +944,9 @@ a {
   }
 
   .app-topbar {
-    position: static;
+    position: sticky;
+    top: 10px;
+    margin-bottom: 12px;
   }
 
   .app-hero h2,
@@ -948,9 +980,77 @@ a {
 }
 
 @media (max-width: 720px) {
+  html,
+  body {
+    height: 100%;
+    overflow-x: hidden;
+  }
+
+  .app-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .mobile-tab-shell {
+    padding: 10px 10px 86px;
+  }
+
+  .app-topbar {
+    flex: 0 0 auto;
+    border-radius: 18px;
+    margin-bottom: 10px;
+  }
+
+  .app-topbar .brand-row {
+    gap: 10px;
+  }
+
+  .app-topbar .brand h1 {
+    font-size: 18px;
+  }
+
+  .app-topbar .brand p {
+    display: none;
+  }
+
+  .mobile-app-meta {
+    display: grid;
+    gap: 2px;
+    text-align: right;
+  }
+
+  .mobile-app-meta span {
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .mobile-app-meta strong {
+    font-size: 15px;
+  }
+
+  .mobile-tab-panel {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 2px 2px 10px;
+  }
+
   .app-hero,
   .admin-command {
     padding: 18px;
+  }
+
+  .app-hero {
+    display: none;
+  }
+
+  .section-heading {
+    align-items: start;
+    flex-direction: column;
   }
 
   .hero-stat-grid div,
@@ -967,11 +1067,42 @@ a {
     display: block;
   }
 
+  .reader-shell {
+    display: flex;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
   .reader-stage {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100dvh;
     padding-bottom: 86px;
   }
 
+  .reader-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 4px 0 10px;
+  }
+
+  .turns {
+    max-width: 100%;
+    width: 100%;
+    gap: 12px;
+  }
+
+  .turn {
+    border-radius: 16px;
+    padding: 18px;
+    line-height: 1.88;
+  }
+
   .reader-topbar {
+    flex: 0 0 auto;
     border: 1px solid var(--line);
     border-radius: 14px;
     background: rgba(255, 255, 255, 0.84);
@@ -980,14 +1111,45 @@ a {
   }
 
   .reader-sidebar {
-    border-left: 0;
-    border-top: 1px solid var(--line);
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 78px;
+    z-index: 14;
+    max-height: 42dvh;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: rgba(238, 241, 245, 0.94);
+    box-shadow: var(--shadow);
+    padding: 12px;
+    backdrop-filter: blur(18px);
+  }
+
+  .reader-sidebar .panel {
+    margin-bottom: 10px;
+    padding: 14px;
   }
 
   .reader-composer {
-    position: sticky;
-    bottom: 10px;
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
     z-index: 12;
+    max-width: none;
+    margin: 0;
+    padding: 12px;
+  }
+
+  .reader-composer textarea {
+    min-height: 58px;
+    max-height: 120px;
+  }
+
+  .choices {
+    flex: 0 0 auto;
+    margin-top: 10px;
   }
 
   .reader-chrome-hidden.reader-composer,
@@ -996,5 +1158,15 @@ a {
     margin: 0;
     overflow: hidden;
     padding: 0;
+  }
+
+  .reader-chrome-hidden.reader-sidebar {
+    display: none;
+  }
+
+  .reader-chrome-toggle {
+    right: 14px;
+    bottom: 14px;
+    padding: 9px 12px;
   }
 }

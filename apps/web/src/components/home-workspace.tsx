@@ -9,11 +9,11 @@ import { createReaderProfileAction } from "@/app/actions";
 
 type HomeTab = "stories" | "profiles" | "continue" | "create";
 
-const navItems: Array<{ id: HomeTab; label: string }> = [
-  { id: "stories", label: "故事" },
-  { id: "profiles", label: "角色" },
-  { id: "continue", label: "继续" },
-  { id: "create", label: "创作" }
+const navItems: Array<{ id: HomeTab; label: string; hint: string }> = [
+  { id: "stories", label: "故事", hint: "Worlds" },
+  { id: "profiles", label: "角色", hint: "Profiles" },
+  { id: "continue", label: "继续", hint: "Reading" },
+  { id: "create", label: "创作", hint: "Create" }
 ];
 
 export function HomeWorkspace({
@@ -26,7 +26,7 @@ export function HomeWorkspace({
   const [activeTab, setActiveTab] = useState<HomeTab>("stories");
 
   return (
-    <main className="reader app-shell mobile-tab-shell">
+    <main className="app-shell mobile-tab-shell">
       <div className="topbar app-topbar">
         <div className="brand-row">
           <BrandMark size={44} />
@@ -34,6 +34,10 @@ export function HomeWorkspace({
             <h1>入戏 InStory</h1>
             <p className="muted">连续阅读，随时入戏</p>
           </div>
+        </div>
+        <div className="mobile-app-meta">
+          <span>{navItems.find((item) => item.id === activeTab)?.hint}</span>
+          <strong>{navItems.find((item) => item.id === activeTab)?.label}</strong>
         </div>
         <nav className="app-nav desktop-nav" aria-label="InStory navigation">
           {navItems.map((item) => (
@@ -84,7 +88,8 @@ export function HomeWorkspace({
             type="button"
             onClick={() => setActiveTab(item.id)}
           >
-            {item.label}
+            <span>{item.label}</span>
+            <small>{item.hint}</small>
           </button>
         ))}
       </nav>

@@ -57,22 +57,24 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
           </div>
         </div>
 
-        <div
-          className="turns reading-surface"
-          role="button"
-          tabIndex={0}
-          aria-label="切换阅读界面栏显示"
-          onClick={() => setChromeVisible((visible) => !visible)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              setChromeVisible((visible) => !visible);
-            }
-          }}
-        >
-          {session.turns.map((turn) => (
-            <TurnView key={turn.id} turn={turn} />
-          ))}
+        <div className="reader-scroll">
+          <div
+            className="turns reading-surface"
+            role="button"
+            tabIndex={0}
+            aria-label="切换阅读界面栏显示"
+            onClick={() => setChromeVisible((visible) => !visible)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                setChromeVisible((visible) => !visible);
+              }
+            }}
+          >
+            {session.turns.map((turn) => (
+              <TurnView key={turn.id} turn={turn} />
+            ))}
+          </div>
         </div>
 
         {latestTurn ? (

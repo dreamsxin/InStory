@@ -150,3 +150,19 @@ InStory 的差异化交互是：
 - 是否改善移动端角色选择和入戏交互。
 - 是否没有明显增加维护复杂度。
 - 是否通过 `npm run typecheck`、`npm run test`、`npm run build`。
+
+## 11. 阅读器开源库评估
+
+调研结论：MVP 阶段不直接引入通用电子书阅读器库，继续自定义 InStory 阅读器。
+
+原因：
+
+- `epub.js` 和 `react-reader` 主要解决 EPUB 文件解析、分页、进度和 iframe 渲染，适合后续“导入 EPUB/电子书”的能力，不适合当前 AI 生成正文、世界状态、记忆书签和入戏回写。
+- Readium Web / Thorium Web 更接近完整电子书阅读工具链，适合 EPUB 3、Web Publications、书库或发行平台，集成成本高于 MVP 当前收益。
+- Readest、Koodo Reader 等开源阅读器项目可参考移动端阅读设置、主题、字体、进度、批注和书库设计，但它们是完整电子书产品，不应作为 InStory MVP 的核心依赖。
+
+MVP 采用方式：
+
+1. 自定义 `ReaderClient`，保持连续阅读、入戏按钮、智能选项、自由输入和状态面板的一体化体验。
+2. 借鉴开源阅读器的阅读设置模型：字号、行距、主题、滚动/分页、进度和书签。
+3. 等产品进入“导入外部书籍 / EPUB 世界化”阶段时，再评估 `epub.js`、`react-reader` 或 Readium Web。
