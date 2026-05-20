@@ -439,6 +439,8 @@ a {
 .reader-shell {
   position: relative;
   min-height: 100dvh;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .reader-stage {
@@ -486,9 +488,15 @@ a {
   display: grid;
   justify-items: center;
   min-height: 0;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .reading-surface {
+  min-width: 0;
+  max-width: 100%;
   border-radius: 18px;
   cursor: pointer;
   padding-bottom: 6px;
@@ -508,9 +516,74 @@ a {
   backdrop-filter: blur(14px);
 }
 
+.reader-tool-dock {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 26;
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: var(--shadow-soft);
+  padding: 8px;
+  backdrop-filter: blur(16px);
+}
+
+.reader-context-panel {
+  position: fixed;
+  right: 18px;
+  top: 18px;
+  bottom: 86px;
+  z-index: 25;
+  width: min(360px, calc(100vw - 36px));
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(238, 241, 245, 0.96);
+  box-shadow: var(--shadow);
+  padding: 12px;
+  backdrop-filter: blur(18px);
+}
+
+.reader-context-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.reading-intervention-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.continue-reading-button {
+  min-width: 140px;
+}
+
 .turn {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
   padding: 20px;
   line-height: 1.8;
+}
+
+.turn p {
+  display: block;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  white-space: normal;
+  line-break: anywhere;
+  overflow-wrap: anywhere;
+  word-break: break-all;
 }
 
 .dialogue {
@@ -547,6 +620,15 @@ a {
   width: 100%;
   min-height: 72px;
   resize: vertical;
+}
+
+.action-panel .reader-composer {
+  position: static;
+  max-width: none;
+  margin-top: 12px;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
 }
 
 .reader-action-field {
@@ -1024,8 +1106,16 @@ a {
 
   .reader-shell {
     display: flex;
+    width: 100%;
+    min-width: 0;
+    max-width: 100vw;
+    grid-template-columns: none;
     height: 100dvh;
     overflow: hidden;
+  }
+
+  .reader-shell-focus {
+    grid-template-columns: none;
   }
 
   .reader-shell-focus .reader-stage {
@@ -1035,12 +1125,16 @@ a {
 
   .reader-shell-focus .reading-surface {
     width: 100%;
+    max-width: 100%;
   }
 
   .reader-stage {
     display: flex;
     flex: 1 1 auto;
     min-height: 0;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
     height: 100dvh;
     padding-bottom: 76px;
   }
@@ -1048,21 +1142,34 @@ a {
   .reader-scroll {
     flex: 1 1 auto;
     min-height: 0;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
     padding: 4px 0 10px;
   }
 
   .turns {
+    min-width: 0;
     max-width: 100%;
     width: 100%;
     gap: 12px;
   }
 
   .turn {
+    width: calc(100vw - 28px);
+    max-width: calc(100vw - 28px);
     border-radius: 16px;
-    padding: 18px;
+    padding: 18px 16px;
     line-height: 1.88;
+  }
+
+  .turn p {
+    inline-size: calc(100vw - 64px);
+    max-inline-size: calc(100vw - 64px);
+    width: calc(100vw - 64px);
+    max-width: calc(100vw - 64px);
   }
 
   .reader-topbar {
@@ -1095,6 +1202,23 @@ a {
     padding: 14px;
   }
 
+  .reader-context-panel {
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: max(82px, calc(env(safe-area-inset-bottom) + 72px));
+    width: auto;
+    max-height: 50dvh;
+    padding: 12px;
+  }
+
+  .reader-tool-dock {
+    left: 12px;
+    right: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .reader-composer {
     position: fixed;
     left: 12px;
@@ -1106,6 +1230,16 @@ a {
     padding: 12px;
   }
 
+  .action-panel .reader-composer {
+    position: static;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    max-width: none;
+    margin-top: 12px;
+    padding: 0;
+  }
+
   .reader-composer textarea {
     min-height: 58px;
     max-height: 120px;
@@ -1114,6 +1248,32 @@ a {
   .choices {
     flex: 0 0 auto;
     margin-top: 10px;
+  }
+
+  .reading-intervention-bar {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: max(58px, calc(env(safe-area-inset-bottom) + 58px));
+    z-index: 12;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    border-top: 1px solid var(--line);
+    background: linear-gradient(to top, rgba(245, 246, 248, 0.98), rgba(245, 246, 248, 0.72));
+    margin: 0;
+    padding: 10px 0;
+    backdrop-filter: blur(12px);
+  }
+
+  .reading-intervention-bar button,
+  .reading-intervention-bar [role="button"],
+  .continue-reading-button {
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    justify-content: center;
+    white-space: normal;
   }
 
   .reader-chrome-hidden.reader-composer,
@@ -1282,7 +1442,7 @@ a {
 
   .choices {
     flex: 0 0 auto;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     gap: 8px;
     margin-top: 8px;
   }
@@ -1292,6 +1452,33 @@ a {
     overflow: hidden;
     padding: 9px 10px;
     font-size: 13px;
+  }
+
+  .reader-tool-dock {
+    top: max(8px, env(safe-area-inset-top));
+    right: max(8px, env(safe-area-inset-right));
+    bottom: auto;
+    left: auto;
+  }
+
+  .reader-context-panel {
+    top: max(8px, env(safe-area-inset-top));
+    right: max(90px, calc(env(safe-area-inset-right) + 90px));
+    bottom: max(8px, env(safe-area-inset-bottom));
+    width: min(320px, 34vw);
+    max-height: none;
+  }
+
+  .reading-intervention-bar {
+    position: static;
+    display: grid;
+    grid-template-columns: auto auto;
+    justify-content: start;
+    margin-top: 8px;
+    padding: 0;
+    border-top: 0;
+    background: transparent;
+    backdrop-filter: none;
   }
 
   .reader-sidebar {
@@ -1318,6 +1505,12 @@ a {
     max-width: 720px;
     margin-top: 8px;
     padding: 10px;
+  }
+
+  .action-panel .reader-composer {
+    max-width: none;
+    margin-top: 12px;
+    padding: 0;
   }
 
   .reader-composer textarea {
