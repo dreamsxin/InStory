@@ -25,16 +25,20 @@ export class StoryCatalog {
     return this.store.listStories();
   }
 
+  listStoriesByOwner(ownerId: string): StorySummary[] {
+    return this.store.listStoriesByOwner(ownerId);
+  }
+
   findStory(storyId: string): StoryDetail | null {
     return this.store.findStory(storyId);
   }
 
-  updateStorySummary(storyId: string, input: Omit<StorySummary, "id">): StorySummary | null {
+  updateStorySummary(storyId: string, input: Omit<StorySummary, "id" | "ownerId">): StorySummary | null {
     return this.store.updateStorySummary(storyId, input);
   }
 
-  createStory(input: CreateStoryRequest, characters: CharacterProfile[] = []): StoryDetail {
-    return this.store.createStory(input, characters);
+  createStory(input: CreateStoryRequest, characters: CharacterProfile[] = [], ownerId: string | null = null): StoryDetail {
+    return this.store.createStory(input, characters, ownerId);
   }
 
   findCharacters(storyId: string): CharacterProfile[] {

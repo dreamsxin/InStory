@@ -204,6 +204,8 @@ ProfileAvatar
 
 MVP 允许创作故事时从 `ReaderProfile` 选择故事演员。服务端创建故事时会复制一份 `Character` 快照，避免用户后续修改自己的入戏角色后影响已有故事设定。
 
+选择故事演员时必须按 `ownerId` 过滤，只允许使用当前用户自己的 `ReaderProfile`。管理员后台不参与普通用户的角色选择与故事创建流程。
+
 #### Creator
 
 职责：
@@ -239,7 +241,7 @@ StoryPublishStatus
 ```ts
 type Story = {
   id: string;
-  authorId?: string;
+  ownerId: string | null;
   title: string;
   tagline: string;
   genre: string;
@@ -249,6 +251,8 @@ type Story = {
   defaultSegmentLength: "short" | "standard" | "long";
 };
 ```
+
+`ownerId` 表示故事归属。种子故事和平台示例故事可以为 `null`，普通用户在客户端创作入口创建的故事必须由服务端写入当前用户标识。客户端不能提交或覆盖 `ownerId`。
 
 `World` MVP 字段：
 
@@ -677,7 +681,38 @@ PUT /api/reader/profiles/:profileId
 }
 ```
 
-### 5.3 阅读推进与入戏
+### 5.3 我的故事与创作 API
+
+```http
+GET /api/me/stories
+POST /api/stories
+```
+
+`GET /api/me/stories` 只返回当前用户创建的故事，用于客户端 `创作 -> 我的故事`。`GET /api/stories` 仍然是探索入口，返回所有可进入的故事。
+
+创建故事请求不包含 `ownerId`，由服务端按当前用户写入：
+
+```json
+{
+  "id": "moon-market",
+  "title": "月下市集",
+  "tagline": "你在午夜市集里寻找被偷走的名字。",
+  "genre": "奇幻悬疑",
+  "coverUrl": null,
+  "premise": "午夜市集只接待遗失重要之物的人。",
+  "openingLocationName": "市集入口",
+  "openingLocationDescription": "纸灯笼在雾里摇晃。",
+  "worldRules": ["不能直接说出真名"],
+  "castProfileIds": ["profile_001"],
+  "experienceMode": "coauthored",
+  "defaultSegmentLength": "standard",
+  "aiFreedom": "medium"
+}
+```
+
+`castProfileIds` 只能引用当前用户自己的角色。服务端会复制这些 `ReaderProfile` 为故事内 `Character` 快照，供 AI 在读者互动时模拟回应。
+
+### 5.4 阅读推进与入戏
 
 ```http
 POST /api/sessions/:sessionId/read
@@ -749,7 +784,7 @@ POST /api/sessions/:sessionId/interventions
 
 兼容性说明：MVP 早期可以继续使用 `POST /api/sessions/:sessionId/turns` 承载入戏回合；当阅读模式成熟后，再拆分 `read` 与 `interventions`。
 
-### 5.4 回溯
+### 5.5 回溯
 
 ```http
 POST /api/sessions/:sessionId/rewind
@@ -763,7 +798,7 @@ POST /api/sessions/:sessionId/rewind
 }
 ```
 
-### 5.5 Admin API
+### 5.6 Admin API
 
 Admin API 初期只读，使用 `Authorization: Bearer <ADMIN_TOKEN>` 保护。
 

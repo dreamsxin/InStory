@@ -82,6 +82,10 @@ export class StoryStore {
     return rows.map((row) => normalizeStorySummary(JSON.parse(row.payload) as StorySummary));
   }
 
+  listStoriesByOwner(ownerId: string): StorySummary[] {
+    return this.listStories().filter((story) => story.ownerId === ownerId);
+  }
+
   findStory(storyId: string): StoryDetail | null {
     const story = this.findStorySummary(storyId);
     const world = this.findWorld(storyId);
@@ -98,7 +102,7 @@ export class StoryStore {
     };
   }
 
-  updateStorySummary(storyId: string, input: Omit<StorySummary, "id">): StorySummary | null {
+  updateStorySummary(storyId: string, input: Omit<StorySummary, "id" | "ownerId">): StorySummary | null {
     const current = this.findStorySummary(storyId);
     if (!current) {
       return null;
@@ -106,13 +110,14 @@ export class StoryStore {
 
     const updated: StorySummary = {
       id: current.id,
+      ownerId: current.ownerId,
       ...input
     };
     this.database.db.prepare("UPDATE stories SET payload = ? WHERE id = ?").run(JSON.stringify(updated), storyId);
     return updated;
   }
 
-  createStory(input: CreateStoryRequest, characters: CharacterProfile[] = []): StoryDetail {
+  createStory(input: CreateStoryRequest, characters: CharacterProfile[] = [], ownerId: string | null = null): StoryDetail {
     const existing = this.findStorySummary(input.id);
     if (existing) {
       throw new Error("Story id already exists");
@@ -120,6 +125,7 @@ export class StoryStore {
 
     const story: StorySummary = {
       id: input.id,
+      ownerId,
       title: input.title,
       tagline: input.tagline,
       genre: input.genre,
@@ -210,6 +216,7 @@ export class StoryStore {
 function normalizeStorySummary(story: StorySummary): StorySummary {
   return {
     ...story,
+    ownerId: story.ownerId ?? null,
     coverUrl: story.coverUrl ?? null,
     experienceMode: story.experienceMode ?? "coauthored",
     defaultSegmentLength: story.defaultSegmentLength ?? "standard"

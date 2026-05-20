@@ -31,7 +31,8 @@ const updateModelConfigSchema = z.object({
   clearApiKey: z.boolean().optional()
 });
 
-const updateStorySummarySchema = storySummarySchema.omit({ id: true });
+const updateStorySummarySchema = storySummarySchema.omit({ id: true, ownerId: true });
+const LOCAL_READER_ID = "local-reader";
 
 export interface BuildAppOptions {
   sessionStore: SessionStore;
@@ -164,6 +165,10 @@ export async function buildApp(options: BuildAppOptions) {
     stories: options.storyCatalog.listStories()
   }));
 
+  app.get("/api/me/stories", async () => ({
+    stories: options.storyCatalog.listStoriesByOwner(LOCAL_READER_ID)
+  }));
+
   app.post("/api/stories", async (request, reply) => {
     const parsed = createStoryRequestSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -172,11 +177,12 @@ export async function buildApp(options: BuildAppOptions) {
 
     try {
       const castCharacters = createCastCharacters({
+        ownerId: LOCAL_READER_ID,
         storyId: parsed.data.id,
         profileIds: parsed.data.castProfileIds ?? [],
         readerProfileStore: options.readerProfileStore
       });
-      const story = options.storyCatalog.createStory(parsed.data, castCharacters);
+      const story = options.storyCatalog.createStory(parsed.data, castCharacters, LOCAL_READER_ID);
       return reply.code(201).send({ story });
     } catch (error) {
       return reply.code(409).send({
@@ -197,7 +203,7 @@ export async function buildApp(options: BuildAppOptions) {
   });
 
   app.get("/api/reader/profiles", async () => ({
-    profiles: options.readerProfileStore.listByOwner("local-reader")
+    profiles: options.readerProfileStore.listByOwner(LOCAL_READER_ID)
   }));
 
   app.post("/api/reader/profiles", async (request, reply) => {
@@ -207,7 +213,7 @@ export async function buildApp(options: BuildAppOptions) {
     }
 
     const profile = options.readerProfileStore.create({
-      ownerId: "local-reader",
+      ownerId: LOCAL_READER_ID,
       ...parsed.data
     });
 
@@ -416,17 +422,19 @@ export async function buildApp(options: BuildAppOptions) {
 
 function createCastCharacters({
   profileIds,
+  ownerId,
   readerProfileStore,
   storyId
 }: {
   profileIds: string[];
+  ownerId: string;
   readerProfileStore: ReaderProfileStore;
   storyId: string;
 }): CharacterProfile[] {
   const uniqueProfileIds = [...new Set(profileIds)];
   return uniqueProfileIds
     .map((profileId) => readerProfileStore.findById(profileId))
-    .filter((profile): profile is ReaderProfile => profile !== null)
+    .filter((profile): profile is ReaderProfile => profile !== null && profile.ownerId === ownerId)
     .map((profile) => ({
       id: `cast_${profile.id}`,
       storyId,

@@ -66,6 +66,15 @@ export async function listStories(): Promise<StorySummary[]> {
   return data.stories;
 }
 
+export async function listMyStories(): Promise<StorySummary[]> {
+  const response = await fetch(`${API_BASE}/api/me/stories`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("加载我的故事失败");
+  }
+  const data = (await response.json()) as { stories: StorySummary[] };
+  return data.stories;
+}
+
 export async function createSession(storyId: string, readerProfileId?: string | null): Promise<CreateSessionResponse> {
   const response = await fetch(`${API_BASE}/api/stories/${storyId}/sessions`, {
     method: "POST",
@@ -212,7 +221,7 @@ export async function getAdminStories(): Promise<StoryDetail[]> {
 
 export async function updateAdminStorySummary(
   storyId: string,
-  input: Omit<StorySummary, "id">
+  input: Omit<StorySummary, "id" | "ownerId">
 ): Promise<StorySummary> {
   const data = await adminRequest<{ story: StorySummary }>(`/api/admin/stories/${storyId}`, {
     method: "PUT",

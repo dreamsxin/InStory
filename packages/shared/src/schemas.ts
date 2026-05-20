@@ -78,6 +78,7 @@ export const narrativeResultSchema = z.object({
 
 export const storySummarySchema = z.object({
   id: z.string().min(1),
+  ownerId: z.string().min(1).nullable(),
   title: z.string().min(1),
   tagline: z.string().min(1),
   genre: z.string().min(1),
@@ -88,7 +89,7 @@ export const storySummarySchema = z.object({
 });
 
 export const createStoryRequestSchema = storySummarySchema
-  .omit({ aiFreedom: true })
+  .omit({ aiFreedom: true, ownerId: true })
   .extend({
     id: z.string().min(3).max(80).regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/),
     title: z.string().min(1).max(80),

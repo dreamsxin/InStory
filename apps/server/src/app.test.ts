@@ -352,6 +352,7 @@ describe("server API", () => {
     expect(updated.json()).toEqual({
       story: {
         id: "rain-mansion",
+        ownerId: null,
         title: "雨夜旧宅：作者修订",
         tagline: "你在雨声里改写旧宅命运。",
         genre: "悬疑互动",
@@ -422,6 +423,7 @@ describe("server API", () => {
     expect(created.json<{ story: StoryDetail }>().story).toMatchObject({
       story: {
         id: "moon-market",
+        ownerId: "local-reader",
         title: "月下市集",
         coverUrl: "https://example.com/moon-market.png"
       },
@@ -442,6 +444,15 @@ describe("server API", () => {
     });
     expect(loaded.statusCode).toBe(200);
     expect(loaded.json<StoryDetail>().world.locations[0]?.name).toBe("市集入口");
+
+    const myStories = await app.inject({
+      method: "GET",
+      url: "/api/me/stories"
+    });
+    expect(myStories.statusCode).toBe(200);
+    expect(myStories.json<{ stories: Array<{ id: string }> }>().stories).toContainEqual(
+      expect.objectContaining({ id: "moon-market" })
+    );
 
     const duplicate = await app.inject({
       method: "POST",

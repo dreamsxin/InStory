@@ -10,6 +10,7 @@ export type SegmentLengthPreset = "short" | "standard" | "long";
 
 export interface StorySummary {
   id: string;
+  ownerId: string | null;
   title: string;
   tagline: string;
   genre: string;

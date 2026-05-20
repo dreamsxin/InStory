@@ -18,9 +18,11 @@ const navItems: Array<{ id: HomeTab; label: string; hint: string }> = [
 ];
 
 export function HomeWorkspace({
+  myStories,
   profiles,
   stories
 }: {
+  myStories: StorySummary[];
   profiles: ReaderProfile[];
   stories: StorySummary[];
 }) {
@@ -77,7 +79,7 @@ export function HomeWorkspace({
         {activeTab === "stories" ? <StoriesView profiles={profiles} stories={stories} /> : null}
         {activeTab === "profiles" ? <ProfilesView profiles={profiles} /> : null}
         {activeTab === "continue" ? <ContinueView profiles={profiles} stories={stories} /> : null}
-        {activeTab === "create" ? <CreateView profiles={profiles} /> : null}
+        {activeTab === "create" ? <CreateView myStories={myStories} profiles={profiles} /> : null}
       </section>
 
       <nav className="bottom-tabbar" aria-label="Mobile navigation">
@@ -103,9 +105,9 @@ function StoriesView({ profiles, stories }: { profiles: ReaderProfile[]; stories
       <div className="section-heading">
         <div>
           <span className="eyebrow">Worlds</span>
-          <h2 className="section-title">故事世界</h2>
+          <h2 className="section-title">探索故事</h2>
         </div>
-        <Chip size="sm" variant="soft">进入前选择入戏身份</Chip>
+        <Chip size="sm" variant="soft">所有可进入的故事</Chip>
       </div>
       <div className="story-grid">
         {stories.map((story) => (
@@ -167,7 +169,7 @@ function ContinueView({ profiles, stories }: { profiles: ReaderProfile[]; storie
   );
 }
 
-function CreateView({ profiles }: { profiles: ReaderProfile[] }) {
+function CreateView({ myStories, profiles }: { myStories: StorySummary[]; profiles: ReaderProfile[] }) {
   const [createTab, setCreateTab] = useState<CreateTab>("stories");
 
   return (
@@ -179,27 +181,94 @@ function CreateView({ profiles }: { profiles: ReaderProfile[] }) {
         </div>
         <Chip size="sm" variant="soft">角色库与故事分层管理</Chip>
       </div>
-      <div className="creator-tabs" role="tablist" aria-label="创作控制台">
+      <div className="creator-tabs">
         <button
-          aria-selected={createTab === "profiles"}
           className={createTab === "profiles" ? "creator-tab active" : "creator-tab"}
-          role="tab"
           type="button"
           onClick={() => setCreateTab("profiles")}
         >
           角色库
         </button>
         <button
-          aria-selected={createTab === "stories"}
           className={createTab === "stories" ? "creator-tab active" : "creator-tab"}
-          role="tab"
           type="button"
           onClick={() => setCreateTab("stories")}
         >
           故事工作台
         </button>
       </div>
-      {createTab === "profiles" ? <CreateProfilePanel /> : <CreateStoryPanel profiles={profiles} />}
+      {createTab === "profiles" ? (
+        <CreatorProfilesPanel profiles={profiles} />
+      ) : (
+        <CreatorStoriesPanel myStories={myStories} profiles={profiles} />
+      )}
+    </div>
+  );
+}
+
+function CreatorProfilesPanel({ profiles }: { profiles: ReaderProfile[] }) {
+  return (
+    <div className="creator-layer">
+      <Card className="profile-panel">
+        <Card.Header>
+          <div>
+            <span className="eyebrow">My Roles</span>
+            <h2>我的角色</h2>
+          </div>
+        </Card.Header>
+        <Card.Content>
+          {profiles.length ? (
+            <div className="profile-list">
+              {profiles.map((profile) => (
+                <article className="profile-card large" key={profile.id}>
+                  <AvatarSeed name={profile.name} src={profile.avatarUrl} />
+                  <div>
+                    <strong>{profile.name}</strong>
+                    <p>{profile.description}</p>
+                    <Chip color="accent" size="sm" variant="soft">{profile.gender ?? "未设定性别"}</Chip>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">还没有角色。先创建一个入戏身份。</p>
+          )}
+        </Card.Content>
+      </Card>
+      <CreateProfilePanel />
+    </div>
+  );
+}
+
+function CreatorStoriesPanel({ myStories, profiles }: { myStories: StorySummary[]; profiles: ReaderProfile[] }) {
+  return (
+    <div className="creator-layer">
+      <Card className="profile-panel">
+        <Card.Header>
+          <div>
+            <span className="eyebrow">My Stories</span>
+            <h2>我的故事</h2>
+          </div>
+        </Card.Header>
+        <Card.Content>
+          {myStories.length ? (
+            <div className="story-management-list">
+              {myStories.map((story) => (
+                <article className="story-management-item" key={story.id}>
+                  <div>
+                    <strong>{story.title}</strong>
+                    <p>{story.tagline}</p>
+                  </div>
+                  <Chip size="sm" variant="soft">{story.genre}</Chip>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">还没有自己创建的故事。创建后会出现在这里。</p>
+          )}
+        </Card.Content>
+      </Card>
+      <CreateStoryPanel profiles={profiles} />
     </div>
   );
 }

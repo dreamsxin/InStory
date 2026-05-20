@@ -123,7 +123,10 @@ describe("StoryStore", () => {
         }
       ]);
 
-      expect(created.story.id).toBe("moon-market");
+      expect(created.story).toMatchObject({
+        id: "moon-market",
+        ownerId: null
+      });
       expect(created.story.coverUrl).toBe("https://example.com/moon-market.png");
       expect(created.world.locations).toHaveLength(1);
       expect(created.characters).toHaveLength(1);
