@@ -118,6 +118,7 @@ Authorization: Bearer dev-admin-token
 
 模型 Provider 可在 Admin 控制台保存为 Mock 或 OpenAI-compatible。API Key 只存储在服务端 SQLite，不会在 Admin API 或页面中回显。
 保存后可点击“验证当前 Provider”，系统会发起一次最小叙事生成并校验返回结构。
+Base URL 可填写 Provider 根地址，例如 `https://api.deepseek.com` 或 `https://api.openai.com/v1`；如果误填完整 `/chat/completions` 地址，服务端会直接使用该地址，不会重复拼接。
 
 ### 启动服务端
 

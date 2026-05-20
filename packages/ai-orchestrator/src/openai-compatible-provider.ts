@@ -16,18 +16,18 @@ interface ChatCompletionResponse {
 }
 
 export class OpenAICompatibleNarrativeProvider implements LLMProvider {
-  private readonly baseUrl: string;
+  private readonly endpointUrl: string;
   private readonly apiKey: string;
   private readonly model: string;
 
   constructor(options: OpenAICompatibleProviderOptions) {
-    this.baseUrl = options.baseUrl.replace(/\/$/, "");
+    this.endpointUrl = buildChatCompletionsUrl(options.baseUrl);
     this.apiKey = options.apiKey;
     this.model = options.model;
   }
 
   async generateNarrative(input: GenerateNarrativeInput): Promise<NarrativeResult> {
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+    const response = await fetch(this.endpointUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
@@ -76,7 +76,7 @@ export class OpenAICompatibleNarrativeProvider implements LLMProvider {
       throw new Error("LLM response did not include message content");
     }
 
-    const parsedJson = parseJsonObject(content);
+    const parsedJson = normalizeNarrativeJson(parseJsonObject(content));
     const parsed = narrativeResultSchema.safeParse(parsedJson);
     if (!parsed.success) {
       throw new Error(`LLM response failed schema validation: ${parsed.error.message}`);
@@ -92,10 +92,19 @@ function buildSystemPrompt(): string {
     "必须使用第二人称“你”推进故事，保持悬疑感和明确行动压力。",
     "输出只能是 JSON 对象，不要使用 Markdown，不要添加解释。",
     "JSON 字段必须包含 narration、dialogues、choices、stateDelta、memoryEvents。",
+    "memoryEvents 必须是字符串数组，例如 [\"你记住了门外脚步声异常。\"]，禁止输出对象数组。",
     "choices 必须包含 2 到 4 个选项，每个选项有 id、text、risk，risk 只能是 low、medium、high。",
     "stateDelta 只能描述本回合变化，不能凭空清空已有状态。",
     "玩家行为超出当前世界能力时，给出合理失败或代价，不要直接满足。"
   ].join("\n");
+}
+
+export function buildChatCompletionsUrl(baseUrl: string): string {
+  const trimmed = baseUrl.trim().replace(/\/+$/, "");
+  if (/\/chat\/completions$/i.test(trimmed)) {
+    return trimmed;
+  }
+  return `${trimmed}/chat/completions`;
 }
 
 function parseJsonObject(content: string): unknown {
@@ -108,4 +117,38 @@ function parseJsonObject(content: string): unknown {
     }
     return JSON.parse(match[0]);
   }
+}
+
+function normalizeNarrativeJson(value: unknown): unknown {
+  if (!isRecord(value) || !Array.isArray(value.memoryEvents)) {
+    return value;
+  }
+
+  return {
+    ...value,
+    memoryEvents: value.memoryEvents.map((event) => normalizeMemoryEvent(event))
+  };
+}
+
+function normalizeMemoryEvent(event: unknown): string {
+  if (typeof event === "string") {
+    return event;
+  }
+  if (!isRecord(event)) {
+    return String(event);
+  }
+
+  const fields = ["summary", "text", "event", "description", "content"];
+  for (const field of fields) {
+    const value = event[field];
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+
+  return JSON.stringify(event);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
