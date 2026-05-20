@@ -7,6 +7,7 @@ import { buildApp } from "./app.js";
 import { StoryCatalog } from "./data/story-catalog.js";
 import { AppDatabase } from "./db/app-database.js";
 import { ModelConfigStore } from "./db/model-config-store.js";
+import { ReaderProfileStore } from "./db/reader-profile-store.js";
 import { SessionStore } from "./db/session-store.js";
 import { ModelRuntime } from "./model-runtime.js";
 
@@ -21,6 +22,7 @@ beforeEach(async () => {
   database = new AppDatabase(join(tempDir, "api.sqlite"));
   app = await buildApp({
     sessionStore: new SessionStore(database),
+    readerProfileStore: new ReaderProfileStore(database),
     storyCatalog: new StoryCatalog(database),
     modelRuntime: new ModelRuntime(new ModelConfigStore(database), {
       provider: "mock",
@@ -146,6 +148,50 @@ describe("server API", () => {
     expect(missingSession.statusCode).toBe(404);
   });
 
+  it("creates reader profiles and uses one as the session role", async () => {
+    const createdProfile = await app.inject({
+      method: "POST",
+      url: "/api/reader/profiles",
+      payload: {
+        name: "林向晚",
+        gender: "女",
+        personality: "冷静、敏感、习惯先观察再行动。",
+        avatarUrl: "https://example.com/avatar.png",
+        description: "现代法医，被卷入雨夜旧宅。"
+      }
+    });
+
+    expect(createdProfile.statusCode).toBe(201);
+    const profile = createdProfile.json<{ profile: { id: string } }>().profile;
+
+    const profiles = await app.inject({
+      method: "GET",
+      url: "/api/reader/profiles"
+    });
+    expect(profiles.statusCode).toBe(200);
+    expect(profiles.json<{ profiles: unknown[] }>().profiles).toHaveLength(1);
+
+    const session = await app.inject({
+      method: "POST",
+      url: "/api/stories/rain-mansion/sessions",
+      payload: {
+        entryMode: "custom_role",
+        readerProfileId: profile.id
+      }
+    });
+    const body = session.json<CreateSessionResponse>();
+
+    expect(session.statusCode).toBe(200);
+    expect(body.session.readerRole).toMatchObject({
+      mode: "custom_role",
+      characterId: profile.id,
+      name: "林向晚",
+      gender: "女",
+      personality: "冷静、敏感、习惯先观察再行动。",
+      avatarUrl: "https://example.com/avatar.png"
+    });
+  });
+
   it("returns admin status, model config, story catalog, sessions and moderation events", async () => {
     const created = await createSession();
 
@@ -220,6 +266,7 @@ describe("server API", () => {
     database = new AppDatabase(join(tempDir, "api.sqlite"));
     app = await buildApp({
       sessionStore: new SessionStore(database),
+      readerProfileStore: new ReaderProfileStore(database),
       storyCatalog: new StoryCatalog(database),
       modelRuntime: new ModelRuntime(new ModelConfigStore(database), {
         provider: "mock",

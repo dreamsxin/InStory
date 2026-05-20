@@ -1,10 +1,16 @@
 import cors from "@fastify/cors";
 import Fastify from "fastify";
 import { z } from "zod";
-import { createSessionRequestSchema, createTurnRequestSchema, storySummarySchema } from "@instory/shared";
+import {
+  createReaderProfileRequestSchema,
+  createSessionRequestSchema,
+  createTurnRequestSchema,
+  storySummarySchema
+} from "@instory/shared";
 import { applyStateDelta, createInitialState, createTimelineNode, shouldCreateTimelineNode } from "@instory/story-engine";
 import type { CreateSessionResponse, CreateTurnResponse, SessionTurn, StorySession, TimelineNode } from "@instory/shared";
 import type { StoryCatalog } from "./data/story-catalog.js";
+import type { ReaderProfileStore } from "./db/reader-profile-store.js";
 import type { SessionStore } from "./db/session-store.js";
 import type { ModelRuntime } from "./model-runtime.js";
 
@@ -20,6 +26,7 @@ const updateStorySummarySchema = storySummarySchema.omit({ id: true });
 
 export interface BuildAppOptions {
   sessionStore: SessionStore;
+  readerProfileStore: ReaderProfileStore;
   storyCatalog: StoryCatalog;
   modelRuntime: ModelRuntime;
   adminToken?: string;
@@ -159,6 +166,24 @@ export async function buildApp(options: BuildAppOptions) {
     return storyDetail;
   });
 
+  app.get("/api/reader/profiles", async () => ({
+    profiles: options.readerProfileStore.listByOwner("local-reader")
+  }));
+
+  app.post("/api/reader/profiles", async (request, reply) => {
+    const parsed = createReaderProfileRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
+    }
+
+    const profile = options.readerProfileStore.create({
+      ownerId: "local-reader",
+      ...parsed.data
+    });
+
+    return reply.code(201).send({ profile });
+  });
+
   app.post("/api/stories/:storyId/sessions", async (request, reply) => {
     const { storyId } = request.params as { storyId: string };
     const storyDetail = options.storyCatalog.findStory(storyId);
@@ -175,6 +200,9 @@ export async function buildApp(options: BuildAppOptions) {
     const requestedCharacter = parsed.data.characterId
       ? options.storyCatalog.findCharacter(parsed.data.characterId)
       : null;
+    const readerProfile = parsed.data.readerProfileId
+      ? options.readerProfileStore.findById(parsed.data.readerProfileId)
+      : null;
     const character =
       requestedCharacter?.storyId === storyId ? requestedCharacter : storyDetail.characters[0] ?? null;
     const now = new Date().toISOString();
@@ -185,10 +213,14 @@ export async function buildApp(options: BuildAppOptions) {
       id: sessionId,
       storyId,
       readerRole: {
-        mode: parsed.data.entryMode,
-        characterId: character?.id,
-        name: parsed.data.customRole?.name ?? character?.name ?? "陌生来客",
-        description: parsed.data.customRole?.description ?? character?.role ?? "被卷入故事的读者"
+        mode: readerProfile ? "custom_role" : parsed.data.entryMode,
+        characterId: readerProfile?.id ?? character?.id,
+        name: readerProfile?.name ?? parsed.data.customRole?.name ?? character?.name ?? "陌生来客",
+        description:
+          readerProfile?.description ?? parsed.data.customRole?.description ?? character?.role ?? "被卷入故事的读者",
+        gender: readerProfile?.gender ?? parsed.data.customRole?.gender ?? null,
+        personality: readerProfile?.personality ?? parsed.data.customRole?.personality ?? null,
+        avatarUrl: readerProfile?.avatarUrl ?? parsed.data.customRole?.avatarUrl ?? null
       },
       state: initialState,
       turns: [],

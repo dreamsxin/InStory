@@ -53,6 +53,21 @@ export interface ReaderRole {
   characterId?: string;
   name: string;
   description: string;
+  gender?: string | null;
+  personality?: string | null;
+  avatarUrl?: string | null;
+}
+
+export interface ReaderProfile {
+  id: string;
+  ownerId: string;
+  name: string;
+  gender: string | null;
+  personality: string;
+  avatarUrl: string | null;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface StoryChoice {
@@ -131,9 +146,13 @@ export interface StorySession {
 export interface CreateSessionRequest {
   entryMode: EntryMode;
   characterId?: string | null;
+  readerProfileId?: string | null;
   customRole?: {
     name: string;
     description: string;
+    gender?: string | null;
+    personality?: string | null;
+    avatarUrl?: string | null;
   } | null;
 }
 

@@ -3,6 +3,7 @@ import { buildApp } from "./app.js";
 import { StoryCatalog } from "./data/story-catalog.js";
 import { AppDatabase } from "./db/app-database.js";
 import { ModelConfigStore } from "./db/model-config-store.js";
+import { ReaderProfileStore } from "./db/reader-profile-store.js";
 import { SessionStore } from "./db/session-store.js";
 import { createInitialModelConfig, ModelRuntime } from "./model-runtime.js";
 
@@ -10,9 +11,11 @@ const defaultDatabasePath = join(process.env.INIT_CWD ?? process.cwd(), "data", 
 const database = new AppDatabase(process.env.SQLITE_DATABASE_PATH ?? defaultDatabasePath);
 const modelRuntime = new ModelRuntime(new ModelConfigStore(database), createInitialModelConfig(process.env));
 const sessionStore = new SessionStore(database);
+const readerProfileStore = new ReaderProfileStore(database);
 const storyCatalog = new StoryCatalog(database);
 const app = await buildApp({
   sessionStore,
+  readerProfileStore,
   storyCatalog,
   modelRuntime,
   adminToken: process.env.ADMIN_TOKEN

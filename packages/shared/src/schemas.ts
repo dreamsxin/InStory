@@ -3,13 +3,42 @@ import { z } from "zod";
 export const createSessionRequestSchema = z.object({
   entryMode: z.enum(["existing_character", "custom_role", "blind"]),
   characterId: z.string().nullish(),
+  readerProfileId: z.string().nullish(),
   customRole: z
     .object({
       name: z.string().min(1),
-      description: z.string().min(1)
+      description: z.string().min(1),
+      gender: z.string().nullish(),
+      personality: z.string().nullish(),
+      avatarUrl: z.string().nullish()
     })
     .nullish()
 });
+
+export const readerProfileSchema = z.object({
+  id: z.string().min(1),
+  ownerId: z.string().min(1),
+  name: z.string().min(1).max(40),
+  gender: z.string().max(40).nullable(),
+  personality: z.string().min(1).max(1200),
+  avatarUrl: z.string().max(2000).nullable(),
+  description: z.string().min(1).max(2000),
+  createdAt: z.string().min(1),
+  updatedAt: z.string().min(1)
+});
+
+export const createReaderProfileRequestSchema = readerProfileSchema
+  .pick({
+    name: true,
+    gender: true,
+    personality: true,
+    avatarUrl: true,
+    description: true
+  })
+  .extend({
+    gender: z.string().max(40).nullish(),
+    avatarUrl: z.string().max(2000).nullish()
+  });
 
 export const createTurnRequestSchema = z.object({
   inputType: z.enum(["free_text", "choice"]),
