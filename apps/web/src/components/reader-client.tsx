@@ -170,9 +170,18 @@ function panelTitle(panel: Exclude<ReaderPanel, null>) {
 }
 
 function TurnView({ turn }: { turn: SessionTurn }) {
+  const paragraphs = turn.narration
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
   return (
     <article className="turn w-full min-w-0">
-      <p className="reader-paragraph">{turn.narration}</p>
+      {paragraphs.map((paragraph, index) => (
+        <p className="reader-paragraph" key={`${turn.id}_p_${index}`}>
+          {paragraph}
+        </p>
+      ))}
       {turn.dialogues.map((dialogue) => (
         <p className="reader-paragraph dialogue" key={`${turn.id}_${dialogue.speaker}_${dialogue.text}`}>
           <strong>{dialogue.speaker}</strong>：{dialogue.text}

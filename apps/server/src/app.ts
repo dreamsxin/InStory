@@ -16,7 +16,9 @@ import type {
   CreateTurnResponse,
   ReaderSessionListItem,
   ReaderProfile,
+  SegmentLengthPreset,
   SessionTurn,
+  StoryDetail,
   StorySession,
   TimelineNode
 } from "@instory/shared";
@@ -417,11 +419,13 @@ export async function buildApp(options: BuildAppOptions) {
       return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
     }
 
+    const storyDetail = options.storyCatalog.findStory(session.storyId) ?? undefined;
     const result = await options.modelRuntime.getProvider().generateNarrative({
       session,
-      story: options.storyCatalog.findStory(session.storyId) ?? undefined,
+      story: storyDetail,
       userInput: parsed.data.content,
-      intent: parsed.data.inputType === "read_continue" ? "read_segment" : "reader_action"
+      intent: parsed.data.inputType === "read_continue" ? "read_segment" : "reader_action",
+      lengthGuide: createLengthGuide(storyDetail)
     });
     const nextState = applyStateDelta(session.state, result.stateDelta);
     const now = new Date().toISOString();
@@ -622,6 +626,29 @@ function createReaderSessionListItem(sessionId: string, options: BuildAppOptions
     turnCount: session.turns.length,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt
+  };
+}
+
+function createLengthGuide(storyDetail: StoryDetail | undefined) {
+  const preset = storyDetail?.story.defaultSegmentLength ?? "standard";
+  const guides: Record<SegmentLengthPreset, { targetWords: number; paragraphs: number }> = {
+    short: {
+      targetWords: 450,
+      paragraphs: 4
+    },
+    standard: {
+      targetWords: 800,
+      paragraphs: 6
+    },
+    long: {
+      targetWords: 1200,
+      paragraphs: 8
+    }
+  };
+
+  return {
+    preset,
+    ...guides[preset]
   };
 }
 
