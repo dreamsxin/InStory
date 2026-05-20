@@ -1,6 +1,7 @@
 import type {
   CreateSessionResponse,
   CreateTurnResponse,
+  ReaderProfile,
   StoryDetail,
   StorySession,
   StorySummary
@@ -64,15 +65,16 @@ export async function listStories(): Promise<StorySummary[]> {
   return data.stories;
 }
 
-export async function createSession(storyId: string): Promise<CreateSessionResponse> {
+export async function createSession(storyId: string, readerProfileId?: string | null): Promise<CreateSessionResponse> {
   const response = await fetch(`${API_BASE}/api/stories/${storyId}/sessions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      entryMode: "existing_character",
-      characterId: "lu_qinghe"
+      entryMode: readerProfileId ? "custom_role" : "existing_character",
+      characterId: readerProfileId ? null : "lu_qinghe",
+      readerProfileId: readerProfileId ?? null
     })
   });
 
@@ -81,6 +83,38 @@ export async function createSession(storyId: string): Promise<CreateSessionRespo
   }
 
   return (await response.json()) as CreateSessionResponse;
+}
+
+export async function listReaderProfiles(): Promise<ReaderProfile[]> {
+  const response = await fetch(`${API_BASE}/api/reader/profiles`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("加载我的角色失败");
+  }
+  const data = (await response.json()) as { profiles: ReaderProfile[] };
+  return data.profiles;
+}
+
+export async function createReaderProfile(input: {
+  name: string;
+  gender?: string | null;
+  personality: string;
+  avatarUrl?: string | null;
+  description: string;
+}): Promise<ReaderProfile> {
+  const response = await fetch(`${API_BASE}/api/reader/profiles`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(input)
+  });
+
+  if (!response.ok) {
+    throw new Error("创建我的角色失败");
+  }
+
+  const data = (await response.json()) as { profile: ReaderProfile };
+  return data.profile;
 }
 
 export async function getStoryDetail(storyId: string): Promise<StoryDetail> {
