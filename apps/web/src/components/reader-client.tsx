@@ -119,6 +119,7 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
               loading={loading}
               text={text}
               onChoice={(choiceText, choiceId) => void submit(choiceText, "choice", choiceId)}
+              onPresetAction={(content) => void submit(content, "free_text")}
               onSubmitText={() => void submit(text, "free_text")}
               onTextChange={setText}
             />
@@ -213,6 +214,7 @@ function ActionPanel({
   latestTurn,
   loading,
   onChoice,
+  onPresetAction,
   onSubmitText,
   onTextChange,
   text
@@ -221,6 +223,7 @@ function ActionPanel({
   latestTurn: SessionTurn;
   loading: boolean;
   onChoice: (choiceText: string, choiceId: string) => void;
+  onPresetAction: (content: string) => void;
   onSubmitText: () => void;
   onTextChange: (value: string) => void;
   text: string;
@@ -228,8 +231,24 @@ function ActionPanel({
   return (
     <Card className="panel action-panel">
       <Card.Content>
-        <h2>介入建议</h2>
-        <div className="choices">
+        <h2>入戏行动</h2>
+        <div className="action-preset-grid" aria-label="固定入戏行动">
+          {ACTION_PRESETS.map((action) => (
+            <Button
+              className="action-preset"
+              isDisabled={loading}
+              key={action.id}
+              type="button"
+              variant="outline"
+              onPress={() => onPresetAction(action.prompt)}
+            >
+              <strong>{action.label}</strong>
+              <span>{action.hint}</span>
+            </Button>
+          ))}
+        </div>
+        <h3>本幕建议</h3>
+        <div className="choices secondary-choices">
           {latestTurn.choices.map((choice) => (
             <Button
               className="choice"
@@ -270,3 +289,30 @@ function ActionPanel({
     </Card>
   );
 }
+
+const ACTION_PRESETS = [
+  {
+    id: "observe",
+    label: "观察",
+    hint: "看清环境、人物表情和异常细节",
+    prompt: "我先不打断剧情，仔细观察当前场景、人物表情和可疑细节。"
+  },
+  {
+    id: "ask",
+    label: "询问",
+    hint: "向当前最关键的人追问",
+    prompt: "我向当前最关键的人追问一个能推进真相的问题，同时观察对方反应。"
+  },
+  {
+    id: "inspect",
+    label: "检查",
+    hint: "检查线索、物品或地点",
+    prompt: "我检查当前场景中最可疑的线索、物品或地点，尽量不惊动其他人。"
+  },
+  {
+    id: "act",
+    label: "行动",
+    hint: "做一个谨慎但能推进局面的动作",
+    prompt: "我采取一个谨慎但能推进局面的行动，优先保证自己不暴露。"
+  }
+];

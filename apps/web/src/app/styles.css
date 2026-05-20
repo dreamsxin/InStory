@@ -802,6 +802,34 @@ a {
   margin-top: 16px;
 }
 
+.action-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.action-preset {
+  width: 100%;
+  min-height: 76px;
+  align-items: flex-start;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  white-space: normal;
+}
+
+.action-preset span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.secondary-choices {
+  margin-top: 10px;
+}
+
 .choice {
   width: 100%;
   text-align: left;
@@ -1661,6 +1689,15 @@ a {
     grid-template-columns: 1fr;
     gap: 8px;
     margin-top: 8px;
+  }
+
+  .action-preset-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .action-preset {
+    min-height: 62px;
   }
 
   .choice {
