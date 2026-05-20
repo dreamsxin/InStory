@@ -475,6 +475,10 @@ export async function buildApp(options: BuildAppOptions) {
       return reply.code(404).send({ error: "Session not found" });
     }
 
+    if (!body.timelineNodeId) {
+      return reply.code(400).send({ error: "Timeline node id is required" });
+    }
+
     const node = session.timeline.find((item) => item.id === body.timelineNodeId);
     if (!node) {
       return reply.code(404).send({ error: "Timeline node not found" });

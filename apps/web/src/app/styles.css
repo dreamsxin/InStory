@@ -895,6 +895,8 @@ a {
 .timeline-item {
   border-left: 3px solid var(--blue);
   padding-left: 10px;
+  display: grid;
+  gap: 8px;
 }
 
 .error {

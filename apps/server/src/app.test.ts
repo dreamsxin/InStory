@@ -195,6 +195,13 @@ describe("server API", () => {
     });
 
     expect(loadedBranch.statusCode).toBe(200);
+
+    const missingNode = await app.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/rewind`,
+      payload: {}
+    });
+    expect(missingNode.statusCode).toBe(400);
   });
 
   it("returns clear errors for missing resources and invalid requests", async () => {

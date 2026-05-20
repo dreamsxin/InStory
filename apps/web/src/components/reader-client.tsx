@@ -2,13 +2,15 @@
 
 import { Button, Card, Chip, Label, TextArea, TextField } from "@heroui/react";
 import type { SessionTurn, StorySession, WorldState } from "@instory/shared";
-import { createTurn } from "@/lib/api";
+import { createTurn, rewindSession } from "@/lib/api";
 import { BrandMark } from "@/components/brand-mark";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 type ReaderPanel = "status" | "memory" | "action" | null;
 
 export function ReaderClient({ initialSession }: { initialSession: StorySession }) {
+  const router = useRouter();
   const [session, setSession] = useState(initialSession);
   const [activePanel, setActivePanel] = useState<ReaderPanel>(null);
   const [text, setText] = useState("");
@@ -109,7 +111,7 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
             <Button size="sm" variant="ghost" onPress={() => setActivePanel(null)}>关闭</Button>
           </div>
           {activePanel === "status" ? <StatePanel state={session.state} /> : null}
-          {activePanel === "memory" ? <TimelinePanel session={session} /> : null}
+          {activePanel === "memory" ? <TimelinePanel session={session} onRewind={(timelineNodeId) => void rewindToNode(timelineNodeId)} /> : null}
           {activePanel === "action" && latestTurn ? (
             <ActionPanel
               error={error}
@@ -125,6 +127,20 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
       ) : null}
     </main>
   );
+
+  async function rewindToNode(timelineNodeId: string) {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const branch = await rewindSession(session.id, timelineNodeId);
+      router.push(`/story/${branch.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "回退失败");
+    } finally {
+      setLoading(false);
+    }
+  }
 }
 
 function panelTitle(panel: Exclude<ReaderPanel, null>) {
@@ -171,7 +187,7 @@ function StatePanel({ state }: { state: WorldState }) {
   );
 }
 
-function TimelinePanel({ session }: { session: StorySession }) {
+function TimelinePanel({ onRewind, session }: { onRewind: (timelineNodeId: string) => void; session: StorySession }) {
   return (
     <Card className="panel">
       <Card.Content>
@@ -181,6 +197,9 @@ function TimelinePanel({ session }: { session: StorySession }) {
             <div className="timeline-item" key={node.id}>
               <strong>{node.title}</strong>
               <p className="muted">{node.summary}</p>
+              <Button size="sm" type="button" variant="outline" onPress={() => onRewind(node.id)}>
+                回到这里
+              </Button>
             </div>
           ))}
         </div>

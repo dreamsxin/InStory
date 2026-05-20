@@ -268,6 +268,25 @@ export async function createTurn(params: {
   return (await response.json()) as CreateTurnResponse;
 }
 
+export async function rewindSession(sessionId: string, timelineNodeId: string): Promise<StorySession> {
+  const response = await fetch(`${API_BASE}/api/sessions/${sessionId}/rewind`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      timelineNodeId
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error("回退故事进度失败");
+  }
+
+  const data = (await response.json()) as { session: StorySession };
+  return data.session;
+}
+
 export async function getAdminStatus(): Promise<AdminStatus> {
   return adminGet<AdminStatus>("/api/admin/status");
 }
