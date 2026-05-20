@@ -1,0 +1,90 @@
+{
+  "stories": [
+    {
+      "id": "rain-mansion",
+      "title": "雨夜旧宅",
+      "tagline": "你醒来时，门外的人已经知道了你的名字。",
+      "genre": "悬疑",
+      "aiFreedom": "medium"
+    }
+  ],
+  "worlds": [
+    {
+      "storyId": "rain-mansion",
+      "premise": "一座与外界隔绝的旧宅在雨夜中封门，宅中每个人都隐瞒着死者失踪前最后一小时的真相。",
+      "rules": [
+        "旧宅封门后，任何人不得在天亮前离开。",
+        "每个核心角色都只知道真相的一部分。",
+        "死者相关线索必须通过观察、对话或风险行动获得。",
+        "陆清河不会主动透露主人死因，除非玩家取得足够信任或证据。"
+      ],
+      "locations": [
+        {
+          "id": "east_room",
+          "name": "旧宅东厢房",
+          "description": "你醒来的房间，木梁低垂，屏风后藏着未干的雨痕。"
+        },
+        {
+          "id": "main_hall",
+          "name": "正厅",
+          "description": "宅中众人被迫聚集的地方，供桌上的香灰被人动过。"
+        },
+        {
+          "id": "back_corridor",
+          "name": "后廊",
+          "description": "连接书房和偏门的狭长木廊，雨声会掩盖细小脚步。"
+        }
+      ]
+    }
+  ],
+  "characters": [
+    {
+      "id": "lu_qinghe",
+      "storyId": "rain-mansion",
+      "name": "陆清河",
+      "role": "旧宅管事",
+      "personality": ["克制", "敏锐", "有所隐瞒"],
+      "goals": ["保护旧宅秘密", "确认你的真实身份"],
+      "constraints": ["不会主动透露主人死因", "不会无故离开旧宅"]
+    },
+    {
+      "id": "madam_shen",
+      "storyId": "rain-mansion",
+      "name": "沈夫人",
+      "role": "旧宅女主人",
+      "personality": ["端庄", "警惕", "强势"],
+      "goals": ["维持宅中秩序", "阻止丑闻外泄"],
+      "constraints": ["不会承认自己见过死者最后一面", "不会允许陌生人单独进入书房"]
+    }
+  ],
+  "anchors": [
+    {
+      "id": "sealed_house",
+      "storyId": "rain-mansion",
+      "title": "旧宅封门",
+      "type": "required",
+      "description": "玩家必须意识到天亮前无法离开旧宅。"
+    },
+    {
+      "id": "corpse_found",
+      "storyId": "rain-mansion",
+      "title": "发现死者",
+      "type": "required",
+      "description": "死者遗体或明确死亡证据应在前几轮内出现。"
+    },
+    {
+      "id": "early_confession",
+      "storyId": "rain-mansion",
+      "title": "反派提前自白",
+      "type": "forbidden",
+      "description": "任何嫌疑人都不能在证据不足时直接承认全部真相。"
+    },
+    {
+      "id": "hidden_letter",
+      "storyId": "rain-mansion",
+      "title": "湿信纸",
+      "type": "optional",
+      "description": "玩家可能在东厢房或后廊发现一封被雨水浸湿的信。"
+    }
+  ]
+}

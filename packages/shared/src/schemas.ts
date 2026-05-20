@@ -46,3 +46,49 @@ export const narrativeResultSchema = z.object({
   }),
   memoryEvents: z.array(z.string())
 });
+
+export const storySummarySchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  tagline: z.string().min(1),
+  genre: z.string().min(1),
+  aiFreedom: z.enum(["low", "medium", "high"])
+});
+
+export const characterProfileSchema = z.object({
+  id: z.string().min(1),
+  storyId: z.string().min(1),
+  name: z.string().min(1),
+  role: z.string().min(1),
+  personality: z.array(z.string()),
+  goals: z.array(z.string()),
+  constraints: z.array(z.string())
+});
+
+export const storyAnchorSchema = z.object({
+  id: z.string().min(1),
+  storyId: z.string().min(1),
+  title: z.string().min(1),
+  type: z.enum(["required", "optional", "forbidden", "ending"]),
+  description: z.string().min(1)
+});
+
+export const worldProfileSchema = z.object({
+  storyId: z.string().min(1),
+  premise: z.string().min(1),
+  rules: z.array(z.string()),
+  locations: z.array(
+    z.object({
+      id: z.string().min(1),
+      name: z.string().min(1),
+      description: z.string().min(1)
+    })
+  )
+});
+
+export const storySeedSchema = z.object({
+  stories: z.array(storySummarySchema),
+  worlds: z.array(worldProfileSchema),
+  characters: z.array(characterProfileSchema),
+  anchors: z.array(storyAnchorSchema)
+});

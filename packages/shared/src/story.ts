@@ -30,6 +30,24 @@ export interface StoryAnchor {
   description: string;
 }
 
+export interface WorldProfile {
+  storyId: string;
+  premise: string;
+  rules: string[];
+  locations: Array<{
+    id: string;
+    name: string;
+    description: string;
+  }>;
+}
+
+export interface StoryDetail {
+  story: StorySummary;
+  world: WorldProfile;
+  characters: CharacterProfile[];
+  anchors: StoryAnchor[];
+}
+
 export interface ReaderRole {
   mode: EntryMode;
   characterId?: string;

@@ -4,13 +4,12 @@ import { join } from "node:path";
 import { createLLMProvider } from "@instory/ai-orchestrator";
 import { createSessionRequestSchema, createTurnRequestSchema } from "@instory/shared";
 import { createTimelineNode, applyStateDelta, createInitialState, shouldCreateTimelineNode } from "@instory/story-engine";
+import { StoryCatalog } from "./data/story-catalog.js";
 import { SessionStore } from "./db/session-store.js";
 import type {
-  CharacterProfile,
   CreateSessionResponse,
   CreateTurnResponse,
   StorySession,
-  StorySummary,
   SessionTurn,
   TimelineNode
 } from "@instory/shared";
@@ -31,27 +30,7 @@ const provider = createLLMProvider({
 });
 const defaultDatabasePath = join(process.env.INIT_CWD ?? process.cwd(), "data", "instory.sqlite");
 const sessionStore = new SessionStore(process.env.SQLITE_DATABASE_PATH ?? defaultDatabasePath);
-const stories: StorySummary[] = [
-  {
-    id: "rain-mansion",
-    title: "雨夜旧宅",
-    tagline: "你醒来时，门外的人已经知道了你的名字。",
-    genre: "悬疑",
-    aiFreedom: "medium"
-  }
-];
-
-const characters: CharacterProfile[] = [
-  {
-    id: "lu_qinghe",
-    storyId: "rain-mansion",
-    name: "陆清河",
-    role: "旧宅管事",
-    personality: ["克制", "敏锐", "有所隐瞒"],
-    goals: ["保护旧宅秘密", "确认你的真实身份"],
-    constraints: ["不会主动透露主人死因", "不会无故离开旧宅"]
-  }
-];
+const storyCatalog = new StoryCatalog();
 
 app.get("/api/health", async () => ({
   ok: true,
@@ -60,28 +39,25 @@ app.get("/api/health", async () => ({
 }));
 
 app.get("/api/stories", async () => ({
-  stories
+  stories: storyCatalog.listStories()
 }));
 
 app.get("/api/stories/:storyId", async (request, reply) => {
   const { storyId } = request.params as { storyId: string };
-  const story = stories.find((item) => item.id === storyId);
+  const storyDetail = storyCatalog.findStory(storyId);
 
-  if (!story) {
+  if (!storyDetail) {
     return reply.code(404).send({ error: "Story not found" });
   }
 
-  return {
-    story,
-    characters: characters.filter((item) => item.storyId === storyId)
-  };
+  return storyDetail;
 });
 
 app.post("/api/stories/:storyId/sessions", async (request, reply) => {
   const { storyId } = request.params as { storyId: string };
-  const story = stories.find((item) => item.id === storyId);
+  const storyDetail = storyCatalog.findStory(storyId);
 
-  if (!story) {
+  if (!storyDetail) {
     return reply.code(404).send({ error: "Story not found" });
   }
 
@@ -90,7 +66,9 @@ app.post("/api/stories/:storyId/sessions", async (request, reply) => {
     return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
   }
 
-  const character = parsed.data.characterId ? characters.find((item) => item.id === parsed.data.characterId) : characters[0];
+  const requestedCharacter = parsed.data.characterId ? storyCatalog.findCharacter(parsed.data.characterId) : null;
+  const character =
+    requestedCharacter?.storyId === storyId ? requestedCharacter : storyDetail.characters[0] ?? null;
   const now = new Date().toISOString();
   const sessionId = `sess_${crypto.randomUUID()}`;
   const initialState = createInitialState();

@@ -34,6 +34,9 @@
 - 修正 workspace 测试脚本，允许暂未添加测试的应用包通过 `npm run test`。
 - 接入 SQLite 会话存储，读者会话、回合、状态快照和时间线以 JSON payload 形式持久化到本地数据库。
 - 新增 `SessionStore` 单元测试，覆盖保存、读取和更新。
+- 将故事、世界、角色、剧情锚点从服务端入口硬编码迁移到 `stories.seed.json`。
+- 新增 `StoryCatalog` 仓库层和测试，用 Zod 校验示例故事种子数据。
+- `GET /api/stories/:storyId` 返回完整故事详情，包括 world、characters、anchors。
 
 ### 验证结果
 
@@ -47,14 +50,14 @@
 ### 已知问题
 
 - `npm audit` 报告 2 个 moderate，来源是 `next@16.2.6` 依赖的 `postcss`。当前 `npm audit fix --force` 会降级到破坏性旧版本，暂不执行。
-- 故事和角色数据仍为静态种子数据，尚未进入数据库。
+- 故事、世界、角色和锚点已迁移为 JSON 种子数据，尚未进入 SQLite 表。
 - SQLite 当前使用 Node.js 内置 `node:sqlite`，在 Node 24 下可能出现实验性 API 提示。
 - AI 叙事暂时使用 Mock provider，尚未接入真实模型。
 - 真实模型 Provider 已接入配置，但尚未用实际 API Key 做端到端验证。
 
 ### 下一步
 
-1. 完善作者配置数据结构与示例故事种子数据。
+1. 增加服务端 API 测试。
 2. 增加真实模型端到端验证用例。
-3. 增加服务端 API 测试。
-4. 将故事、角色、锚点种子数据迁移到可加载的 JSON/SQLite 数据源。
+3. 将故事、角色、锚点种子数据迁移到 SQLite 表。
+4. 在 Web 作者工具中展示/编辑故事配置。

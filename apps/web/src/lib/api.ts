@@ -1,6 +1,7 @@
 import type {
   CreateSessionResponse,
   CreateTurnResponse,
+  StoryDetail,
   StorySession,
   StorySummary
 } from "@instory/shared";
@@ -33,6 +34,14 @@ export async function createSession(storyId: string): Promise<CreateSessionRespo
   }
 
   return (await response.json()) as CreateSessionResponse;
+}
+
+export async function getStoryDetail(storyId: string): Promise<StoryDetail> {
+  const response = await fetch(`${API_BASE}/api/stories/${storyId}`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("加载故事详情失败");
+  }
+  return (await response.json()) as StoryDetail;
 }
 
 export async function getSession(sessionId: string): Promise<StorySession> {
