@@ -81,7 +81,9 @@ export const storySummarySchema = z.object({
   title: z.string().min(1),
   tagline: z.string().min(1),
   genre: z.string().min(1),
-  aiFreedom: z.enum(["low", "medium", "high"])
+  aiFreedom: z.enum(["low", "medium", "high"]),
+  experienceMode: z.enum(["scripted", "coauthored", "improvised"]),
+  defaultSegmentLength: z.enum(["short", "standard", "long"])
 });
 
 export const characterProfileSchema = z.object({

@@ -60,13 +60,17 @@ describe("StoryStore", () => {
         title: "雨夜旧宅：修订版",
         tagline: "新的故事标语",
         genre: "悬疑测试",
-        aiFreedom: "high"
+        aiFreedom: "high",
+        experienceMode: "scripted",
+        defaultSegmentLength: "long"
       });
 
       expect(updated).toMatchObject({
         id: "rain-mansion",
         title: "雨夜旧宅：修订版",
-        aiFreedom: "high"
+        aiFreedom: "high",
+        experienceMode: "scripted",
+        defaultSegmentLength: "long"
       });
       expect(store.findStory("rain-mansion")).toMatchObject({
         story: {

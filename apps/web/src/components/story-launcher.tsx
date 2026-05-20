@@ -35,6 +35,8 @@ export function StoryLauncher({ profiles, story }: { profiles: ReaderProfile[]; 
         <div className="tag-row">
           <Chip size="sm" variant="soft">{story.genre}</Chip>
           <Chip size="sm" variant="soft">AI 自由度 {story.aiFreedom}</Chip>
+          <Chip size="sm" variant="soft">{experienceModeLabel(story.experienceMode)}</Chip>
+          <Chip size="sm" variant="soft">{segmentLengthLabel(story.defaultSegmentLength)}</Chip>
         </div>
         <Select
           className="instory-select"
@@ -71,3 +73,11 @@ export function StoryLauncher({ profiles, story }: { profiles: ReaderProfile[]; 
 }
 
 const DEFAULT_ROLE_KEY = "__default__";
+
+function experienceModeLabel(mode: StorySummary["experienceMode"]) {
+  return mode === "scripted" ? "剧本入戏" : mode === "improvised" ? "即兴入戏" : "共演入戏";
+}
+
+function segmentLengthLabel(length: StorySummary["defaultSegmentLength"]) {
+  return length === "short" ? "短段" : length === "long" ? "长小节" : "标准小节";
+}

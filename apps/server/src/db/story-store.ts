@@ -79,7 +79,7 @@ export class StoryStore {
 
   listStories(): StorySummary[] {
     const rows = this.database.db.prepare("SELECT payload FROM stories ORDER BY id ASC").all() as Array<{ payload: string }>;
-    return rows.map((row) => JSON.parse(row.payload) as StorySummary);
+    return rows.map((row) => normalizeStorySummary(JSON.parse(row.payload) as StorySummary));
   }
 
   findStory(storyId: string): StoryDetail | null {
@@ -128,7 +128,7 @@ export class StoryStore {
     const row = this.database.db.prepare("SELECT payload FROM stories WHERE id = ?").get(storyId) as
       | { payload: string }
       | undefined;
-    return row ? (JSON.parse(row.payload) as StorySummary) : null;
+    return row ? normalizeStorySummary(JSON.parse(row.payload) as StorySummary) : null;
   }
 
   private findWorld(storyId: string): WorldProfile | null {
@@ -151,4 +151,12 @@ export class StoryStore {
       .all(storyId) as Array<{ payload: string }>;
     return rows.map((row) => JSON.parse(row.payload) as StoryAnchor);
   }
+}
+
+function normalizeStorySummary(story: StorySummary): StorySummary {
+  return {
+    ...story,
+    experienceMode: story.experienceMode ?? "coauthored",
+    defaultSegmentLength: story.defaultSegmentLength ?? "standard"
+  };
 }

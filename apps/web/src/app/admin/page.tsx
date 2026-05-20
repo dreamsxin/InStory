@@ -124,6 +124,8 @@ export default async function AdminPage({
                 aiFreedom={item.story.aiFreedom}
                 anchorsCount={item.anchors.length}
                 charactersCount={item.characters.length}
+                defaultSegmentLength={item.story.defaultSegmentLength}
+                experienceMode={item.story.experienceMode}
                 genre={item.story.genre}
                 key={item.story.id}
                 locationsCount={item.world.locations.length}

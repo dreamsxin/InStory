@@ -1,6 +1,7 @@
 "use client";
 
 import { Button, Checkbox, Input, Label, ListBox, Select, TextField } from "@heroui/react";
+import type { ExperienceMode, SegmentLengthPreset } from "@instory/shared";
 
 import { updateModelConfigAction, updateStorySummaryAction, verifyModelConfigAction } from "@/app/admin/actions";
 
@@ -66,6 +67,8 @@ export function StorySummaryForm({
   aiFreedom,
   anchorsCount,
   charactersCount,
+  defaultSegmentLength,
+  experienceMode,
   genre,
   locationsCount,
   storyId,
@@ -75,6 +78,8 @@ export function StorySummaryForm({
   aiFreedom: AIFreedom;
   anchorsCount: number;
   charactersCount: number;
+  defaultSegmentLength: SegmentLengthPreset;
+  experienceMode: ExperienceMode;
   genre: string;
   locationsCount: number;
   storyId: string;
@@ -107,6 +112,34 @@ export function StorySummaryForm({
             <ListBox.Item id="low" textValue="low">low<ListBox.ItemIndicator /></ListBox.Item>
             <ListBox.Item id="medium" textValue="medium">medium<ListBox.ItemIndicator /></ListBox.Item>
             <ListBox.Item id="high" textValue="high">high<ListBox.ItemIndicator /></ListBox.Item>
+          </ListBox>
+        </Select.Popover>
+      </Select>
+      <Select defaultSelectedKey={experienceMode} name="experienceMode">
+        <Label>入戏体验</Label>
+        <Select.Trigger>
+          <Select.Value />
+          <Select.Indicator />
+        </Select.Trigger>
+        <Select.Popover>
+          <ListBox>
+            <ListBox.Item id="scripted" textValue="剧本入戏">剧本入戏<ListBox.ItemIndicator /></ListBox.Item>
+            <ListBox.Item id="coauthored" textValue="共演入戏">共演入戏<ListBox.ItemIndicator /></ListBox.Item>
+            <ListBox.Item id="improvised" textValue="即兴入戏">即兴入戏<ListBox.ItemIndicator /></ListBox.Item>
+          </ListBox>
+        </Select.Popover>
+      </Select>
+      <Select defaultSelectedKey={defaultSegmentLength} name="defaultSegmentLength">
+        <Label>生成长度</Label>
+        <Select.Trigger>
+          <Select.Value />
+          <Select.Indicator />
+        </Select.Trigger>
+        <Select.Popover>
+          <ListBox>
+            <ListBox.Item id="short" textValue="短段">短段<ListBox.ItemIndicator /></ListBox.Item>
+            <ListBox.Item id="standard" textValue="标准小节">标准小节<ListBox.ItemIndicator /></ListBox.Item>
+            <ListBox.Item id="long" textValue="长小节">长小节<ListBox.ItemIndicator /></ListBox.Item>
           </ListBox>
         </Select.Popover>
       </Select>

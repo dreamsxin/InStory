@@ -341,7 +341,9 @@ describe("server API", () => {
         title: "雨夜旧宅：作者修订",
         tagline: "你在雨声里改写旧宅命运。",
         genre: "悬疑互动",
-        aiFreedom: "high"
+        aiFreedom: "high",
+        experienceMode: "scripted",
+        defaultSegmentLength: "long"
       }
     });
 
@@ -352,7 +354,9 @@ describe("server API", () => {
         title: "雨夜旧宅：作者修订",
         tagline: "你在雨声里改写旧宅命运。",
         genre: "悬疑互动",
-        aiFreedom: "high"
+        aiFreedom: "high",
+        experienceMode: "scripted",
+        defaultSegmentLength: "long"
       }
     });
 
@@ -369,7 +373,9 @@ describe("server API", () => {
         title: "missing",
         tagline: "missing",
         genre: "missing",
-        aiFreedom: "low"
+        aiFreedom: "low",
+        experienceMode: "coauthored",
+        defaultSegmentLength: "standard"
       }
     });
     expect(missing.statusCode).toBe(404);

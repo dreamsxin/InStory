@@ -52,12 +52,20 @@ export async function updateStorySummaryAction(formData: FormData) {
   const aiFreedom = formData.get("aiFreedom") === "high" || formData.get("aiFreedom") === "low"
     ? String(formData.get("aiFreedom"))
     : "medium";
+  const experienceMode = formData.get("experienceMode") === "scripted" || formData.get("experienceMode") === "improvised"
+    ? String(formData.get("experienceMode"))
+    : "coauthored";
+  const defaultSegmentLength = formData.get("defaultSegmentLength") === "short" || formData.get("defaultSegmentLength") === "long"
+    ? String(formData.get("defaultSegmentLength"))
+    : "standard";
 
   await updateAdminStorySummary(storyId, {
     title,
     tagline,
     genre,
-    aiFreedom: aiFreedom as "low" | "medium" | "high"
+    aiFreedom: aiFreedom as "low" | "medium" | "high",
+    experienceMode: experienceMode as "scripted" | "coauthored" | "improvised",
+    defaultSegmentLength: defaultSegmentLength as "short" | "standard" | "long"
   });
 
   revalidatePath("/admin");

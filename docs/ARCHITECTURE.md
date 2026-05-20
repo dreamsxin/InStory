@@ -155,6 +155,12 @@ type ExperienceModeConfig = {
 
 `experienceMode` 是产品层的体验承诺，不是直接把权重暴露给读者。服务端使用它决定查找作者预设的优先级、提示词中对剧情锚点的约束强度、是否允许 AI 生成偏离主线的临场结果，以及是否需要更严格的状态校验。
 
+MVP 实现边界：
+
+- `coauthored` / `共演入戏` 是唯一需要完整验证的主路径。
+- `scripted` / `剧本入戏` 和 `improvised` / `即兴入戏` 先作为作品字段和策略参数保留，运行时可先复用 `coauthored` 流程，只调整提示词约束和作者预设优先级。
+- 不为三种模式分别实现三套运行时，避免 MVP 过早复杂化。
+
 `read_segment` 不应总是实时调用模型。推荐按以下优先级生成阅读内容：
 
 1. 命中作者预设小节或选择后的预设后续，直接读取预设正文。
@@ -234,6 +240,8 @@ type StoryVersion = {
   defaultSegmentLength: "short" | "standard" | "long";
 };
 ```
+
+MVP 当前工程仍以 SQLite JSON payload 保存故事配置。实现时可以先把 `experienceMode` 与 `defaultSegmentLength` 写入 `StorySummary` payload；等 `StoryVersion` 表落地后再迁移到版本表。
 
 #### AI Orchestrator
 

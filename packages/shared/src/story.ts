@@ -4,12 +4,18 @@ export type TurnInputType = "free_text" | "choice";
 
 export type RiskLevel = "low" | "medium" | "high";
 
+export type ExperienceMode = "scripted" | "coauthored" | "improvised";
+
+export type SegmentLengthPreset = "short" | "standard" | "long";
+
 export interface StorySummary {
   id: string;
   title: string;
   tagline: string;
   genre: string;
   aiFreedom: "low" | "medium" | "high";
+  experienceMode: ExperienceMode;
+  defaultSegmentLength: SegmentLengthPreset;
 }
 
 export interface CharacterProfile {
