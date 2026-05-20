@@ -19,6 +19,10 @@ beforeEach(async () => {
     provider: new MockNarrativeProvider(),
     sessionStore: new SessionStore(join(tempDir, "api.sqlite")),
     storyCatalog: new StoryCatalog(),
+    modelConfig: {
+      provider: "mock",
+      apiKeyConfigured: false
+    },
     logger: false
   });
 });
@@ -136,6 +140,104 @@ describe("server API", () => {
       url: "/api/sessions/missing"
     });
     expect(missingSession.statusCode).toBe(404);
+  });
+
+  it("returns admin status, model config, story catalog, sessions and moderation events", async () => {
+    const created = await createSession();
+
+    const status = await app.inject({
+      method: "GET",
+      url: "/api/admin/status"
+    });
+    expect(status.statusCode).toBe(200);
+    expect(status.json()).toMatchObject({
+      service: "instory-server",
+      storage: {
+        type: "sqlite"
+      },
+      counts: {
+        stories: 1,
+        sessions: 1
+      }
+    });
+
+    const models = await app.inject({
+      method: "GET",
+      url: "/api/admin/models"
+    });
+    expect(models.statusCode).toBe(200);
+    expect(models.json()).toEqual({
+      provider: "mock",
+      baseUrl: null,
+      model: null,
+      apiKeyConfigured: false
+    });
+
+    const stories = await app.inject({
+      method: "GET",
+      url: "/api/admin/stories"
+    });
+    expect(stories.statusCode).toBe(200);
+    expect(stories.json<{ stories: unknown[] }>().stories).toHaveLength(1);
+
+    const sessions = await app.inject({
+      method: "GET",
+      url: "/api/admin/sessions"
+    });
+    expect(sessions.statusCode).toBe(200);
+    expect(sessions.json<{ sessions: Array<{ id: string; turnCount: number }> }>().sessions).toContainEqual(
+      expect.objectContaining({
+        id: created.session.id,
+        turnCount: 1
+      })
+    );
+
+    const sessionDetail = await app.inject({
+      method: "GET",
+      url: `/api/admin/sessions/${created.session.id}`
+    });
+    expect(sessionDetail.statusCode).toBe(200);
+    expect(sessionDetail.json<{ session: StorySession }>().session.id).toBe(created.session.id);
+
+    const moderation = await app.inject({
+      method: "GET",
+      url: "/api/admin/moderation/events"
+    });
+    expect(moderation.statusCode).toBe(200);
+    expect(moderation.json()).toEqual({ events: [] });
+  });
+
+  it("protects admin routes when an admin token is configured", async () => {
+    await app.close();
+    rmSync(tempDir, { recursive: true, force: true });
+
+    tempDir = mkdtempSync(join(tmpdir(), "instory-api-"));
+    app = await buildApp({
+      provider: new MockNarrativeProvider(),
+      sessionStore: new SessionStore(join(tempDir, "api.sqlite")),
+      storyCatalog: new StoryCatalog(),
+      modelConfig: {
+        provider: "mock",
+        apiKeyConfigured: false
+      },
+      adminToken: "secret",
+      logger: false
+    });
+
+    const unauthorized = await app.inject({
+      method: "GET",
+      url: "/api/admin/status"
+    });
+    expect(unauthorized.statusCode).toBe(401);
+
+    const authorized = await app.inject({
+      method: "GET",
+      url: "/api/admin/status",
+      headers: {
+        authorization: "Bearer secret"
+      }
+    });
+    expect(authorized.statusCode).toBe(200);
   });
 });
 

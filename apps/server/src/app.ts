@@ -7,10 +7,19 @@ import type { CreateSessionResponse, CreateTurnResponse, SessionTurn, StorySessi
 import type { StoryCatalog } from "./data/story-catalog.js";
 import type { SessionStore } from "./db/session-store.js";
 
+export interface RuntimeModelConfig {
+  provider: "mock" | "openai-compatible";
+  baseUrl?: string;
+  model?: string;
+  apiKeyConfigured: boolean;
+}
+
 export interface BuildAppOptions {
   provider: LLMProvider;
   sessionStore: SessionStore;
   storyCatalog: StoryCatalog;
+  modelConfig: RuntimeModelConfig;
+  adminToken?: string;
   logger?: boolean;
 }
 
@@ -31,6 +40,67 @@ export async function buildApp(options: BuildAppOptions) {
     ok: true,
     service: "instory-server",
     storage: "sqlite"
+  }));
+
+  app.addHook("preHandler", async (request, reply) => {
+    if (!request.url.startsWith("/api/admin")) {
+      return;
+    }
+
+    if (!options.adminToken) {
+      return;
+    }
+
+    const authorization = request.headers.authorization;
+    if (authorization !== `Bearer ${options.adminToken}`) {
+      return reply.code(401).send({ error: "Unauthorized" });
+    }
+  });
+
+  app.get("/api/admin/status", async () => ({
+    service: "instory-server",
+    storage: {
+      type: "sqlite",
+      databasePath: options.sessionStore.databasePath
+    },
+    counts: {
+      stories: options.storyCatalog.listStories().length,
+      sessions: options.sessionStore.count()
+    }
+  }));
+
+  app.get("/api/admin/models", async () => ({
+    provider: options.modelConfig.provider,
+    baseUrl: options.modelConfig.baseUrl ?? null,
+    model: options.modelConfig.model ?? null,
+    apiKeyConfigured: options.modelConfig.apiKeyConfigured
+  }));
+
+  app.get("/api/admin/stories", async () => ({
+    stories: options.storyCatalog.listStories().map((story) => options.storyCatalog.findStory(story.id))
+  }));
+
+  app.get("/api/admin/sessions", async (request) => {
+    const query = request.query as { limit?: string };
+    const limit = Number(query.limit ?? 20);
+    return {
+      sessions: options.sessionStore.listRecent(Number.isFinite(limit) ? limit : 20)
+    };
+  });
+
+  app.get("/api/admin/sessions/:sessionId", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string };
+    const session = options.sessionStore.findById(sessionId);
+
+    if (!session) {
+      return reply.code(404).send({ error: "Session not found" });
+    }
+
+    return { session };
+  });
+
+  app.get("/api/admin/moderation/events", async () => ({
+    events: []
   }));
 
   app.get("/api/stories", async () => ({

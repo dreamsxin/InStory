@@ -39,6 +39,17 @@
 - `GET /api/stories/:storyId` 返回完整故事详情，包括 world、characters、anchors。
 - 抽出服务端 `buildApp`，将路由注册与进程启动解耦，便于测试和后续部署。
 - 新增服务端 API 测试，覆盖健康检查、故事详情、创建会话、推进回合、读取会话、回溯分支和错误响应。
+- MVP 规划新增“极简管理后台 / AI 叙事系统控制台”，用于模型配置查看、运行状态、故事配置查看、会话审计和审核占位。
+- 新增 Admin API：
+  - `GET /api/admin/status`
+  - `GET /api/admin/models`
+  - `GET /api/admin/stories`
+  - `GET /api/admin/sessions`
+  - `GET /api/admin/sessions/:sessionId`
+  - `GET /api/admin/moderation/events`
+- Admin API 支持 `ADMIN_TOKEN` Bearer 鉴权，本地未设置 token 时允许访问。
+- `SessionStore` 增加会话统计和最近会话列表能力。
+- Admin API 测试覆盖状态、模型配置、故事配置、会话审计、审核占位和鉴权。
 
 ### 验证结果
 
@@ -59,7 +70,8 @@
 
 ### 下一步
 
-1. 增加真实模型端到端验证用例。
-2. 将故事、角色、锚点种子数据迁移到 SQLite 表。
-3. 在 Web 作者工具中展示/编辑故事配置。
-4. 增加 Web 阅读器交互测试。
+1. 实现 Web `/admin` 极简只读后台。
+2. 增加真实模型端到端验证用例。
+3. 将故事、角色、锚点种子数据迁移到 SQLite 表。
+4. 在 Web 作者工具中展示/编辑故事配置。
+5. 增加 Web 阅读器交互测试。

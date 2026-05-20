@@ -1,14 +1,20 @@
 import { join } from "node:path";
 import { createLLMProvider } from "@instory/ai-orchestrator";
+import type { RuntimeModelConfig } from "./app.js";
 import { buildApp } from "./app.js";
 import { StoryCatalog } from "./data/story-catalog.js";
 import { SessionStore } from "./db/session-store.js";
 
-const provider = createLLMProvider({
-  provider: process.env.LLM_PROVIDER === "openai-compatible" ? "openai-compatible" : "mock",
+const modelProvider = process.env.LLM_PROVIDER === "openai-compatible" ? "openai-compatible" : "mock";
+const modelConfig: RuntimeModelConfig = {
+  provider: modelProvider,
   baseUrl: process.env.LLM_BASE_URL,
-  apiKey: process.env.LLM_API_KEY,
-  model: process.env.LLM_MODEL
+  model: process.env.LLM_MODEL,
+  apiKeyConfigured: Boolean(process.env.LLM_API_KEY)
+};
+const provider = createLLMProvider({
+  ...modelConfig,
+  apiKey: process.env.LLM_API_KEY
 });
 const defaultDatabasePath = join(process.env.INIT_CWD ?? process.cwd(), "data", "instory.sqlite");
 const sessionStore = new SessionStore(process.env.SQLITE_DATABASE_PATH ?? defaultDatabasePath);
@@ -16,7 +22,9 @@ const storyCatalog = new StoryCatalog();
 const app = await buildApp({
   provider,
   sessionStore,
-  storyCatalog
+  storyCatalog,
+  modelConfig,
+  adminToken: process.env.ADMIN_TOKEN
 });
 
 const port = Number(process.env.PORT ?? 4000);

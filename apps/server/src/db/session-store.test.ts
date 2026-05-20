@@ -20,6 +20,16 @@ describe("SessionStore", () => {
 
       expect(store.findById("sess_test")).toEqual(session);
       expect(store.findById("missing")).toBeNull();
+      expect(store.count()).toBe(1);
+      expect(store.listRecent()).toEqual([
+        {
+          id: "sess_test",
+          storyId: "rain-mansion",
+          createdAt: "2026-05-20T00:00:00.000Z",
+          updatedAt: "2026-05-20T00:00:00.000Z",
+          turnCount: 0
+        }
+      ]);
     } finally {
       store.close();
       rmSync(dir, { recursive: true, force: true });

@@ -642,6 +642,14 @@ cp .env.example .env
 - 默认路径：`data/instory.sqlite`
 - 可通过 `SQLITE_DATABASE_PATH` 覆盖
 
+Admin API 使用 `ADMIN_TOKEN` 保护：
+
+```http
+Authorization: Bearer dev-admin-token
+```
+
+本地开发如果不设置 `ADMIN_TOKEN`，Admin API 默认允许访问；部署环境必须设置。
+
 ### 启动服务端
 
 ```bash
@@ -652,6 +660,7 @@ npm run dev:server
 
 - API: `http://localhost:4000`
 - 健康检查: `http://localhost:4000/api/health`
+- Admin 状态: `http://localhost:4000/api/admin/status`
 
 ### 启动 Web 客户端
 
