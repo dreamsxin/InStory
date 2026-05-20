@@ -5,6 +5,7 @@ import {
   getAdminStatus,
   getAdminStories
 } from "@/lib/api";
+import { BrandMark } from "@/components/brand-mark";
 
 export default async function AdminPage() {
   const [status, modelConfig, stories, sessions, moderationEvents] = await Promise.all([
@@ -18,9 +19,12 @@ export default async function AdminPage() {
   return (
     <main className="admin-page">
       <header className="admin-header">
-        <div className="brand">
-          <h1>InStory 控制台</h1>
-          <p className="muted">模型、内容、会话和审核的 MVP 只读视图</p>
+        <div className="brand-row">
+          <BrandMark size={42} />
+          <div className="brand">
+            <h1>InStory 控制台</h1>
+            <p className="muted">模型、内容、会话和审核的 MVP 只读视图</p>
+          </div>
         </div>
       </header>
 

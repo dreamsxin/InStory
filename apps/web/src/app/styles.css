@@ -68,6 +68,25 @@ button {
   gap: 4px;
 }
 
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.brand-mark {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+}
+
+.brand-mark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .brand h1 {
   font-size: 28px;
   margin: 0;

@@ -2,6 +2,7 @@
 
 import type { SessionTurn, StorySession, WorldState } from "@instory/shared";
 import { createTurn } from "@/lib/api";
+import { BrandMark } from "@/components/brand-mark";
 import { useState } from "react";
 
 export function ReaderClient({ initialSession }: { initialSession: StorySession }) {
@@ -46,9 +47,12 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
     <main className="shell">
       <section className="reader">
         <div className="topbar">
-          <div className="brand">
-            <h1>雨夜旧宅</h1>
-            <p className="muted">身份：{session.readerRole.name}</p>
+          <div className="brand-row">
+            <BrandMark size={40} />
+            <div className="brand">
+              <h1>雨夜旧宅</h1>
+              <p className="muted">身份：{session.readerRole.name}</p>
+            </div>
           </div>
         </div>
 
