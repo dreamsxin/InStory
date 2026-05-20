@@ -607,3 +607,46 @@ MVP 可暂缓：
 - 安全拦截与重生成率
 
 最终目标不是让用户多看几章，而是让用户不断产生“这是我亲手改变的故事”的体验。
+
+## 11. 开发启动
+
+当前工程采用 Node.js / TypeScript monorepo，包含服务端、Web 客户端和共享包。
+
+### 环境要求
+
+- Node.js 24+
+- npm 11+
+
+### 安装依赖
+
+```bash
+npm install
+```
+
+### 启动服务端
+
+```bash
+npm run dev:server
+```
+
+默认地址：
+
+- API: `http://localhost:4000`
+- 健康检查: `http://localhost:4000/api/health`
+
+### 启动 Web 客户端
+
+```bash
+npm run dev:web
+```
+
+默认地址：
+
+- Web: `http://localhost:3000`
+
+### 常用检查
+
+```bash
+npm run typecheck
+npm run build
+```
