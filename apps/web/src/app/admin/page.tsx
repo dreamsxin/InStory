@@ -6,6 +6,7 @@ import {
   getAdminStories
 } from "@/lib/api";
 import { BrandMark } from "@/components/brand-mark";
+import Link from "next/link";
 import { updateModelConfigAction, updateStorySummaryAction, verifyModelConfigAction } from "./actions";
 
 export default async function AdminPage({
@@ -23,16 +24,33 @@ export default async function AdminPage({
   ]);
 
   return (
-    <main className="admin-page">
-      <header className="admin-header">
+    <main className="admin-page admin-shell">
+      <header className="admin-header app-topbar">
         <div className="brand-row">
           <BrandMark size={42} />
           <div className="brand">
             <h1>InStory 控制台</h1>
-            <p className="muted">模型、内容、会话和审核的 MVP 只读视图</p>
+            <p className="muted">模型、内容、会话和审核的 MVP 工作台</p>
           </div>
         </div>
+        <nav className="app-nav" aria-label="Admin navigation">
+          <a href="#model">模型</a>
+          <a href="#stories">故事</a>
+          <a href="#sessions">会话</a>
+          <Link href="/">客户端</Link>
+        </nav>
       </header>
+
+      <section className="admin-command">
+        <div>
+          <span className="eyebrow">System Console</span>
+          <h2>验证 Provider，管理故事基础配置，观察运行状态。</h2>
+        </div>
+        <div className="admin-command-actions">
+          <span>{modelConfig.provider}</span>
+          <span>{modelConfig.apiKeyConfigured ? "Key 已配置" : "Key 未配置"}</span>
+        </div>
+      </section>
 
       <section className="admin-kpis">
         <Metric label="服务" value={status.service} />
@@ -42,7 +60,7 @@ export default async function AdminPage({
       </section>
 
       <section className="admin-grid">
-        <article className="panel">
+        <article className="panel" id="model">
           <h2>模型配置</h2>
           <form className="admin-form" action={updateModelConfigAction}>
             <label>
@@ -113,7 +131,7 @@ export default async function AdminPage({
         </article>
       </section>
 
-      <section className="panel">
+      <section className="panel" id="stories">
         <h2>故事配置</h2>
         <div className="story-editor-list">
           {stories.map((item) => (
@@ -150,7 +168,7 @@ export default async function AdminPage({
         </div>
       </section>
 
-      <section className="panel">
+      <section className="panel" id="sessions">
         <h2>最近会话</h2>
         {sessions.length ? (
           <div className="admin-table-wrap">

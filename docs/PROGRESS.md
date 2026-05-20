@@ -70,6 +70,7 @@
 - 新增“我的角色”服务端基础能力：`ReaderProfile` 共享类型、SQLite `reader_profiles` 存储、`GET/POST /api/reader/profiles`，创建会话时可通过 `readerProfileId` 注入用户角色上下文。
 - Web 客户端完成 HeroUI 基础依赖接入，先引入样式与组件包，核心阅读体验仍保持自定义。
 - 首页升级为“故事世界 + 我的角色”工作台，支持创建我的角色，并在进入故事前选择入戏身份。
+- 参考 HeroUI demos 的 Card、Avatar、Chip、Drawer、Modal、Tabs、Table 等交互模式，统一客户端与管理后台为现代 App 工作台视觉：粘性导航、Hero 状态区、卡片阴影、圆角控件、输入焦点态和后台快捷导航。
 
 ### 验证结果
 

@@ -1,15 +1,18 @@
 :root {
   color-scheme: light;
-  --bg: #f7f3ec;
-  --panel: #fffdf8;
-  --panel-strong: #efe8dc;
+  --bg: #f5f6f8;
+  --panel: #ffffff;
+  --panel-strong: #eef1f5;
   --text: #1f1c18;
   --muted: #6f675d;
-  --line: #ded4c5;
+  --line: #e2e6ec;
   --accent: #8b2f2f;
   --accent-strong: #6f2222;
   --green: #286b4b;
   --blue: #2c5d8a;
+  --surface: rgba(255, 255, 255, 0.82);
+  --shadow: 0 18px 60px rgba(31, 28, 24, 0.08);
+  --shadow-soft: 0 8px 28px rgba(31, 28, 24, 0.06);
 }
 
 * {
@@ -23,7 +26,10 @@ body {
 }
 
 body {
-  background: var(--bg);
+  background:
+    radial-gradient(circle at top left, rgba(139, 47, 47, 0.12), transparent 32rem),
+    radial-gradient(circle at top right, rgba(44, 93, 138, 0.12), transparent 28rem),
+    var(--bg);
   color: var(--text);
   font-family:
     Inter, "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -38,6 +44,11 @@ button {
   cursor: pointer;
 }
 
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
 .shell {
   min-height: 100vh;
   display: grid;
@@ -46,6 +57,11 @@ button {
 
 .reader {
   padding: 32px;
+}
+
+.app-shell,
+.admin-shell {
+  min-height: 100vh;
 }
 
 .sidebar {
@@ -61,6 +77,40 @@ button {
   align-items: center;
   gap: 16px;
   margin-bottom: 28px;
+}
+
+.app-topbar {
+  position: sticky;
+  top: 16px;
+  z-index: 10;
+  border: 1px solid rgba(226, 230, 236, 0.9);
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(18px);
+  border-radius: 16px;
+  padding: 12px 14px;
+  box-shadow: var(--shadow-soft);
+}
+
+.app-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.app-nav a {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 14px;
+  padding: 8px 12px;
+}
+
+.app-nav a:hover {
+  border-color: var(--line);
+  background: var(--panel);
+  color: var(--text);
 }
 
 .brand {
@@ -103,6 +153,72 @@ button {
   gap: 16px;
 }
 
+.app-hero,
+.admin-command {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: end;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.72)),
+    var(--panel);
+  box-shadow: var(--shadow);
+  margin-bottom: 18px;
+  padding: 22px;
+}
+
+.app-hero h2,
+.admin-command h2 {
+  max-width: 760px;
+  margin: 6px 0 8px;
+  font-size: 30px;
+  line-height: 1.18;
+}
+
+.app-hero p {
+  max-width: 720px;
+  color: var(--muted);
+  line-height: 1.7;
+  margin: 0;
+}
+
+.eyebrow {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.hero-stat-grid,
+.admin-command-actions {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.hero-stat-grid div,
+.admin-command-actions span {
+  min-width: 112px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 12px;
+}
+
+.hero-stat-grid strong {
+  display: block;
+  font-size: 26px;
+}
+
+.hero-stat-grid span,
+.admin-command-actions span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .home-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
@@ -121,13 +237,21 @@ button {
 .composer {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 14px;
+  box-shadow: var(--shadow-soft);
 }
 
 .story-card {
   padding: 20px;
   display: grid;
   gap: 12px;
+}
+
+.story-card:hover,
+.profile-card:hover,
+.metric:hover,
+.panel:hover {
+  border-color: rgba(139, 47, 47, 0.22);
 }
 
 .story-card h2,
@@ -152,17 +276,31 @@ button {
 .profile-form textarea {
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 10px;
   background: white;
   color: var(--text);
   padding: 9px 10px;
 }
 
+.story-role-select select:focus,
+.profile-form input:focus,
+.profile-form textarea:focus,
+.admin-form input:focus,
+.admin-form select:focus,
+.story-editor-row input:focus,
+.story-editor-row select:focus,
+.composer textarea:focus {
+  border-color: rgba(139, 47, 47, 0.5);
+  box-shadow: 0 0 0 3px rgba(139, 47, 47, 0.12);
+  outline: none;
+}
+
 .profile-panel {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 16px;
   padding: 16px;
+  box-shadow: var(--shadow);
 }
 
 .profile-panel h2 {
@@ -181,9 +319,9 @@ button {
   gap: 10px;
   align-items: start;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 14px;
   padding: 10px;
-  background: #faf7f0;
+  background: #fbfcfd;
 }
 
 .profile-card p {
@@ -203,7 +341,7 @@ button {
   height: 46px;
   display: grid;
   place-items: center;
-  border-radius: 8px;
+  border-radius: 14px;
   background: var(--panel-strong);
   color: var(--accent);
   font-weight: 700;
@@ -231,8 +369,14 @@ button {
   border: 0;
   background: var(--accent);
   color: white;
-  padding: 10px 14px;
-  border-radius: 6px;
+  padding: 11px 15px;
+  border-radius: 12px;
+  box-shadow: 0 8px 18px rgba(139, 47, 47, 0.18);
+}
+
+.story-card button:hover,
+.primary:hover {
+  background: var(--accent-strong);
 }
 
 .primary:disabled {
@@ -269,7 +413,7 @@ button {
   text-align: left;
   border: 1px solid var(--line);
   background: #faf7f0;
-  border-radius: 6px;
+  border-radius: 12px;
   padding: 12px;
 }
 
@@ -289,14 +433,14 @@ button {
   min-height: 84px;
   resize: vertical;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 12px;
   padding: 12px;
   background: white;
 }
 
 .panel {
-  padding: 16px;
-  margin-bottom: 16px;
+  padding: 18px;
+  margin-bottom: 18px;
 }
 
 .stat-list {
@@ -315,7 +459,7 @@ button {
 
 .tag {
   border: 1px solid var(--line);
-  background: #faf7f0;
+  background: #fbfcfd;
   border-radius: 999px;
   padding: 4px 8px;
   font-size: 13px;
@@ -360,10 +504,11 @@ button {
 .metric {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 16px;
   padding: 14px;
   display: grid;
   gap: 6px;
+  box-shadow: var(--shadow-soft);
 }
 
 .metric span {
@@ -411,7 +556,7 @@ button {
 .admin-form select {
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 10px;
   background: white;
   color: var(--text);
   padding: 9px 10px;
@@ -429,14 +574,19 @@ button {
 
 .secondary {
   border: 1px solid var(--line);
-  background: #faf7f0;
+  background: #fbfcfd;
   color: var(--text);
   padding: 10px 14px;
-  border-radius: 6px;
+  border-radius: 12px;
+}
+
+.secondary:hover {
+  border-color: rgba(139, 47, 47, 0.34);
+  background: white;
 }
 
 .notice {
-  border-radius: 6px;
+  border-radius: 12px;
   padding: 10px 12px;
   margin: 12px 0 0;
 }
@@ -474,7 +624,8 @@ button {
 
 .admin-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   min-width: 640px;
 }
 
@@ -484,6 +635,10 @@ button {
   padding: 10px 8px;
   text-align: left;
   vertical-align: top;
+}
+
+.admin-table tbody tr:hover {
+  background: #fbfcfd;
 }
 
 .admin-table th {
@@ -531,7 +686,7 @@ button {
 .story-editor-row select {
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 10px;
   background: white;
   color: var(--text);
   padding: 9px 10px;
@@ -563,11 +718,11 @@ button {
   }
 
   .reader {
-    padding: 20px;
+    padding: 14px;
   }
 
   .admin-page {
-    padding: 20px;
+    padding: 14px;
   }
 
   .admin-kpis,
@@ -577,6 +732,32 @@ button {
 
   .home-layout {
     grid-template-columns: 1fr;
+  }
+
+  .app-topbar,
+  .app-hero,
+  .admin-command {
+    border-radius: 14px;
+  }
+
+  .app-topbar,
+  .app-hero,
+  .admin-command {
+    grid-template-columns: 1fr;
+  }
+
+  .app-topbar {
+    position: static;
+  }
+
+  .app-hero h2,
+  .admin-command h2 {
+    font-size: 24px;
+  }
+
+  .hero-stat-grid,
+  .admin-command-actions {
+    flex-wrap: wrap;
   }
 
   .story-editor-row {

@@ -2,24 +2,49 @@ import { StoryLauncher } from "@/components/story-launcher";
 import { BrandMark } from "@/components/brand-mark";
 import { listReaderProfiles, listStories } from "@/lib/api";
 import { createReaderProfileAction } from "./actions";
+import Link from "next/link";
 
 export default async function HomePage() {
   const [stories, profiles] = await Promise.all([listStories(), listReaderProfiles()]);
 
   return (
-    <main className="reader">
-      <div className="topbar">
+    <main className="reader app-shell">
+      <div className="topbar app-topbar">
         <div className="brand-row">
           <BrandMark size={44} />
           <div className="brand">
             <h1>入戏 InStory</h1>
-            <p className="muted">AI 驱动互动小说平台</p>
+            <p className="muted">连续阅读，随时入戏</p>
           </div>
         </div>
+        <nav className="app-nav" aria-label="InStory navigation">
+          <a href="#stories">故事</a>
+          <a href="#profiles">角色</a>
+          <a href="#continue">继续</a>
+          <Link href="/admin">控制台</Link>
+        </nav>
       </div>
 
-      <section className="home-layout">
+      <section className="app-hero" id="continue">
         <div>
+          <span className="eyebrow">MVP Workspace</span>
+          <h2>选择一个身份，进入一个故事世界。</h2>
+          <p>先阅读，再在关键一幕点击入戏。你的角色设定会成为 AI 生成互动时的上下文。</p>
+        </div>
+        <div className="hero-stat-grid" aria-label="InStory stats">
+          <div>
+            <strong>{stories.length}</strong>
+            <span>故事世界</span>
+          </div>
+          <div>
+            <strong>{profiles.length}</strong>
+            <span>我的角色</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="home-layout">
+        <div id="stories">
           <h2 className="section-title">故事世界</h2>
           <div className="story-grid">
             {stories.map((story) => (
@@ -28,7 +53,7 @@ export default async function HomePage() {
           </div>
         </div>
 
-        <aside className="profile-panel">
+        <aside className="profile-panel" id="profiles">
           <h2>我的角色</h2>
           {profiles.length ? (
             <div className="profile-list">
