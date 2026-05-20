@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@instory/shared": "0.1.0"
+    "@instory/shared": "0.1.0",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

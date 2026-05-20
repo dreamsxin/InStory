@@ -1,6 +1,6 @@
 import cors from "@fastify/cors";
 import Fastify from "fastify";
-import { MockNarrativeProvider } from "@instory/ai-orchestrator";
+import { createLLMProvider } from "@instory/ai-orchestrator";
 import { createSessionRequestSchema, createTurnRequestSchema } from "@instory/shared";
 import { createTimelineNode, applyStateDelta, createInitialState, shouldCreateTimelineNode } from "@instory/story-engine";
 import type {
@@ -21,7 +21,12 @@ await app.register(cors, {
   origin: true
 });
 
-const provider = new MockNarrativeProvider();
+const provider = createLLMProvider({
+  provider: process.env.LLM_PROVIDER === "openai-compatible" ? "openai-compatible" : "mock",
+  baseUrl: process.env.LLM_BASE_URL,
+  apiKey: process.env.LLM_API_KEY,
+  model: process.env.LLM_MODEL
+});
 const stories: StorySummary[] = [
   {
     id: "rain-mansion",

@@ -8,3 +8,10 @@ export interface GenerateNarrativeInput {
 export interface LLMProvider {
   generateNarrative(input: GenerateNarrativeInput): Promise<NarrativeResult>;
 }
+
+export interface LLMProviderConfig {
+  provider: "mock" | "openai-compatible";
+  baseUrl?: string;
+  apiKey?: string;
+  model?: string;
+}

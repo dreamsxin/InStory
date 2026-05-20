@@ -623,6 +623,20 @@ MVP 可暂缓：
 npm install
 ```
 
+### 配置环境变量
+
+复制 `.env.example` 为 `.env`，默认使用 Mock AI，无需 API Key：
+
+```bash
+cp .env.example .env
+```
+
+如需接入真实模型，将 `LLM_PROVIDER` 改为 `openai-compatible`，并配置：
+
+- `LLM_BASE_URL`
+- `LLM_API_KEY`
+- `LLM_MODEL`
+
 ### 启动服务端
 
 ```bash
