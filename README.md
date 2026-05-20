@@ -637,6 +637,11 @@ cp .env.example .env
 - `LLM_API_KEY`
 - `LLM_MODEL`
 
+服务端默认使用 SQLite 保存读者会话：
+
+- 默认路径：`data/instory.sqlite`
+- 可通过 `SQLITE_DATABASE_PATH` 覆盖
+
 ### 启动服务端
 
 ```bash

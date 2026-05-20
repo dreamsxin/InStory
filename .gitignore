@@ -3,6 +3,8 @@ node_modules/
 dist/
 coverage/
 .turbo/
+data/
+**/data/
 .env
 .env.local
 npm-debug.log*

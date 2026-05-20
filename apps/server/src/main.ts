@@ -1,8 +1,10 @@
 import cors from "@fastify/cors";
 import Fastify from "fastify";
+import { join } from "node:path";
 import { createLLMProvider } from "@instory/ai-orchestrator";
 import { createSessionRequestSchema, createTurnRequestSchema } from "@instory/shared";
 import { createTimelineNode, applyStateDelta, createInitialState, shouldCreateTimelineNode } from "@instory/story-engine";
+import { SessionStore } from "./db/session-store.js";
 import type {
   CharacterProfile,
   CreateSessionResponse,
@@ -27,6 +29,8 @@ const provider = createLLMProvider({
   apiKey: process.env.LLM_API_KEY,
   model: process.env.LLM_MODEL
 });
+const defaultDatabasePath = join(process.env.INIT_CWD ?? process.cwd(), "data", "instory.sqlite");
+const sessionStore = new SessionStore(process.env.SQLITE_DATABASE_PATH ?? defaultDatabasePath);
 const stories: StorySummary[] = [
   {
     id: "rain-mansion",
@@ -49,11 +53,10 @@ const characters: CharacterProfile[] = [
   }
 ];
 
-const sessions = new Map<string, StorySession>();
-
 app.get("/api/health", async () => ({
   ok: true,
-  service: "instory-server"
+  service: "instory-server",
+  storage: "sqlite"
 }));
 
 app.get("/api/stories", async () => ({
@@ -148,7 +151,7 @@ app.post("/api/stories/:storyId/sessions", async (request, reply) => {
 
   session.turns.push(openingTurn);
   session.timeline.push(openingNode);
-  sessions.set(session.id, session);
+  sessionStore.save(session);
 
   const response: CreateSessionResponse = {
     session,
@@ -160,7 +163,7 @@ app.post("/api/stories/:storyId/sessions", async (request, reply) => {
 
 app.get("/api/sessions/:sessionId", async (request, reply) => {
   const { sessionId } = request.params as { sessionId: string };
-  const session = sessions.get(sessionId);
+  const session = sessionStore.findById(sessionId);
 
   if (!session) {
     return reply.code(404).send({ error: "Session not found" });
@@ -171,7 +174,7 @@ app.get("/api/sessions/:sessionId", async (request, reply) => {
 
 app.post("/api/sessions/:sessionId/turns", async (request, reply) => {
   const { sessionId } = request.params as { sessionId: string };
-  const session = sessions.get(sessionId);
+  const session = sessionStore.findById(sessionId);
 
   if (!session) {
     return reply.code(404).send({ error: "Session not found" });
@@ -215,6 +218,7 @@ app.post("/api/sessions/:sessionId/turns", async (request, reply) => {
     });
     session.timeline.push(timelineNode);
   }
+  sessionStore.save(session);
 
   const response: CreateTurnResponse = {
     turn,
@@ -230,7 +234,7 @@ app.post("/api/sessions/:sessionId/turns", async (request, reply) => {
 
 app.post("/api/sessions/:sessionId/rewind", async (request, reply) => {
   const { sessionId } = request.params as { sessionId: string };
-  const session = sessions.get(sessionId);
+  const session = sessionStore.findById(sessionId);
   const body = request.body as { timelineNodeId?: string };
 
   if (!session) {
@@ -252,7 +256,7 @@ app.post("/api/sessions/:sessionId/rewind", async (request, reply) => {
     updatedAt: now
   };
 
-  sessions.set(branch.id, branch);
+  sessionStore.save(branch);
 
   return {
     session: branch
@@ -261,5 +265,15 @@ app.post("/api/sessions/:sessionId/rewind", async (request, reply) => {
 
 const port = Number(process.env.PORT ?? 4000);
 const host = process.env.HOST ?? "0.0.0.0";
+
+process.on("SIGINT", () => {
+  sessionStore.close();
+  process.exit(0);
+});
+
+process.on("SIGTERM", () => {
+  sessionStore.close();
+  process.exit(0);
+});
 
 await app.listen({ port, host });
