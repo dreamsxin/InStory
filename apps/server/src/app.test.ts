@@ -118,8 +118,18 @@ describe("server API", () => {
   });
 
   it("returns one latest reading record per story", async () => {
+    const older = await createSession();
     await createSession();
-    await createSession();
+
+    const advanced = await app.inject({
+      method: "POST",
+      url: `/api/sessions/${older.session.id}/turns`,
+      payload: {
+        inputType: "free_text",
+        content: "我继续查看旧宅走廊。"
+      }
+    });
+    expect(advanced.statusCode).toBe(200);
 
     const recentSessions = await app.inject({
       method: "GET",
@@ -127,13 +137,15 @@ describe("server API", () => {
     });
 
     expect(recentSessions.statusCode).toBe(200);
-    const sessions = recentSessions.json<{ sessions: Array<{ storyId: string; story: { id: string } }> }>().sessions;
+    const sessions = recentSessions.json<{ sessions: Array<{ id: string; storyId: string; story: { id: string }; turnCount: number }> }>().sessions;
     expect(sessions.filter((session) => session.storyId === "rain-mansion")).toHaveLength(1);
     expect(sessions[0]).toMatchObject({
+      id: older.session.id,
       storyId: "rain-mansion",
       story: {
         id: "rain-mansion"
-      }
+      },
+      turnCount: 2
     });
   });
 

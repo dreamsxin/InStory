@@ -2,11 +2,19 @@
 
 import { Button, Card, Chip, Label, ListBox, Select } from "@heroui/react";
 import { useRouter } from "next/navigation";
-import type { ReaderProfile, StorySummary } from "@instory/shared";
+import type { ReaderProfile, ReaderSessionListItem, StorySummary } from "@instory/shared";
 import { createSession } from "@/lib/api";
 import { useState } from "react";
 
-export function StoryLauncher({ profiles, story }: { profiles: ReaderProfile[]; story: StorySummary }) {
+export function StoryLauncher({
+  existingSession,
+  profiles,
+  story
+}: {
+  existingSession?: ReaderSessionListItem;
+  profiles: ReaderProfile[];
+  story: StorySummary;
+}) {
   const router = useRouter();
   const [readerProfileId, setReaderProfileId] = useState(profiles[0]?.id ?? DEFAULT_ROLE_KEY);
   const [loading, setLoading] = useState(false);
@@ -17,6 +25,11 @@ export function StoryLauncher({ profiles, story }: { profiles: ReaderProfile[]; 
     setError(null);
 
     try {
+      if (existingSession) {
+        router.push(`/story/${existingSession.id}`);
+        return;
+      }
+
       const response = await createSession(story.id, readerProfileId === DEFAULT_ROLE_KEY ? null : readerProfileId);
       router.push(`/story/${response.session.id}`);
     } catch (err) {
@@ -41,34 +54,41 @@ export function StoryLauncher({ profiles, story }: { profiles: ReaderProfile[]; 
           <Chip size="sm" variant="soft">{experienceModeLabel(story.experienceMode)}</Chip>
           <Chip size="sm" variant="soft">{segmentLengthLabel(story.defaultSegmentLength)}</Chip>
         </div>
-        <Select
-          className="instory-select"
-          selectedKey={readerProfileId}
-          onSelectionChange={(key) => setReaderProfileId(typeof key === "string" ? key : DEFAULT_ROLE_KEY)}
-        >
-          <Label>入戏身份</Label>
-          <Select.Trigger>
-            <Select.Value />
-            <Select.Indicator />
-          </Select.Trigger>
-          <Select.Popover>
-            <ListBox>
-              <ListBox.Item id={DEFAULT_ROLE_KEY} textValue="默认角色：陆清河">
-                默认角色：陆清河
-                <ListBox.ItemIndicator />
-              </ListBox.Item>
-              {profiles.map((profile) => (
-                <ListBox.Item id={profile.id} key={profile.id} textValue={profile.name}>
-                  {profile.name}
+        {existingSession ? (
+          <div className="tag-row compact">
+            <Chip size="sm" variant="soft">继续身份：{existingSession.readerRoleName}</Chip>
+            <Chip size="sm" variant="soft">{existingSession.turnCount} 回合</Chip>
+          </div>
+        ) : (
+          <Select
+            className="instory-select"
+            selectedKey={readerProfileId}
+            onSelectionChange={(key) => setReaderProfileId(typeof key === "string" ? key : DEFAULT_ROLE_KEY)}
+          >
+            <Label>入戏身份</Label>
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id={DEFAULT_ROLE_KEY} textValue="默认角色：陆清河">
+                  默认角色：陆清河
                   <ListBox.ItemIndicator />
                 </ListBox.Item>
-              ))}
-            </ListBox>
-          </Select.Popover>
-        </Select>
+                {profiles.map((profile) => (
+                  <ListBox.Item id={profile.id} key={profile.id} textValue={profile.name}>
+                    {profile.name}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
+        )}
         {error ? <p className="error">{error}</p> : null}
-        <Button isDisabled={loading} onPress={startStory}>
-          {loading ? "进入中..." : "进入故事"}
+        <Button isDisabled={loading} type="button" onPress={startStory}>
+          {loading ? "进入中..." : existingSession ? "继续故事" : "进入故事"}
         </Button>
       </Card.Content>
     </Card>

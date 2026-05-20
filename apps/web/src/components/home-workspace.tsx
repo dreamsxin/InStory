@@ -88,7 +88,7 @@ export function HomeWorkspace({
       </Card>
 
       <section className="mobile-tab-panel">
-        {activeTab === "stories" ? <StoriesView profiles={profiles} stories={stories} /> : null}
+        {activeTab === "stories" ? <StoriesView profiles={profiles} sessions={sessions} stories={stories} /> : null}
         {activeTab === "continue" ? <ContinueView sessions={sessions} /> : null}
         {activeTab === "create" ? <CreateView myStoryDetails={myStoryDetails} profiles={profiles} /> : null}
       </section>
@@ -110,7 +110,17 @@ export function HomeWorkspace({
   );
 }
 
-function StoriesView({ profiles, stories }: { profiles: ReaderProfile[]; stories: StorySummary[] }) {
+function StoriesView({
+  profiles,
+  sessions,
+  stories
+}: {
+  profiles: ReaderProfile[];
+  sessions: ReaderSessionListItem[];
+  stories: StorySummary[];
+}) {
+  const sessionsByStoryId = new Map(sessions.map((session) => [session.storyId, session]));
+
   return (
     <div className="app-section">
       <div className="section-heading">
@@ -122,7 +132,7 @@ function StoriesView({ profiles, stories }: { profiles: ReaderProfile[]; stories
       </div>
       <div className="story-grid">
         {stories.map((story) => (
-          <StoryLauncher key={story.id} profiles={profiles} story={story} />
+          <StoryLauncher existingSession={sessionsByStoryId.get(story.id)} key={story.id} profiles={profiles} story={story} />
         ))}
       </div>
     </div>

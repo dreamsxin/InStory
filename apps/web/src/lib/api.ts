@@ -96,7 +96,8 @@ export async function createSession(storyId: string, readerProfileId?: string | 
   });
 
   if (!response.ok) {
-    throw new Error("创建故事会话失败");
+    const detail = await response.text();
+    throw new Error(detail ? `创建故事会话失败：${detail}` : "创建故事会话失败");
   }
 
   return (await response.json()) as CreateSessionResponse;
