@@ -2,9 +2,11 @@
 
 import { Avatar, Button, Card, Chip, Input, Label, ListBox, Select, TextArea, TextField } from "@heroui/react";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { ReaderProfile, StoryDetail, StorySummary } from "@instory/shared";
 import { BrandMark } from "@/components/brand-mark";
 import { StoryLauncher } from "@/components/story-launcher";
+import { createSession } from "@/lib/api";
 import {
   createReaderProfileAction,
   createStoryAction,
@@ -22,6 +24,8 @@ const navItems: Array<{ id: HomeTab; label: string; hint: string }> = [
   { id: "continue", label: "继续", hint: "Reading" },
   { id: "create", label: "创作", hint: "Create" }
 ];
+
+const TRIAL_DEFAULT_ROLE_KEY = "__trial_default__";
 
 export function HomeWorkspace({
   myStoryDetails,
@@ -241,7 +245,7 @@ function CreatorStoriesPanel({ myStoryDetails, profiles }: { myStoryDetails: Sto
                       <Chip size="sm" variant="soft">{visibilityLabel(detail.story.visibility)}</Chip>
                     </div>
                   </summary>
-                  <StoryEditForm detail={detail} />
+                  <StoryEditForm detail={detail} profiles={profiles} />
                 </details>
               ))}
             </div>
@@ -299,7 +303,14 @@ function ProfileEditForm({ profile }: { profile: ReaderProfile }) {
           <Button type="submit">保存角色</Button>
         </div>
       </form>
-      <form action={deleteReaderProfileAction}>
+      <form
+        action={deleteReaderProfileAction}
+        onSubmit={(event) => {
+          if (!window.confirm(`确认删除角色「${profile.name}」？已创建故事中的演员快照不会被删除。`)) {
+            event.preventDefault();
+          }
+        }}
+      >
         <input name="profileId" type="hidden" value={profile.id} />
         <Button className="danger-button" type="submit" variant="outline">删除角色</Button>
       </form>
@@ -307,11 +318,12 @@ function ProfileEditForm({ profile }: { profile: ReaderProfile }) {
   );
 }
 
-function StoryEditForm({ detail }: { detail: StoryDetail }) {
+function StoryEditForm({ detail, profiles }: { detail: StoryDetail; profiles: ReaderProfile[] }) {
   const openingLocation = detail.world.locations[0];
 
   return (
     <div className="management-edit">
+      <StoryTrialLauncher profiles={profiles} story={detail.story} />
       <form className="profile-form embedded" action={updateStoryAction}>
         <input name="storyId" type="hidden" value={detail.story.id} />
         <section className="form-section">
@@ -431,10 +443,78 @@ function StoryEditForm({ detail }: { detail: StoryDetail }) {
           <Button type="submit">保存故事</Button>
         </div>
       </form>
-      <form action={deleteStoryAction}>
+      <form
+        action={deleteStoryAction}
+        onSubmit={(event) => {
+          if (!window.confirm(`确认删除《${detail.story.title}》？删除后无法从列表恢复。`)) {
+            event.preventDefault();
+          }
+        }}
+      >
         <input name="storyId" type="hidden" value={detail.story.id} />
         <Button className="danger-button" type="submit" variant="outline">删除故事</Button>
       </form>
+    </div>
+  );
+}
+
+function StoryTrialLauncher({ profiles, story }: { profiles: ReaderProfile[]; story: StorySummary }) {
+  const router = useRouter();
+  const [readerProfileId, setReaderProfileId] = useState(profiles[0]?.id ?? TRIAL_DEFAULT_ROLE_KEY);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function startTrial() {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await createSession(story.id, readerProfileId === TRIAL_DEFAULT_ROLE_KEY ? null : readerProfileId);
+      router.push(`/story/${response.session.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "试玩失败");
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="trial-launcher">
+      <div>
+        <span className="eyebrow">Preview</span>
+        <h3>试玩这个故事</h3>
+        <p className="muted">以一个入戏身份进入开场，检查世界设定、角色上下文和阅读体验。</p>
+      </div>
+      <div className="trial-launcher-controls">
+        <Select
+          className="instory-select"
+          selectedKey={readerProfileId}
+          onSelectionChange={(key) => setReaderProfileId(typeof key === "string" ? key : TRIAL_DEFAULT_ROLE_KEY)}
+        >
+          <Label>试玩身份</Label>
+          <Select.Trigger>
+            <Select.Value />
+            <Select.Indicator />
+          </Select.Trigger>
+          <Select.Popover>
+            <ListBox>
+              <ListBox.Item id={TRIAL_DEFAULT_ROLE_KEY} textValue="默认角色：陆清河">
+                默认角色：陆清河
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+              {profiles.map((profile) => (
+                <ListBox.Item id={profile.id} key={profile.id} textValue={profile.name}>
+                  {profile.name}
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              ))}
+            </ListBox>
+          </Select.Popover>
+        </Select>
+        <Button isDisabled={loading} onPress={startTrial}>
+          {loading ? "进入中..." : "试玩故事"}
+        </Button>
+      </div>
+      {error ? <p className="error">{error}</p> : null}
     </div>
   );
 }

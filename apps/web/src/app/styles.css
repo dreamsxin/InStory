@@ -576,6 +576,31 @@ a {
   gap: 10px;
 }
 
+.trial-launcher {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(35, 93, 116, 0.18);
+  border-radius: 14px;
+  background: #f6fbfd;
+}
+
+.trial-launcher h3,
+.trial-launcher p {
+  margin: 0;
+}
+
+.trial-launcher p {
+  margin-top: 4px;
+}
+
+.trial-launcher-controls {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
 .danger-button {
   border-color: rgba(178, 41, 41, 0.32);
   color: #9f1f1f;
@@ -583,6 +608,10 @@ a {
 
 @media (max-width: 900px) {
   .creator-layer {
+    grid-template-columns: 1fr;
+  }
+
+  .trial-launcher-controls {
     grid-template-columns: 1fr;
   }
 }
