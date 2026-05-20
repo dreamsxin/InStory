@@ -104,6 +104,11 @@ export const createStoryRequestSchema = storySummarySchema
     aiFreedom: z.enum(["low", "medium", "high"]).default("medium")
   });
 
+export const updateStoryRequestSchema = createStoryRequestSchema.omit({
+  id: true,
+  castProfileIds: true
+});
+
 export const characterProfileSchema = z.object({
   id: z.string().min(1),
   storyId: z.string().min(1),

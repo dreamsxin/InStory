@@ -28,6 +28,30 @@ describe("ReaderProfileStore", () => {
       });
       expect(store.listByOwner("local-reader")).toHaveLength(1);
       expect(store.listByOwner("other-reader")).toHaveLength(0);
+
+      const updated = store.update(profile.id, "local-reader", {
+        name: "林向晚修订",
+        gender: null,
+        personality: "冷静、果断。",
+        avatarUrl: null,
+        description: "重新设定后的入戏角色。"
+      });
+      expect(updated).toMatchObject({
+        id: profile.id,
+        name: "林向晚修订",
+        gender: null,
+        avatarUrl: null
+      });
+      expect(store.update(profile.id, "other-reader", {
+        name: "越权",
+        gender: null,
+        personality: "越权",
+        avatarUrl: null,
+        description: "越权"
+      })).toBeNull();
+      expect(store.delete(profile.id, "other-reader")).toBe(false);
+      expect(store.delete(profile.id, "local-reader")).toBe(true);
+      expect(store.findById(profile.id)).toBeNull();
     } finally {
       database.close();
       rmSync(dir, { recursive: true, force: true });

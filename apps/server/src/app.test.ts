@@ -190,6 +190,39 @@ describe("server API", () => {
       personality: "冷静、敏感、习惯先观察再行动。",
       avatarUrl: "https://example.com/avatar.png"
     });
+
+    const updatedProfile = await app.inject({
+      method: "PUT",
+      url: `/api/reader/profiles/${profile.id}`,
+      payload: {
+        name: "林向晚修订",
+        gender: null,
+        personality: "冷静、果断。",
+        avatarUrl: null,
+        description: "重写后的角色背景。"
+      }
+    });
+    expect(updatedProfile.statusCode).toBe(200);
+    expect(updatedProfile.json()).toMatchObject({
+      profile: {
+        id: profile.id,
+        name: "林向晚修订",
+        gender: null,
+        avatarUrl: null
+      }
+    });
+
+    const deletedProfile = await app.inject({
+      method: "DELETE",
+      url: `/api/reader/profiles/${profile.id}`
+    });
+    expect(deletedProfile.statusCode).toBe(204);
+
+    const profilesAfterDelete = await app.inject({
+      method: "GET",
+      url: "/api/reader/profiles"
+    });
+    expect(profilesAfterDelete.json<{ profiles: unknown[] }>().profiles).toHaveLength(0);
   });
 
   it("returns admin status, model config, story catalog, sessions and moderation events", async () => {
@@ -454,6 +487,57 @@ describe("server API", () => {
       expect.objectContaining({ id: "moon-market" })
     );
 
+    const updated = await app.inject({
+      method: "PUT",
+      url: "/api/me/stories/moon-market",
+      payload: {
+        title: "月下市集：修订",
+        tagline: "你重新进入被名字交易支配的午夜市集。",
+        genre: "奇幻",
+        coverUrl: null,
+        premise: "午夜市集只接待失去名字的人，交易会改变记忆。",
+        openingLocationName: "旧钟楼下",
+        openingLocationDescription: "钟声停在零点，雾气从台阶下涌上来。",
+        worldRules: ["不能直接说出真名"],
+        aiFreedom: "low",
+        experienceMode: "scripted",
+        defaultSegmentLength: "long"
+      }
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json<{ story: StoryDetail }>().story).toMatchObject({
+      story: {
+        id: "moon-market",
+        ownerId: "local-reader",
+        title: "月下市集：修订",
+        aiFreedom: "low",
+        experienceMode: "scripted",
+        defaultSegmentLength: "long"
+      },
+      world: {
+        premise: "午夜市集只接待失去名字的人，交易会改变记忆。"
+      }
+    });
+
+    const updateSeedStory = await app.inject({
+      method: "PUT",
+      url: "/api/me/stories/rain-mansion",
+      payload: {
+        title: "不能修改",
+        tagline: "不能修改",
+        genre: "悬疑",
+        coverUrl: null,
+        premise: "不能修改",
+        openingLocationName: "不能修改",
+        openingLocationDescription: "不能修改",
+        worldRules: [],
+        aiFreedom: "medium",
+        experienceMode: "coauthored",
+        defaultSegmentLength: "standard"
+      }
+    });
+    expect(updateSeedStory.statusCode).toBe(404);
+
     const duplicate = await app.inject({
       method: "POST",
       url: "/api/stories",
@@ -473,6 +557,18 @@ describe("server API", () => {
       }
     });
     expect(duplicate.statusCode).toBe(409);
+
+    const deleted = await app.inject({
+      method: "DELETE",
+      url: "/api/me/stories/moon-market"
+    });
+    expect(deleted.statusCode).toBe(204);
+
+    const deletedStory = await app.inject({
+      method: "GET",
+      url: "/api/stories/moon-market"
+    });
+    expect(deletedStory.statusCode).toBe(404);
   });
 
   it("verifies the active admin model provider", async () => {

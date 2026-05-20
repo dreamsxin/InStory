@@ -1,4 +1,12 @@
-import type { CharacterProfile, CreateStoryRequest, StoryAnchor, StoryDetail, StorySummary, WorldProfile } from "@instory/shared";
+import type {
+  CharacterProfile,
+  CreateStoryRequest,
+  StoryAnchor,
+  StoryDetail,
+  StorySummary,
+  UpdateStoryRequest,
+  WorldProfile
+} from "@instory/shared";
 import type { AppDatabase } from "./app-database.js";
 
 export interface StorySeedData {
@@ -170,6 +178,75 @@ export class StoryStore {
       characters,
       anchors: []
     };
+  }
+
+  updateOwnedStory(storyId: string, ownerId: string, input: UpdateStoryRequest): StoryDetail | null {
+    const current = this.findStory(storyId);
+    if (!current || current.story.ownerId !== ownerId) {
+      return null;
+    }
+
+    const story: StorySummary = {
+      ...current.story,
+      title: input.title,
+      tagline: input.tagline,
+      genre: input.genre,
+      coverUrl: input.coverUrl ?? null,
+      aiFreedom: input.aiFreedom,
+      experienceMode: input.experienceMode,
+      defaultSegmentLength: input.defaultSegmentLength
+    };
+    const world: WorldProfile = {
+      storyId,
+      premise: input.premise,
+      rules: input.worldRules,
+      locations: [
+        {
+          id: current.world.locations[0]?.id ?? `${storyId}-opening`,
+          name: input.openingLocationName,
+          description: input.openingLocationDescription
+        }
+      ]
+    };
+
+    this.database.db.exec("BEGIN");
+    try {
+      this.database.db.prepare("UPDATE stories SET payload = ? WHERE id = ?").run(JSON.stringify(story), storyId);
+      this.database.db
+        .prepare("UPDATE worlds SET payload = ? WHERE story_id = ?")
+        .run(JSON.stringify(world), storyId);
+      this.database.db.exec("COMMIT");
+    } catch (error) {
+      this.database.db.exec("ROLLBACK");
+      throw error;
+    }
+
+    return {
+      story,
+      world,
+      characters: current.characters,
+      anchors: current.anchors
+    };
+  }
+
+  deleteOwnedStory(storyId: string, ownerId: string): boolean {
+    const current = this.findStorySummary(storyId);
+    if (!current || current.ownerId !== ownerId) {
+      return false;
+    }
+
+    this.database.db.exec("BEGIN");
+    try {
+      this.database.db.prepare("DELETE FROM story_anchors WHERE story_id = ?").run(storyId);
+      this.database.db.prepare("DELETE FROM characters WHERE story_id = ?").run(storyId);
+      this.database.db.prepare("DELETE FROM worlds WHERE story_id = ?").run(storyId);
+      const result = this.database.db.prepare("DELETE FROM stories WHERE id = ?").run(storyId);
+      this.database.db.exec("COMMIT");
+      return result.changes > 0;
+    } catch (error) {
+      this.database.db.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   findCharacter(characterId: string): CharacterProfile | null {

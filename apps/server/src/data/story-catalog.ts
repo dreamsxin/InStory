@@ -4,7 +4,15 @@ import { dirname, join } from "node:path";
 import { storySeedSchema } from "@instory/shared";
 import { StoryStore } from "../db/story-store.js";
 import type { AppDatabase } from "../db/app-database.js";
-import type { CharacterProfile, CreateStoryRequest, StoryAnchor, StoryDetail, StorySummary, WorldProfile } from "@instory/shared";
+import type {
+  CharacterProfile,
+  CreateStoryRequest,
+  StoryAnchor,
+  StoryDetail,
+  StorySummary,
+  UpdateStoryRequest,
+  WorldProfile
+} from "@instory/shared";
 
 interface StorySeed {
   stories: StorySummary[];
@@ -39,6 +47,14 @@ export class StoryCatalog {
 
   createStory(input: CreateStoryRequest, characters: CharacterProfile[] = [], ownerId: string | null = null): StoryDetail {
     return this.store.createStory(input, characters, ownerId);
+  }
+
+  updateOwnedStory(storyId: string, ownerId: string, input: UpdateStoryRequest): StoryDetail | null {
+    return this.store.updateOwnedStory(storyId, ownerId, input);
+  }
+
+  deleteOwnedStory(storyId: string, ownerId: string): boolean {
+    return this.store.deleteOwnedStory(storyId, ownerId);
   }
 
   findCharacters(storyId: string): CharacterProfile[] {

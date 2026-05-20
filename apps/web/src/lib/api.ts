@@ -5,7 +5,8 @@ import type {
   ReaderProfile,
   StoryDetail,
   StorySession,
-  StorySummary
+  StorySummary,
+  UpdateStoryRequest
 } from "@instory/shared";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000";
@@ -75,6 +76,11 @@ export async function listMyStories(): Promise<StorySummary[]> {
   return data.stories;
 }
 
+export async function listMyStoryDetails(): Promise<StoryDetail[]> {
+  const stories = await listMyStories();
+  return Promise.all(stories.map((story) => getStoryDetail(story.id)));
+}
+
 export async function createSession(storyId: string, readerProfileId?: string | null): Promise<CreateSessionResponse> {
   const response = await fetch(`${API_BASE}/api/stories/${storyId}/sessions`, {
     method: "POST",
@@ -127,6 +133,42 @@ export async function createReaderProfile(input: {
   return data.profile;
 }
 
+export async function updateReaderProfile(
+  profileId: string,
+  input: {
+    name: string;
+    gender?: string | null;
+    personality: string;
+    avatarUrl?: string | null;
+    description: string;
+  }
+): Promise<ReaderProfile> {
+  const response = await fetch(`${API_BASE}/api/reader/profiles/${profileId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(input)
+  });
+
+  if (!response.ok) {
+    throw new Error("更新我的角色失败");
+  }
+
+  const data = (await response.json()) as { profile: ReaderProfile };
+  return data.profile;
+}
+
+export async function deleteReaderProfile(profileId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/reader/profiles/${profileId}`, {
+    method: "DELETE"
+  });
+
+  if (!response.ok) {
+    throw new Error("删除我的角色失败");
+  }
+}
+
 export async function createStory(input: CreateStoryRequest): Promise<StoryDetail> {
   const response = await fetch(`${API_BASE}/api/stories`, {
     method: "POST",
@@ -142,6 +184,33 @@ export async function createStory(input: CreateStoryRequest): Promise<StoryDetai
 
   const data = (await response.json()) as { story: StoryDetail };
   return data.story;
+}
+
+export async function updateMyStory(storyId: string, input: UpdateStoryRequest): Promise<StoryDetail> {
+  const response = await fetch(`${API_BASE}/api/me/stories/${storyId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(input)
+  });
+
+  if (!response.ok) {
+    throw new Error("更新我的故事失败");
+  }
+
+  const data = (await response.json()) as { story: StoryDetail };
+  return data.story;
+}
+
+export async function deleteMyStory(storyId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/me/stories/${storyId}`, {
+    method: "DELETE"
+  });
+
+  if (!response.ok) {
+    throw new Error("删除我的故事失败");
+  }
 }
 
 export async function getStoryDetail(storyId: string): Promise<StoryDetail> {

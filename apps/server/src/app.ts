@@ -6,7 +6,8 @@ import {
   createSessionRequestSchema,
   createStoryRequestSchema,
   createTurnRequestSchema,
-  storySummarySchema
+  storySummarySchema,
+  updateStoryRequestSchema
 } from "@instory/shared";
 import { applyStateDelta, createInitialState, createTimelineNode, shouldCreateTimelineNode } from "@instory/story-engine";
 import type {
@@ -169,6 +170,31 @@ export async function buildApp(options: BuildAppOptions) {
     stories: options.storyCatalog.listStoriesByOwner(LOCAL_READER_ID)
   }));
 
+  app.put("/api/me/stories/:storyId", async (request, reply) => {
+    const { storyId } = request.params as { storyId: string };
+    const parsed = updateStoryRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
+    }
+
+    const story = options.storyCatalog.updateOwnedStory(storyId, LOCAL_READER_ID, parsed.data);
+    if (!story) {
+      return reply.code(404).send({ error: "Story not found" });
+    }
+
+    return { story };
+  });
+
+  app.delete("/api/me/stories/:storyId", async (request, reply) => {
+    const { storyId } = request.params as { storyId: string };
+    const deleted = options.storyCatalog.deleteOwnedStory(storyId, LOCAL_READER_ID);
+    if (!deleted) {
+      return reply.code(404).send({ error: "Story not found" });
+    }
+
+    return reply.code(204).send();
+  });
+
   app.post("/api/stories", async (request, reply) => {
     const parsed = createStoryRequestSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -218,6 +244,31 @@ export async function buildApp(options: BuildAppOptions) {
     });
 
     return reply.code(201).send({ profile });
+  });
+
+  app.put("/api/reader/profiles/:profileId", async (request, reply) => {
+    const { profileId } = request.params as { profileId: string };
+    const parsed = createReaderProfileRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
+    }
+
+    const profile = options.readerProfileStore.update(profileId, LOCAL_READER_ID, parsed.data);
+    if (!profile) {
+      return reply.code(404).send({ error: "Profile not found" });
+    }
+
+    return { profile };
+  });
+
+  app.delete("/api/reader/profiles/:profileId", async (request, reply) => {
+    const { profileId } = request.params as { profileId: string };
+    const deleted = options.readerProfileStore.delete(profileId, LOCAL_READER_ID);
+    if (!deleted) {
+      return reply.code(404).send({ error: "Profile not found" });
+    }
+
+    return reply.code(204).send();
   });
 
   app.post("/api/stories/:storyId/sessions", async (request, reply) => {

@@ -1,8 +1,8 @@
 import { HomeWorkspace } from "@/components/home-workspace";
-import { listMyStories, listReaderProfiles, listStories } from "@/lib/api";
+import { listMyStoryDetails, listReaderProfiles, listStories } from "@/lib/api";
 
 export default async function HomePage() {
-  const [stories, profiles, myStories] = await Promise.all([listStories(), listReaderProfiles(), listMyStories()]);
+  const [stories, profiles, myStoryDetails] = await Promise.all([listStories(), listReaderProfiles(), listMyStoryDetails()]);
 
-  return <HomeWorkspace myStories={myStories} profiles={profiles} stories={stories} />;
+  return <HomeWorkspace myStoryDetails={myStoryDetails} profiles={profiles} stories={stories} />;
 }

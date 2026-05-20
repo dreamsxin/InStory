@@ -651,6 +651,7 @@ POST /api/stories/:storyId/sessions
 GET /api/reader/profiles
 POST /api/reader/profiles
 PUT /api/reader/profiles/:profileId
+DELETE /api/reader/profiles/:profileId
 ```
 
 创建请求：
@@ -686,6 +687,8 @@ PUT /api/reader/profiles/:profileId
 ```http
 GET /api/me/stories
 POST /api/stories
+PUT /api/me/stories/:storyId
+DELETE /api/me/stories/:storyId
 ```
 
 `GET /api/me/stories` 只返回当前用户创建的故事，用于客户端 `创作 -> 我的故事`。`GET /api/stories` 仍然是探索入口，返回所有可进入的故事。
@@ -711,6 +714,8 @@ POST /api/stories
 ```
 
 `castProfileIds` 只能引用当前用户自己的角色。服务端会复制这些 `ReaderProfile` 为故事内 `Character` 快照，供 AI 在读者互动时模拟回应。
+
+用户侧故事管理只允许操作 `ownerId` 等于当前用户的故事。平台示例故事、种子故事和其他用户作品不能通过 `/api/me/stories/:storyId` 修改或删除。
 
 ### 5.4 阅读推进与入戏
 

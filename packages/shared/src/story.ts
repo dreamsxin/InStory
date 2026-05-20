@@ -36,6 +36,20 @@ export interface CreateStoryRequest {
   defaultSegmentLength: SegmentLengthPreset;
 }
 
+export interface UpdateStoryRequest {
+  title: string;
+  tagline: string;
+  genre: string;
+  coverUrl?: string | null;
+  premise: string;
+  openingLocationName: string;
+  openingLocationDescription: string;
+  worldRules: string[];
+  aiFreedom: "low" | "medium" | "high";
+  experienceMode: ExperienceMode;
+  defaultSegmentLength: SegmentLengthPreset;
+}
+
 export interface CharacterProfile {
   id: string;
   storyId: string;

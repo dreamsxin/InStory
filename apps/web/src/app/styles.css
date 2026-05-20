@@ -525,6 +525,20 @@ a {
   gap: 10px;
 }
 
+.management-details {
+  display: grid;
+  gap: 10px;
+}
+
+.management-details > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.management-details > summary::-webkit-details-marker {
+  display: none;
+}
+
 .story-management-item {
   display: flex;
   justify-content: space-between;
@@ -540,6 +554,31 @@ a {
   margin: 4px 0 0;
   color: var(--muted);
   line-height: 1.45;
+}
+
+.management-summary {
+  cursor: pointer;
+}
+
+.management-edit {
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: white;
+}
+
+.management-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.danger-button {
+  border-color: rgba(178, 41, 41, 0.32);
+  color: #9f1f1f;
 }
 
 @media (max-width: 900px) {

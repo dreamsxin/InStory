@@ -10,6 +10,8 @@ export interface CreateReaderProfileInput {
   description: string;
 }
 
+export type UpdateReaderProfileInput = Omit<CreateReaderProfileInput, "ownerId">;
+
 export class ReaderProfileStore {
   private readonly database: AppDatabase;
 
@@ -66,5 +68,37 @@ export class ReaderProfileStore {
       | undefined;
 
     return row ? (JSON.parse(row.payload) as ReaderProfile) : null;
+  }
+
+  update(profileId: string, ownerId: string, input: UpdateReaderProfileInput): ReaderProfile | null {
+    const current = this.findById(profileId);
+    if (!current || current.ownerId !== ownerId) {
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    const updated: ReaderProfile = {
+      ...current,
+      name: input.name,
+      gender: input.gender?.trim() || null,
+      personality: input.personality,
+      avatarUrl: input.avatarUrl?.trim() || null,
+      description: input.description,
+      updatedAt: now
+    };
+
+    this.database.db
+      .prepare("UPDATE reader_profiles SET payload = ?, updated_at = ? WHERE id = ? AND owner_id = ?")
+      .run(JSON.stringify(updated), now, profileId, ownerId);
+
+    return updated;
+  }
+
+  delete(profileId: string, ownerId: string): boolean {
+    const result = this.database.db
+      .prepare("DELETE FROM reader_profiles WHERE id = ? AND owner_id = ?")
+      .run(profileId, ownerId);
+
+    return result.changes > 0;
   }
 }

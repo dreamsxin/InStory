@@ -2,10 +2,17 @@
 
 import { Avatar, Button, Card, Chip, Input, Label, ListBox, Select, TextArea, TextField } from "@heroui/react";
 import { useState } from "react";
-import type { ReaderProfile, StorySummary } from "@instory/shared";
+import type { ReaderProfile, StoryDetail, StorySummary } from "@instory/shared";
 import { BrandMark } from "@/components/brand-mark";
 import { StoryLauncher } from "@/components/story-launcher";
-import { createReaderProfileAction, createStoryAction } from "@/app/actions";
+import {
+  createReaderProfileAction,
+  createStoryAction,
+  deleteReaderProfileAction,
+  deleteStoryAction,
+  updateReaderProfileAction,
+  updateStoryAction
+} from "@/app/actions";
 
 type HomeTab = "stories" | "profiles" | "continue" | "create";
 type CreateTab = "profiles" | "stories";
@@ -18,11 +25,11 @@ const navItems: Array<{ id: HomeTab; label: string; hint: string }> = [
 ];
 
 export function HomeWorkspace({
-  myStories,
+  myStoryDetails,
   profiles,
   stories
 }: {
-  myStories: StorySummary[];
+  myStoryDetails: StoryDetail[];
   profiles: ReaderProfile[];
   stories: StorySummary[];
 }) {
@@ -79,7 +86,7 @@ export function HomeWorkspace({
         {activeTab === "stories" ? <StoriesView profiles={profiles} stories={stories} /> : null}
         {activeTab === "profiles" ? <ProfilesView profiles={profiles} /> : null}
         {activeTab === "continue" ? <ContinueView profiles={profiles} stories={stories} /> : null}
-        {activeTab === "create" ? <CreateView myStories={myStories} profiles={profiles} /> : null}
+        {activeTab === "create" ? <CreateView myStoryDetails={myStoryDetails} profiles={profiles} /> : null}
       </section>
 
       <nav className="bottom-tabbar" aria-label="Mobile navigation">
@@ -169,7 +176,7 @@ function ContinueView({ profiles, stories }: { profiles: ReaderProfile[]; storie
   );
 }
 
-function CreateView({ myStories, profiles }: { myStories: StorySummary[]; profiles: ReaderProfile[] }) {
+function CreateView({ myStoryDetails, profiles }: { myStoryDetails: StoryDetail[]; profiles: ReaderProfile[] }) {
   const [createTab, setCreateTab] = useState<CreateTab>("stories");
 
   return (
@@ -200,7 +207,7 @@ function CreateView({ myStories, profiles }: { myStories: StorySummary[]; profil
       {createTab === "profiles" ? (
         <CreatorProfilesPanel profiles={profiles} />
       ) : (
-        <CreatorStoriesPanel myStories={myStories} profiles={profiles} />
+        <CreatorStoriesPanel myStoryDetails={myStoryDetails} profiles={profiles} />
       )}
     </div>
   );
@@ -220,14 +227,17 @@ function CreatorProfilesPanel({ profiles }: { profiles: ReaderProfile[] }) {
           {profiles.length ? (
             <div className="profile-list">
               {profiles.map((profile) => (
-                <article className="profile-card large" key={profile.id}>
+                <details className="management-details" key={profile.id}>
+                  <summary className="profile-card large management-summary">
                   <AvatarSeed name={profile.name} src={profile.avatarUrl} />
                   <div>
                     <strong>{profile.name}</strong>
                     <p>{profile.description}</p>
                     <Chip color="accent" size="sm" variant="soft">{profile.gender ?? "未设定性别"}</Chip>
                   </div>
-                </article>
+                  </summary>
+                  <ProfileEditForm profile={profile} />
+                </details>
               ))}
             </div>
           ) : (
@@ -240,7 +250,7 @@ function CreatorProfilesPanel({ profiles }: { profiles: ReaderProfile[] }) {
   );
 }
 
-function CreatorStoriesPanel({ myStories, profiles }: { myStories: StorySummary[]; profiles: ReaderProfile[] }) {
+function CreatorStoriesPanel({ myStoryDetails, profiles }: { myStoryDetails: StoryDetail[]; profiles: ReaderProfile[] }) {
   return (
     <div className="creator-layer">
       <Card className="profile-panel">
@@ -251,16 +261,19 @@ function CreatorStoriesPanel({ myStories, profiles }: { myStories: StorySummary[
           </div>
         </Card.Header>
         <Card.Content>
-          {myStories.length ? (
+          {myStoryDetails.length ? (
             <div className="story-management-list">
-              {myStories.map((story) => (
-                <article className="story-management-item" key={story.id}>
-                  <div>
-                    <strong>{story.title}</strong>
-                    <p>{story.tagline}</p>
-                  </div>
-                  <Chip size="sm" variant="soft">{story.genre}</Chip>
-                </article>
+              {myStoryDetails.map((detail) => (
+                <details className="management-details" key={detail.story.id}>
+                  <summary className="story-management-item">
+                    <div>
+                      <strong>{detail.story.title}</strong>
+                      <p>{detail.story.tagline}</p>
+                    </div>
+                    <Chip size="sm" variant="soft">{detail.story.genre}</Chip>
+                  </summary>
+                  <StoryEditForm detail={detail} />
+                </details>
               ))}
             </div>
           ) : (
@@ -269,6 +282,164 @@ function CreatorStoriesPanel({ myStories, profiles }: { myStories: StorySummary[
         </Card.Content>
       </Card>
       <CreateStoryPanel profiles={profiles} />
+    </div>
+  );
+}
+
+function ProfileEditForm({ profile }: { profile: ReaderProfile }) {
+  return (
+    <div className="management-edit">
+      <form className="profile-form embedded" action={updateReaderProfileAction}>
+        <input name="profileId" type="hidden" value={profile.id} />
+        <div className="form-grid">
+          <TextField isRequired name="name">
+            <Label>名称</Label>
+            <Input defaultValue={profile.name} maxLength={40} />
+          </TextField>
+          <TextField name="gender">
+            <Label>性别</Label>
+            <Input defaultValue={profile.gender ?? ""} maxLength={40} />
+          </TextField>
+        </div>
+        <TextField isRequired name="personality">
+          <Label>性格</Label>
+          <TextArea defaultValue={profile.personality} maxLength={1200} rows={3} />
+        </TextField>
+        <TextField name="avatarUrl" type="url">
+          <Label>头像 URL</Label>
+          <Input defaultValue={profile.avatarUrl ?? ""} />
+        </TextField>
+        <TextField isRequired name="description">
+          <Label>身份背景</Label>
+          <TextArea defaultValue={profile.description} maxLength={2000} rows={3} />
+        </TextField>
+        <div className="management-actions">
+          <Button type="submit">保存角色</Button>
+        </div>
+      </form>
+      <form action={deleteReaderProfileAction}>
+        <input name="profileId" type="hidden" value={profile.id} />
+        <Button className="danger-button" type="submit" variant="outline">删除角色</Button>
+      </form>
+    </div>
+  );
+}
+
+function StoryEditForm({ detail }: { detail: StoryDetail }) {
+  const openingLocation = detail.world.locations[0];
+
+  return (
+    <div className="management-edit">
+      <form className="profile-form embedded" action={updateStoryAction}>
+        <input name="storyId" type="hidden" value={detail.story.id} />
+        <section className="form-section">
+          <div>
+            <span className="eyebrow">展示信息</span>
+            <h3>故事卡片</h3>
+          </div>
+          <div className="form-grid">
+            <TextField isRequired name="title">
+              <Label>标题</Label>
+              <Input defaultValue={detail.story.title} maxLength={80} />
+            </TextField>
+            <TextField isRequired name="genre">
+              <Label>类型</Label>
+              <Input defaultValue={detail.story.genre} maxLength={40} />
+            </TextField>
+          </div>
+          <TextField isRequired name="tagline">
+            <Label>一句话钩子</Label>
+            <Input defaultValue={detail.story.tagline} maxLength={160} />
+          </TextField>
+          <TextField name="coverUrl" type="url">
+            <Label>封面图 URL</Label>
+            <Input defaultValue={detail.story.coverUrl ?? ""} />
+          </TextField>
+        </section>
+
+        <section className="form-section">
+          <div>
+            <span className="eyebrow">世界入口</span>
+            <h3>开场设定</h3>
+          </div>
+          <TextField isRequired name="premise">
+            <Label>世界前提</Label>
+            <TextArea defaultValue={detail.world.premise} maxLength={4000} rows={4} />
+          </TextField>
+          <div className="form-grid">
+            <TextField isRequired name="openingLocationName">
+              <Label>起点地点</Label>
+              <Input defaultValue={openingLocation?.name ?? ""} maxLength={80} />
+            </TextField>
+            <TextField isRequired name="openingLocationDescription">
+              <Label>起点场景</Label>
+              <TextArea defaultValue={openingLocation?.description ?? ""} maxLength={1000} rows={3} />
+            </TextField>
+          </div>
+          <TextField name="worldRules">
+            <Label>世界规则</Label>
+            <TextArea defaultValue={detail.world.rules.join("\n")} maxLength={4000} rows={3} />
+          </TextField>
+        </section>
+
+        <section className="form-section">
+          <div>
+            <span className="eyebrow">体验配置</span>
+            <h3>AI 与阅读节奏</h3>
+          </div>
+          <div className="story-setting-grid">
+            <Select defaultSelectedKey={detail.story.experienceMode} name="experienceMode">
+              <Label>入戏体验</Label>
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="scripted" textValue="剧本入戏">剧本入戏<ListBox.ItemIndicator /></ListBox.Item>
+                  <ListBox.Item id="coauthored" textValue="共演入戏">共演入戏<ListBox.ItemIndicator /></ListBox.Item>
+                  <ListBox.Item id="improvised" textValue="即兴入戏">即兴入戏<ListBox.ItemIndicator /></ListBox.Item>
+                </ListBox>
+              </Select.Popover>
+            </Select>
+            <Select defaultSelectedKey={detail.story.defaultSegmentLength} name="defaultSegmentLength">
+              <Label>生成长度</Label>
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="short" textValue="短段">短段<ListBox.ItemIndicator /></ListBox.Item>
+                  <ListBox.Item id="standard" textValue="标准小节">标准小节<ListBox.ItemIndicator /></ListBox.Item>
+                  <ListBox.Item id="long" textValue="长小节">长小节<ListBox.ItemIndicator /></ListBox.Item>
+                </ListBox>
+              </Select.Popover>
+            </Select>
+            <Select defaultSelectedKey={detail.story.aiFreedom} name="aiFreedom">
+              <Label>AI 自由度</Label>
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="low" textValue="低">低<ListBox.ItemIndicator /></ListBox.Item>
+                  <ListBox.Item id="medium" textValue="中">中<ListBox.ItemIndicator /></ListBox.Item>
+                  <ListBox.Item id="high" textValue="高">高<ListBox.ItemIndicator /></ListBox.Item>
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </div>
+        </section>
+        <div className="management-actions">
+          <Button type="submit">保存故事</Button>
+        </div>
+      </form>
+      <form action={deleteStoryAction}>
+        <input name="storyId" type="hidden" value={detail.story.id} />
+        <Button className="danger-button" type="submit" variant="outline">删除故事</Button>
+      </form>
     </div>
   );
 }
