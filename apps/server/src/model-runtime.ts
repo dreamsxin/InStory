@@ -72,7 +72,8 @@ export class ModelRuntime {
       provider: config.provider,
       baseUrl: config.baseUrl,
       apiKey: config.apiKey,
-      model: config.model
+      model: config.model,
+      timeoutMs: Number(process.env.LLM_TIMEOUT_MS || 45_000)
     });
   }
 }

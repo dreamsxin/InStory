@@ -14,6 +14,7 @@ export function createLLMProvider(config: LLMProviderConfig): LLMProvider {
   return new OpenAICompatibleNarrativeProvider({
     baseUrl: config.baseUrl,
     apiKey: config.apiKey,
-    model: config.model
+    model: config.model,
+    timeoutMs: config.timeoutMs
   });
 }

@@ -262,7 +262,8 @@ export async function createTurn(params: {
   });
 
   if (!response.ok) {
-    throw new Error("推进故事失败");
+    const detail = await response.text();
+    throw new Error(detail ? `推进故事失败：${detail}` : "推进故事失败");
   }
 
   return (await response.json()) as CreateTurnResponse;

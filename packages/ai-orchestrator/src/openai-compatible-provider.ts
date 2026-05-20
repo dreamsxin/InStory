@@ -5,6 +5,7 @@ export interface OpenAICompatibleProviderOptions {
   baseUrl: string;
   apiKey: string;
   model: string;
+  timeoutMs?: number;
 }
 
 interface ChatCompletionResponse {
@@ -19,60 +20,76 @@ export class OpenAICompatibleNarrativeProvider implements LLMProvider {
   private readonly endpointUrl: string;
   private readonly apiKey: string;
   private readonly model: string;
+  private readonly timeoutMs: number;
 
   constructor(options: OpenAICompatibleProviderOptions) {
     this.endpointUrl = buildChatCompletionsUrl(options.baseUrl);
     this.apiKey = options.apiKey;
     this.model = options.model;
+    this.timeoutMs = options.timeoutMs ?? 45_000;
   }
 
   async generateNarrative(input: GenerateNarrativeInput): Promise<NarrativeResult> {
-    const response = await fetch(this.endpointUrl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: this.model,
-        temperature: 0.8,
-        response_format: {
-          type: "json_object"
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetch(this.endpointUrl, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json"
         },
-        messages: [
-          {
-            role: "system",
-            content: buildSystemPrompt()
+        body: JSON.stringify({
+          model: this.model,
+          temperature: 0.8,
+          response_format: {
+            type: "json_object"
           },
-          {
-            role: "user",
-            content: JSON.stringify({
-              userInput: input.userInput,
-              intent: input.intent ?? "reader_action",
-              story: input.story
-                ? {
-                    summary: input.story.story,
-                    world: input.story.world,
-                    characters: input.story.characters,
-                    anchors: input.story.anchors
-                  }
-                : null,
-              readerRole: input.session.readerRole,
-              currentState: input.session.state,
-              recentTurns: input.session.turns.slice(-6).map((turn) => ({
-                input: turn.input,
-                narration: turn.narration,
-                choices: turn.choices
-              })),
-              timeline: input.session.timeline.slice(-5).map((node) => ({
-                title: node.title,
-                summary: node.summary
-              }))
-            })
-          }
-        ]
-      })
-    });
+          messages: [
+            {
+              role: "system",
+              content: buildSystemPrompt()
+            },
+            {
+              role: "user",
+              content: JSON.stringify({
+                userInput: input.userInput,
+                intent: input.intent ?? "reader_action",
+                story: input.story
+                  ? {
+                      summary: input.story.story,
+                      world: input.story.world,
+                      characters: input.story.characters,
+                      anchors: input.story.anchors
+                    }
+                  : null,
+                readerRole: input.session.readerRole,
+                currentState: input.session.state,
+                recentTurns: input.session.turns.slice(-6).map((turn) => ({
+                  input: turn.input,
+                  narration: turn.narration,
+                  choices: turn.choices
+                })),
+                timeline: input.session.timeline.slice(-5).map((node) => ({
+                  title: node.title,
+                  summary: node.summary
+                }))
+              })
+            }
+          ]
+        })
+      });
+    } catch (error) {
+      if (isAbortError(error)) {
+        throw new Error(`LLM request timed out after ${this.timeoutMs}ms`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!response.ok) {
       const body = await response.text();
@@ -110,6 +127,10 @@ function buildSystemPrompt(): string {
     "stateDelta 只能描述本回合变化，不能凭空清空已有状态。",
     "玩家行为超出当前世界能力时，给出合理失败或代价，不要直接满足。"
   ].join("\n");
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 export function buildChatCompletionsUrl(baseUrl: string): string {

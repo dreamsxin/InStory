@@ -179,6 +179,8 @@ MVP 实现边界：
 
 作者工具应支持 `defaultSegmentLength` 或类似配置，例如 `short`、`standard`、`long`，由 Story Runtime 转换为目标字数、段落数和最大 token。这样阅读模式能生成一个完整小节，而不是每次只追加一句话。
 
+当前实现风险：MVP 仍使用同步 REST 请求承载 `read_continue` 和入戏行动，真实 OpenAI-compatible Provider 响应慢或不返回时，会让当前请求长期挂起。实现必须至少提供模型请求超时、前端错误提示和请求中的禁用态；后续应改为 `read_segment` 后台生成或 SSE 流式返回，并把已生成正文写入 `SessionSegment`，避免用户每次继续阅读都阻塞在实时模型调用上。
+
 #### Reader Profile
 
 职责：
