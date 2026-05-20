@@ -61,6 +61,7 @@ describe("StoryStore", () => {
         title: "雨夜旧宅：修订版",
         tagline: "新的故事标语",
         genre: "悬疑测试",
+        coverUrl: "https://example.com/cover.png",
         aiFreedom: "high",
         experienceMode: "scripted",
         defaultSegmentLength: "long"
@@ -69,6 +70,7 @@ describe("StoryStore", () => {
       expect(updated).toMatchObject({
         id: "rain-mansion",
         title: "雨夜旧宅：修订版",
+        coverUrl: "https://example.com/cover.png",
         aiFreedom: "high",
         experienceMode: "scripted",
         defaultSegmentLength: "long"
@@ -100,6 +102,7 @@ describe("StoryStore", () => {
         title: "月下市集",
         tagline: "你在午夜市集里寻找被偷走的名字。",
         genre: "奇幻悬疑",
+        coverUrl: "https://example.com/moon-market.png",
         premise: "午夜之后，城市背面的市集会向失去名字的人开放。",
         openingLocationName: "市集入口",
         openingLocationDescription: "湿漉漉的石阶向下延伸，灯笼照出一排没有影子的摊位。",
@@ -111,6 +114,7 @@ describe("StoryStore", () => {
       const created = store.createStory(input);
 
       expect(created.story.id).toBe("moon-market");
+      expect(created.story.coverUrl).toBe("https://example.com/moon-market.png");
       expect(created.world.locations).toHaveLength(1);
       expect(created.characters).toHaveLength(0);
       expect(created.anchors).toHaveLength(0);

@@ -69,6 +69,7 @@ export function StorySummaryForm({
   charactersCount,
   defaultSegmentLength,
   experienceMode,
+  coverUrl,
   genre,
   locationsCount,
   storyId,
@@ -80,6 +81,7 @@ export function StorySummaryForm({
   charactersCount: number;
   defaultSegmentLength: SegmentLengthPreset;
   experienceMode: ExperienceMode;
+  coverUrl: string | null;
   genre: string;
   locationsCount: number;
   storyId: string;
@@ -99,6 +101,10 @@ export function StorySummaryForm({
       </TextField>
       <TextField defaultValue={genre} isRequired name="genre" type="text">
         <Label>类型</Label>
+        <Input />
+      </TextField>
+      <TextField defaultValue={coverUrl ?? ""} name="coverUrl" type="url">
+        <Label>封面 URL</Label>
         <Input />
       </TextField>
       <Select defaultSelectedKey={aiFreedom} name="aiFreedom">

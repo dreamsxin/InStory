@@ -81,6 +81,7 @@ export const storySummarySchema = z.object({
   title: z.string().min(1),
   tagline: z.string().min(1),
   genre: z.string().min(1),
+  coverUrl: z.string().max(2000).nullable(),
   aiFreedom: z.enum(["low", "medium", "high"]),
   experienceMode: z.enum(["scripted", "coauthored", "improvised"]),
   defaultSegmentLength: z.enum(["short", "standard", "long"])
@@ -93,6 +94,7 @@ export const createStoryRequestSchema = storySummarySchema
     title: z.string().min(1).max(80),
     tagline: z.string().min(1).max(160),
     genre: z.string().min(1).max(40),
+    coverUrl: z.string().max(2000).nullish(),
     premise: z.string().min(1).max(4000),
     openingLocationName: z.string().min(1).max(80),
     openingLocationDescription: z.string().min(1).max(1000),

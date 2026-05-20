@@ -32,7 +32,7 @@ export function HomeWorkspace({
           <BrandMark size={44} />
           <div className="brand">
             <h1>入戏 InStory</h1>
-            <p className="muted">连续阅读，随时入戏</p>
+            <p className="muted">读故事，也创造故事</p>
           </div>
         </div>
         <div className="mobile-app-meta">
@@ -58,7 +58,7 @@ export function HomeWorkspace({
         <div>
           <span className="eyebrow">MVP Workspace</span>
           <h2>选择一个身份，进入一个故事世界。</h2>
-          <p>先阅读，再在关键一幕点击入戏。你的角色设定会成为 AI 生成互动时的上下文。</p>
+          <p>创建入戏角色用于扮演自己；创建故事世界用于吸引读者进入你的设定。</p>
         </div>
         <div className="hero-stat-grid" aria-label="InStory stats">
           <div>
@@ -206,6 +206,10 @@ function CreateStoryPanel() {
               <Input maxLength={160} placeholder="你在午夜市集里寻找被偷走的名字。" />
             </TextField>
           </div>
+          <TextField name="coverUrl" type="url">
+            <Label>封面图 URL</Label>
+            <Input placeholder="用于故事卡片展示，后续可接上传或 AI 生图" />
+          </TextField>
           <TextField isRequired name="premise">
             <Label>世界前提</Label>
             <TextArea maxLength={4000} placeholder="这个世界如何运转，读者会被卷入什么冲突。" rows={4} />
@@ -281,7 +285,7 @@ function CreateProfilePanel() {
       <Card.Header>
         <div>
           <span className="eyebrow">Create Profile</span>
-          <h2>创建角色</h2>
+          <h2>创建入戏角色</h2>
         </div>
       </Card.Header>
       <Card.Content>
@@ -306,7 +310,7 @@ function CreateProfilePanel() {
             <Label>身份背景</Label>
             <TextArea maxLength={2000} placeholder="现代法医，被卷入雨夜旧宅谜案。" rows={3} />
           </TextField>
-          <Button type="submit">创建角色</Button>
+          <Button type="submit">创建入戏角色</Button>
         </form>
       </Card.Content>
     </Card>

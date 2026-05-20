@@ -49,6 +49,7 @@ export async function updateStorySummaryAction(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const tagline = String(formData.get("tagline") ?? "").trim();
   const genre = String(formData.get("genre") ?? "").trim();
+  const coverUrl = String(formData.get("coverUrl") ?? "").trim();
   const aiFreedom = formData.get("aiFreedom") === "high" || formData.get("aiFreedom") === "low"
     ? String(formData.get("aiFreedom"))
     : "medium";
@@ -63,6 +64,7 @@ export async function updateStorySummaryAction(formData: FormData) {
     title,
     tagline,
     genre,
+    coverUrl: coverUrl || null,
     aiFreedom: aiFreedom as "low" | "medium" | "high",
     experienceMode: experienceMode as "scripted" | "coauthored" | "improvised",
     defaultSegmentLength: defaultSegmentLength as "short" | "standard" | "long"

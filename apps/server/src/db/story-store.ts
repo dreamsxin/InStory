@@ -123,6 +123,7 @@ export class StoryStore {
       title: input.title,
       tagline: input.tagline,
       genre: input.genre,
+      coverUrl: input.coverUrl ?? null,
       aiFreedom: input.aiFreedom,
       experienceMode: input.experienceMode,
       defaultSegmentLength: input.defaultSegmentLength
@@ -204,6 +205,7 @@ export class StoryStore {
 function normalizeStorySummary(story: StorySummary): StorySummary {
   return {
     ...story,
+    coverUrl: story.coverUrl ?? null,
     experienceMode: story.experienceMode ?? "coauthored",
     defaultSegmentLength: story.defaultSegmentLength ?? "standard"
   };

@@ -13,6 +13,7 @@ export interface StorySummary {
   title: string;
   tagline: string;
   genre: string;
+  coverUrl: string | null;
   aiFreedom: "low" | "medium" | "high";
   experienceMode: ExperienceMode;
   defaultSegmentLength: SegmentLengthPreset;
@@ -23,6 +24,7 @@ export interface CreateStoryRequest {
   title: string;
   tagline: string;
   genre: string;
+  coverUrl?: string | null;
   premise: string;
   openingLocationName: string;
   openingLocationDescription: string;

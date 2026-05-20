@@ -126,6 +126,7 @@ export default async function AdminPage({
                 charactersCount={item.characters.length}
                 defaultSegmentLength={item.story.defaultSegmentLength}
                 experienceMode={item.story.experienceMode}
+                coverUrl={item.story.coverUrl}
                 genre={item.story.genre}
                 key={item.story.id}
                 locationsCount={item.world.locations.length}

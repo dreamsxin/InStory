@@ -341,6 +341,7 @@ describe("server API", () => {
         title: "雨夜旧宅：作者修订",
         tagline: "你在雨声里改写旧宅命运。",
         genre: "悬疑互动",
+        coverUrl: "https://example.com/rain-cover.png",
         aiFreedom: "high",
         experienceMode: "scripted",
         defaultSegmentLength: "long"
@@ -354,6 +355,7 @@ describe("server API", () => {
         title: "雨夜旧宅：作者修订",
         tagline: "你在雨声里改写旧宅命运。",
         genre: "悬疑互动",
+        coverUrl: "https://example.com/rain-cover.png",
         aiFreedom: "high",
         experienceMode: "scripted",
         defaultSegmentLength: "long"
@@ -373,6 +375,7 @@ describe("server API", () => {
         title: "missing",
         tagline: "missing",
         genre: "missing",
+        coverUrl: null,
         aiFreedom: "low",
         experienceMode: "coauthored",
         defaultSegmentLength: "standard"
@@ -390,6 +393,7 @@ describe("server API", () => {
         title: "月下市集",
         tagline: "你在午夜市集里寻找被偷走的名字。",
         genre: "奇幻悬疑",
+        coverUrl: "https://example.com/moon-market.png",
         premise: "午夜之后，城市背面的市集会向失去名字的人开放。",
         openingLocationName: "市集入口",
         openingLocationDescription: "湿漉漉的石阶向下延伸，灯笼照出一排没有影子的摊位。",
@@ -404,7 +408,8 @@ describe("server API", () => {
     expect(created.json<{ story: StoryDetail }>().story).toMatchObject({
       story: {
         id: "moon-market",
-        title: "月下市集"
+        title: "月下市集",
+        coverUrl: "https://example.com/moon-market.png"
       },
       world: {
         premise: "午夜之后，城市背面的市集会向失去名字的人开放。"
@@ -428,6 +433,7 @@ describe("server API", () => {
         title: "重复故事",
         tagline: "重复",
         genre: "测试",
+        coverUrl: null,
         premise: "重复",
         openingLocationName: "入口",
         openingLocationDescription: "入口",

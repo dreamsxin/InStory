@@ -27,6 +27,9 @@ export function StoryLauncher({ profiles, story }: { profiles: ReaderProfile[]; 
 
   return (
     <Card className="story-card">
+      <div className="story-cover" aria-hidden="true">
+        {story.coverUrl ? <img alt="" src={story.coverUrl} /> : <div className="story-cover-fallback">{story.title.slice(0, 1)}</div>}
+      </div>
       <Card.Header className="story-card-header">
         <h2>{story.title}</h2>
         <p className="muted">{story.tagline}</p>

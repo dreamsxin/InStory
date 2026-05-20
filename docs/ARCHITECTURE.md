@@ -241,6 +241,7 @@ type Story = {
   title: string;
   tagline: string;
   genre: string;
+  coverUrl: string | null;
   aiFreedom: "low" | "medium" | "high";
   experienceMode: ExperienceMode;
   defaultSegmentLength: "short" | "standard" | "long";
@@ -521,7 +522,7 @@ MVP 可先支持手动回溯到自动生成的节点。
 - 编辑约束
 - 一键试玩
 
-MVP 阶段不追求可视化工作流，先保证作者能在客户端创作入口稳定创建并配置一部可试玩作品。第一版创建表单包含故事 ID、标题、标语、类型、世界前提、起点地点、起点场景、世界规则、入戏体验模式、默认生成长度和 AI 自由度。作者工具和“我的角色”要保持边界清晰：作者创建故事世界和世界内角色，读者创建自己的入戏身份。
+MVP 阶段不追求可视化工作流，先保证作者能在客户端创作入口稳定创建并配置一部可试玩作品。第一版创建表单包含故事 ID、标题、标语、类型、封面图、世界前提、起点地点、起点场景、世界规则、入戏体验模式、默认生成长度和 AI 自由度。作者工具和“我的角色”要保持边界清晰：作者创建故事世界和世界内角色，读者创建自己的入戏身份。
 
 #### Account & Entitlement
 

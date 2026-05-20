@@ -26,6 +26,7 @@ export async function createStoryAction(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const tagline = String(formData.get("tagline") ?? "").trim();
   const genre = String(formData.get("genre") ?? "").trim();
+  const coverUrl = String(formData.get("coverUrl") ?? "").trim();
   const premise = String(formData.get("premise") ?? "").trim();
   const openingLocationName = String(formData.get("openingLocationName") ?? "").trim();
   const openingLocationDescription = String(formData.get("openingLocationDescription") ?? "").trim();
@@ -48,6 +49,7 @@ export async function createStoryAction(formData: FormData) {
     title,
     tagline,
     genre,
+    coverUrl: coverUrl || null,
     premise,
     openingLocationName,
     openingLocationDescription,
