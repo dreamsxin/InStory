@@ -60,9 +60,11 @@ describe("server API", () => {
 
     expect(story.statusCode).toBe(200);
     expect(body.story.title).toBe("雨夜旧宅");
-    expect(body.world.locations).toHaveLength(3);
-    expect(body.characters).toHaveLength(2);
-    expect(body.anchors).toHaveLength(4);
+    expect(body.story.visibility).toBe("public");
+    expect(body.story.ownerId).toBeNull();
+    expect(body.world.locations).toHaveLength(5);
+    expect(body.characters).toHaveLength(3);
+    expect(body.anchors).toHaveLength(5);
   });
 
   it("creates a session, advances a turn, and reads it back", async () => {

@@ -91,7 +91,7 @@ export class StoryStore {
   }
 
   listPublicStories(): StorySummary[] {
-    return this.listStories().filter((story) => story.ownerId === null || story.visibility === "public");
+    return this.listStories().filter((story) => story.visibility === "public");
   }
 
   listStoriesByOwner(ownerId: string): StorySummary[] {

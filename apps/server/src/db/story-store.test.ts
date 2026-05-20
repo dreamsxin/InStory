@@ -21,9 +21,10 @@ describe("StoryStore", () => {
       expect(store.listPublicStories()[0]?.id).toBe("rain-mansion");
 
       const detail = store.findStory("rain-mansion");
-      expect(detail?.world.locations).toHaveLength(3);
-      expect(detail?.characters).toHaveLength(2);
-      expect(detail?.anchors).toHaveLength(4);
+      expect(detail?.story.visibility).toBe("public");
+      expect(detail?.world.locations).toHaveLength(5);
+      expect(detail?.characters).toHaveLength(3);
+      expect(detail?.anchors).toHaveLength(5);
       expect(store.findCharacter("lu_qinghe")?.name).toBe("陆清河");
       expect(store.findStory("missing")).toBeNull();
     } finally {
@@ -43,7 +44,7 @@ describe("StoryStore", () => {
       store.seedIfEmpty(seed);
 
       expect(store.countStories()).toBe(1);
-      expect(store.findStory("rain-mansion")?.characters).toHaveLength(2);
+      expect(store.findStory("rain-mansion")?.characters).toHaveLength(3);
     } finally {
       database.close();
       rmSync(dir, { recursive: true, force: true });
@@ -84,8 +85,35 @@ describe("StoryStore", () => {
           tagline: "新的故事标语"
         }
       });
-      expect(store.findStory("rain-mansion")?.characters).toHaveLength(2);
+      expect(store.findStory("rain-mansion")?.characters).toHaveLength(3);
       expect(store.updateStorySummary("missing", updated!)).toBeNull();
+    } finally {
+      database.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not list hidden system templates in public stories", () => {
+    const dir = mkdtempSync(join(tmpdir(), "instory-story-store-"));
+    const database = new AppDatabase(join(dir, "story.sqlite"));
+    const store = new StoryStore(database);
+
+    try {
+      store.seedIfEmpty(loadSeed());
+
+      store.updateStorySummary("rain-mansion", {
+        title: "雨夜旧宅",
+        tagline: "你醒来时，门外的人已经知道了你的名字。",
+        genre: "悬疑",
+        coverUrl: null,
+        visibility: "private",
+        aiFreedom: "medium",
+        experienceMode: "coauthored",
+        defaultSegmentLength: "standard"
+      });
+
+      expect(store.findStory("rain-mansion")?.story.ownerId).toBeNull();
+      expect(store.listPublicStories()).toHaveLength(0);
     } finally {
       database.close();
       rmSync(dir, { recursive: true, force: true });

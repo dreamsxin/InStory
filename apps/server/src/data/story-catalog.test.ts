@@ -30,9 +30,12 @@ describe("StoryCatalog", () => {
     const detail = catalog.findStory("rain-mansion");
 
     expect(detail?.story.title).toBe("雨夜旧宅");
-    expect(detail?.world.locations).toHaveLength(3);
+    expect(detail?.story.visibility).toBe("public");
+    expect(detail?.world.locations).toHaveLength(5);
     expect(detail?.characters.map((item) => item.id)).toContain("lu_qinghe");
+    expect(detail?.characters.map((item) => item.id)).toContain("zhou_yan");
     expect(detail?.anchors.map((item) => item.id)).toContain("corpse_found");
+    expect(detail?.anchors.map((item) => item.id)).toContain("study_confrontation");
   });
 
   it("returns null for missing stories or characters", () => {
