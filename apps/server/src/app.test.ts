@@ -381,6 +381,65 @@ describe("server API", () => {
     expect(missing.statusCode).toBe(404);
   });
 
+  it("creates a minimal story through admin API", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/admin/stories",
+      payload: {
+        id: "moon-market",
+        title: "月下市集",
+        tagline: "你在午夜市集里寻找被偷走的名字。",
+        genre: "奇幻悬疑",
+        premise: "午夜之后，城市背面的市集会向失去名字的人开放。",
+        openingLocationName: "市集入口",
+        openingLocationDescription: "湿漉漉的石阶向下延伸，灯笼照出一排没有影子的摊位。",
+        worldRules: ["不能直接说出真名", "交易必须付出记忆"],
+        aiFreedom: "medium",
+        experienceMode: "coauthored",
+        defaultSegmentLength: "standard"
+      }
+    });
+
+    expect(created.statusCode).toBe(201);
+    expect(created.json<{ story: StoryDetail }>().story).toMatchObject({
+      story: {
+        id: "moon-market",
+        title: "月下市集"
+      },
+      world: {
+        premise: "午夜之后，城市背面的市集会向失去名字的人开放。"
+      },
+      characters: [],
+      anchors: []
+    });
+
+    const loaded = await app.inject({
+      method: "GET",
+      url: "/api/stories/moon-market"
+    });
+    expect(loaded.statusCode).toBe(200);
+    expect(loaded.json<StoryDetail>().world.locations[0]?.name).toBe("市集入口");
+
+    const duplicate = await app.inject({
+      method: "POST",
+      url: "/api/admin/stories",
+      payload: {
+        id: "moon-market",
+        title: "重复故事",
+        tagline: "重复",
+        genre: "测试",
+        premise: "重复",
+        openingLocationName: "入口",
+        openingLocationDescription: "入口",
+        worldRules: [],
+        aiFreedom: "medium",
+        experienceMode: "coauthored",
+        defaultSegmentLength: "standard"
+      }
+    });
+    expect(duplicate.statusCode).toBe(409);
+  });
+
   it("verifies the active admin model provider", async () => {
     const response = await app.inject({
       method: "POST",

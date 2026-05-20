@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   createReaderProfileRequestSchema,
   createSessionRequestSchema,
+  createStoryRequestSchema,
   createTurnRequestSchema,
   storySummarySchema
 } from "@instory/shared";
@@ -112,6 +113,22 @@ export async function buildApp(options: BuildAppOptions) {
   app.get("/api/admin/stories", async () => ({
     stories: options.storyCatalog.listStories().map((story) => options.storyCatalog.findStory(story.id))
   }));
+
+  app.post("/api/admin/stories", async (request, reply) => {
+    const parsed = createStoryRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
+    }
+
+    try {
+      const story = options.storyCatalog.createStory(parsed.data);
+      return reply.code(201).send({ story });
+    } catch (error) {
+      return reply.code(409).send({
+        error: error instanceof Error ? error.message : "Failed to create story"
+      });
+    }
+  });
 
   app.put("/api/admin/stories/:storyId", async (request, reply) => {
     const { storyId } = request.params as { storyId: string };

@@ -86,6 +86,20 @@ export const storySummarySchema = z.object({
   defaultSegmentLength: z.enum(["short", "standard", "long"])
 });
 
+export const createStoryRequestSchema = storySummarySchema
+  .omit({ aiFreedom: true })
+  .extend({
+    id: z.string().min(3).max(80).regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/),
+    title: z.string().min(1).max(80),
+    tagline: z.string().min(1).max(160),
+    genre: z.string().min(1).max(40),
+    premise: z.string().min(1).max(4000),
+    openingLocationName: z.string().min(1).max(80),
+    openingLocationDescription: z.string().min(1).max(1000),
+    worldRules: z.array(z.string().min(1).max(500)).max(20),
+    aiFreedom: z.enum(["low", "medium", "high"]).default("medium")
+  });
+
 export const characterProfileSchema = z.object({
   id: z.string().min(1),
   storyId: z.string().min(1),

@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { storySeedSchema } from "@instory/shared";
 import { StoryStore } from "../db/story-store.js";
 import type { AppDatabase } from "../db/app-database.js";
-import type { CharacterProfile, StoryAnchor, StoryDetail, StorySummary, WorldProfile } from "@instory/shared";
+import type { CharacterProfile, CreateStoryRequest, StoryAnchor, StoryDetail, StorySummary, WorldProfile } from "@instory/shared";
 
 interface StorySeed {
   stories: StorySummary[];
@@ -31,6 +31,10 @@ export class StoryCatalog {
 
   updateStorySummary(storyId: string, input: Omit<StorySummary, "id">): StorySummary | null {
     return this.store.updateStorySummary(storyId, input);
+  }
+
+  createStory(input: CreateStoryRequest): StoryDetail {
+    return this.store.createStory(input);
   }
 
   findCharacters(storyId: string): CharacterProfile[] {

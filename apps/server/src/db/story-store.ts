@@ -1,4 +1,4 @@
-import type { CharacterProfile, StoryAnchor, StoryDetail, StorySummary, WorldProfile } from "@instory/shared";
+import type { CharacterProfile, CreateStoryRequest, StoryAnchor, StoryDetail, StorySummary, WorldProfile } from "@instory/shared";
 import type { AppDatabase } from "./app-database.js";
 
 export interface StorySeedData {
@@ -110,6 +110,54 @@ export class StoryStore {
     };
     this.database.db.prepare("UPDATE stories SET payload = ? WHERE id = ?").run(JSON.stringify(updated), storyId);
     return updated;
+  }
+
+  createStory(input: CreateStoryRequest): StoryDetail {
+    const existing = this.findStorySummary(input.id);
+    if (existing) {
+      throw new Error("Story id already exists");
+    }
+
+    const story: StorySummary = {
+      id: input.id,
+      title: input.title,
+      tagline: input.tagline,
+      genre: input.genre,
+      aiFreedom: input.aiFreedom,
+      experienceMode: input.experienceMode,
+      defaultSegmentLength: input.defaultSegmentLength
+    };
+    const world: WorldProfile = {
+      storyId: input.id,
+      premise: input.premise,
+      rules: input.worldRules,
+      locations: [
+        {
+          id: `${input.id}-opening`,
+          name: input.openingLocationName,
+          description: input.openingLocationDescription
+        }
+      ]
+    };
+
+    this.database.db.exec("BEGIN");
+    try {
+      this.database.db.prepare("INSERT INTO stories (id, payload) VALUES (?, ?)").run(story.id, JSON.stringify(story));
+      this.database.db
+        .prepare("INSERT INTO worlds (story_id, payload) VALUES (?, ?)")
+        .run(world.storyId, JSON.stringify(world));
+      this.database.db.exec("COMMIT");
+    } catch (error) {
+      this.database.db.exec("ROLLBACK");
+      throw error;
+    }
+
+    return {
+      story,
+      world,
+      characters: [],
+      anchors: []
+    };
   }
 
   findCharacter(characterId: string): CharacterProfile | null {

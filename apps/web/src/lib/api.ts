@@ -1,4 +1,5 @@
 import type {
+  CreateStoryRequest,
   CreateSessionResponse,
   CreateTurnResponse,
   ReaderProfile,
@@ -190,6 +191,14 @@ export async function verifyAdminModelConfig(): Promise<AdminModelVerificationRe
 export async function getAdminStories(): Promise<StoryDetail[]> {
   const data = await adminGet<{ stories: StoryDetail[] }>("/api/admin/stories");
   return data.stories;
+}
+
+export async function createAdminStory(input: CreateStoryRequest): Promise<StoryDetail> {
+  const data = await adminRequest<{ story: StoryDetail }>("/api/admin/stories", {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+  return data.story;
 }
 
 export async function updateAdminStorySummary(

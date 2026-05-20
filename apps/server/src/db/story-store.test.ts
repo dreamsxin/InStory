@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { loadSeed } from "../data/story-catalog.js";
 import { AppDatabase } from "./app-database.js";
 import { StoryStore } from "./story-store.js";
+import type { CreateStoryRequest } from "@instory/shared";
 
 describe("StoryStore", () => {
   it("seeds and reads story configuration from SQLite", () => {
@@ -80,6 +81,42 @@ describe("StoryStore", () => {
       });
       expect(store.findStory("rain-mansion")?.characters).toHaveLength(2);
       expect(store.updateStorySummary("missing", updated!)).toBeNull();
+    } finally {
+      database.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("creates a minimal story with world configuration", () => {
+    const dir = mkdtempSync(join(tmpdir(), "instory-story-store-"));
+    const database = new AppDatabase(join(dir, "story.sqlite"));
+    const store = new StoryStore(database);
+
+    try {
+      store.seedIfEmpty(loadSeed());
+
+      const input: CreateStoryRequest = {
+        id: "moon-market",
+        title: "月下市集",
+        tagline: "你在午夜市集里寻找被偷走的名字。",
+        genre: "奇幻悬疑",
+        premise: "午夜之后，城市背面的市集会向失去名字的人开放。",
+        openingLocationName: "市集入口",
+        openingLocationDescription: "湿漉漉的石阶向下延伸，灯笼照出一排没有影子的摊位。",
+        worldRules: ["不能直接说出真名", "交易必须付出记忆"],
+        aiFreedom: "medium",
+        experienceMode: "coauthored",
+        defaultSegmentLength: "standard"
+      };
+      const created = store.createStory(input);
+
+      expect(created.story.id).toBe("moon-market");
+      expect(created.world.locations).toHaveLength(1);
+      expect(created.characters).toHaveLength(0);
+      expect(created.anchors).toHaveLength(0);
+      expect(store.countStories()).toBe(2);
+      expect(store.findStory("moon-market")?.world.rules).toEqual(["不能直接说出真名", "交易必须付出记忆"]);
+      expect(() => store.createStory(input)).toThrow("Story id already exists");
     } finally {
       database.close();
       rmSync(dir, { recursive: true, force: true });
