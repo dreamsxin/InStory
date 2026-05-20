@@ -58,6 +58,7 @@
 - 新增 `StoryStore` 单元测试。
 - 新增 `docs/PRODUCT_PLAN.md`，将 README 中的产品规划内容迁入独立文档。
 - README 收敛为开源项目入口，仅保留项目概览、当前状态、技术栈、代码结构、文档导航和开发启动说明。
+- 新增 `npm run verify:llm`，用于验证 Mock 或 OpenAI-compatible `LLMProvider` 的端到端叙事输出 schema。
 
 ### 验证结果
 
@@ -73,13 +74,11 @@
 - `npm audit` 报告 2 个 moderate，来源是 `next@16.2.6` 依赖的 `postcss`。当前 `npm audit fix --force` 会降级到破坏性旧版本，暂不执行。
 - 故事、世界、角色和锚点已进入 SQLite 表，但仍以 JSON payload 存储，尚未拆成完全关系化字段。
 - SQLite 当前使用 Node.js 内置 `node:sqlite`，在 Node 24 下可能出现实验性 API 提示。
-- AI 叙事暂时使用 Mock provider，尚未接入真实模型。
-- 真实模型 Provider 已接入配置，但尚未用实际 API Key 做端到端验证。
+- AI 叙事默认使用 Mock provider；真实模型可通过 `npm run verify:llm` 在配置 API Key 后手动验证。
 
 ### 下一步
 
-1. 增加真实模型端到端验证用例。
-2. 在 Web 作者工具中展示/编辑故事配置。
-3. 增加 Web 阅读器交互测试。
-4. 为 `/admin` 增加页面级测试。
-5. 将故事配置 JSON payload 逐步拆成可查询字段。
+1. 在 Web 作者工具中展示/编辑故事配置。
+2. 增加 Web 阅读器交互测试。
+3. 为 `/admin` 增加页面级测试。
+4. 将故事配置 JSON payload 逐步拆成可查询字段。

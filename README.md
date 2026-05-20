@@ -145,6 +145,25 @@ npm run dev:web
 
 ```bash
 npm run typecheck
+npm run test
 npm run build
+```
+
+### 验证模型 Provider
+
+默认使用 Mock Provider 验证叙事输出结构：
+
+```bash
+npm run verify:llm
+```
+
+验证真实 OpenAI-compatible 模型时，需要先配置：
+
+```bash
+LLM_PROVIDER=openai-compatible
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_API_KEY=...
+LLM_MODEL=...
+npm run verify:llm
 ```
 
