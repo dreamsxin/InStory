@@ -77,6 +77,8 @@
 - 检索并评估开源阅读器库，结论是 MVP 不引入 EPUB 阅读器库，继续自定义互动小说阅读器，后续外部书籍导入阶段再评估 `epub.js`、`react-reader` 或 Readium Web。
 - 手机端首页改为固定高度 App 布局，顶部显示当前主功能，底部导航显示主/副标签，故事、角色、继续、创作各自独立滚动。
 - 手机端阅读器改为沉浸式正文滚动，状态侧栏在可见 chrome 下以底部浮层呈现，输入区固定在底部，隐藏 chrome 后保留悬浮恢复入口。
+- 根据 `D:\work\heroui\skills` 和本地 demos 修正 HeroUI v3 用法：不使用 Provider，采用 `Card.Header/Card.Content`、`TextField + Label + Input/TextArea`、`Select + ListBox.Item` 等复合组件模式，并补齐 Tailwind v4 / `@heroui/styles` 样式管线。
+- 移动端 UI 完成截图回归：手机竖屏首页、手机横屏首页、手机竖屏阅读器、手机横屏阅读器均已检查；阅读器手机端默认进入专注阅读，保留智能选项和“显示菜单”入口。
 
 ### 验证结果
 

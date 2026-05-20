@@ -1,3 +1,4 @@
+import { Card, Chip } from "@heroui/react";
 import {
   getAdminModelConfig,
   getAdminModerationEvents,
@@ -5,9 +6,9 @@ import {
   getAdminStatus,
   getAdminStories
 } from "@/lib/api";
+import { ModelConfigForm, StorySummaryForm } from "@/components/admin-forms";
 import { BrandMark } from "@/components/brand-mark";
 import Link from "next/link";
-import { updateModelConfigAction, updateStorySummaryAction, verifyModelConfigAction } from "./actions";
 
 export default async function AdminPage({
   searchParams
@@ -47,8 +48,10 @@ export default async function AdminPage({
           <h2>验证 Provider，管理故事基础配置，观察运行状态。</h2>
         </div>
         <div className="admin-command-actions">
-          <span>{modelConfig.provider}</span>
-          <span>{modelConfig.apiKeyConfigured ? "Key 已配置" : "Key 未配置"}</span>
+          <Chip variant="soft">{modelConfig.provider}</Chip>
+          <Chip color={modelConfig.apiKeyConfigured ? "success" : "warning"} variant="soft">
+            {modelConfig.apiKeyConfigured ? "Key 已配置" : "Key 未配置"}
+          </Chip>
         </div>
       </section>
 
@@ -60,113 +63,78 @@ export default async function AdminPage({
       </section>
 
       <section className="admin-grid">
-        <article className="panel" id="model">
-          <h2>模型配置</h2>
-          <form className="admin-form" action={updateModelConfigAction}>
-            <label>
-              <span>Provider</span>
-              <select name="provider" defaultValue={modelConfig.provider}>
-                <option value="mock">Mock</option>
-                <option value="openai-compatible">OpenAI-compatible</option>
-              </select>
-            </label>
-            <label>
-              <span>Base URL</span>
-              <input name="baseUrl" type="url" defaultValue={modelConfig.baseUrl ?? ""} placeholder="https://api.openai.com/v1" />
-            </label>
-            <label>
-              <span>Model</span>
-              <input name="model" type="text" defaultValue={modelConfig.model ?? ""} placeholder="gpt-4.1-mini" />
-            </label>
-            <label>
-              <span>API Key</span>
-              <input name="apiKey" type="password" placeholder={modelConfig.apiKeyConfigured ? "保持现有 Key" : "输入 API Key"} />
-            </label>
-            <label className="checkbox-line">
-              <input name="clearApiKey" type="checkbox" />
-              <span>清除已保存 API Key</span>
-            </label>
-            <button className="primary" type="submit">保存模型配置</button>
-          </form>
-          <form className="admin-form compact" action={verifyModelConfigAction}>
-            <button className="secondary" type="submit">验证当前 Provider</button>
-          </form>
-          <VerificationNotice query={query} />
-          <dl className="admin-list">
-            <div>
-              <dt>Provider</dt>
-              <dd>{modelConfig.provider}</dd>
-            </div>
-            <div>
-              <dt>Base URL</dt>
-              <dd>{modelConfig.baseUrl ?? "未配置"}</dd>
-            </div>
-            <div>
-              <dt>Model</dt>
-              <dd>{modelConfig.model ?? "未配置"}</dd>
-            </div>
-            <div>
-              <dt>API Key</dt>
-              <dd>{modelConfig.apiKeyConfigured ? "已配置" : "未配置"}</dd>
-            </div>
-            <div>
-              <dt>更新时间</dt>
-              <dd>{modelConfig.updatedAt ? formatDate(modelConfig.updatedAt) : "未记录"}</dd>
-            </div>
-          </dl>
-        </article>
-
-        <article className="panel">
-          <h2>存储状态</h2>
-          <dl className="admin-list">
-            <div>
-              <dt>类型</dt>
-              <dd>{status.storage.type}</dd>
-            </div>
-            <div>
-              <dt>路径</dt>
-              <dd className="breakable">{status.storage.databasePath}</dd>
-            </div>
-          </dl>
-        </article>
-      </section>
-
-      <section className="panel" id="stories">
-        <h2>故事配置</h2>
-        <div className="story-editor-list">
-          {stories.map((item) => (
-            <form className="story-editor-row" action={updateStorySummaryAction} key={item.story.id}>
-              <input name="storyId" type="hidden" value={item.story.id} />
-              <label>
-                <span>标题</span>
-                <input name="title" type="text" defaultValue={item.story.title} required />
-              </label>
-              <label>
-                <span>标语</span>
-                <input name="tagline" type="text" defaultValue={item.story.tagline} required />
-              </label>
-              <label>
-                <span>类型</span>
-                <input name="genre" type="text" defaultValue={item.story.genre} required />
-              </label>
-              <label>
-                <span>AI 自由度</span>
-                <select name="aiFreedom" defaultValue={item.story.aiFreedom}>
-                  <option value="low">low</option>
-                  <option value="medium">medium</option>
-                  <option value="high">high</option>
-                </select>
-              </label>
-              <div className="story-editor-meta">
-                <span>{item.world.locations.length} 地点</span>
-                <span>{item.characters.length} 角色</span>
-                <span>{item.anchors.length} 锚点</span>
+        <Card className="panel" id="model">
+          <Card.Content>
+            <h2>模型配置</h2>
+            <ModelConfigForm
+              apiKeyConfigured={modelConfig.apiKeyConfigured}
+              baseUrl={modelConfig.baseUrl}
+              model={modelConfig.model}
+              provider={modelConfig.provider}
+            />
+            <VerificationNotice query={query} />
+            <dl className="admin-list">
+              <div>
+                <dt>Provider</dt>
+                <dd>{modelConfig.provider}</dd>
               </div>
-              <button className="secondary" type="submit">保存故事</button>
-            </form>
-          ))}
-        </div>
+              <div>
+                <dt>Base URL</dt>
+                <dd>{modelConfig.baseUrl ?? "未配置"}</dd>
+              </div>
+              <div>
+                <dt>Model</dt>
+                <dd>{modelConfig.model ?? "未配置"}</dd>
+              </div>
+              <div>
+                <dt>API Key</dt>
+                <dd>{modelConfig.apiKeyConfigured ? "已配置" : "未配置"}</dd>
+              </div>
+              <div>
+                <dt>更新时间</dt>
+                <dd>{modelConfig.updatedAt ? formatDate(modelConfig.updatedAt) : "未记录"}</dd>
+              </div>
+            </dl>
+          </Card.Content>
+        </Card>
+
+        <Card className="panel">
+          <Card.Content>
+            <h2>存储状态</h2>
+            <dl className="admin-list">
+              <div>
+                <dt>类型</dt>
+                <dd>{status.storage.type}</dd>
+              </div>
+              <div>
+                <dt>路径</dt>
+                <dd className="breakable">{status.storage.databasePath}</dd>
+              </div>
+            </dl>
+          </Card.Content>
+        </Card>
       </section>
+
+      <Card className="panel" id="stories">
+        <Card.Content>
+          <h2>故事配置</h2>
+          <div className="story-editor-list">
+            {stories.map((item) => (
+              <StorySummaryForm
+                aiFreedom={item.story.aiFreedom}
+                anchorsCount={item.anchors.length}
+                charactersCount={item.characters.length}
+                genre={item.story.genre}
+                key={item.story.id}
+                locationsCount={item.world.locations.length}
+                storyId={item.story.id}
+                tagline={item.story.tagline}
+                title={item.story.title}
+              />
+            ))}
+          </div>
+        </Card.Content>
+      </Card>
 
       <section className="panel" id="sessions">
         <h2>最近会话</h2>
