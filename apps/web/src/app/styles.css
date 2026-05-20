@@ -61,9 +61,9 @@ a {
 }
 
 .mobile-tab-shell {
-  width: min(1180px, 100%);
+  width: 100%;
   margin: 0 auto;
-  padding: max(28px, env(safe-area-inset-top)) 28px max(92px, calc(28px + env(safe-area-inset-bottom) + 64px));
+  padding: max(28px, env(safe-area-inset-top)) clamp(28px, 4vw, 72px) max(92px, calc(28px + env(safe-area-inset-bottom) + 64px));
 }
 
 .reader {
@@ -453,7 +453,7 @@ a {
 
 .creator-layer {
   display: grid;
-  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(320px, 0.72fr) minmax(0, 1.28fr);
   gap: 14px;
   align-items: start;
 }
@@ -1134,7 +1134,7 @@ a {
     bottom: max(12px, env(safe-area-inset-bottom));
     z-index: 30;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
     gap: 6px;
     border: 1px solid var(--line);
     border-radius: 20px;
