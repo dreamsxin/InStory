@@ -1,7 +1,7 @@
 import cors from "@fastify/cors";
 import Fastify from "fastify";
 import { z } from "zod";
-import { createSessionRequestSchema, createTurnRequestSchema } from "@instory/shared";
+import { createSessionRequestSchema, createTurnRequestSchema, storySummarySchema } from "@instory/shared";
 import { applyStateDelta, createInitialState, createTimelineNode, shouldCreateTimelineNode } from "@instory/story-engine";
 import type { CreateSessionResponse, CreateTurnResponse, SessionTurn, StorySession, TimelineNode } from "@instory/shared";
 import type { StoryCatalog } from "./data/story-catalog.js";
@@ -15,6 +15,8 @@ const updateModelConfigSchema = z.object({
   apiKey: z.string().nullish(),
   clearApiKey: z.boolean().optional()
 });
+
+const updateStorySummarySchema = storySummarySchema.omit({ id: true });
 
 export interface BuildAppOptions {
   sessionStore: SessionStore;
@@ -103,6 +105,21 @@ export async function buildApp(options: BuildAppOptions) {
   app.get("/api/admin/stories", async () => ({
     stories: options.storyCatalog.listStories().map((story) => options.storyCatalog.findStory(story.id))
   }));
+
+  app.put("/api/admin/stories/:storyId", async (request, reply) => {
+    const { storyId } = request.params as { storyId: string };
+    const parsed = updateStorySummarySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
+    }
+
+    const story = options.storyCatalog.updateStorySummary(storyId, parsed.data);
+    if (!story) {
+      return reply.code(404).send({ error: "Story not found" });
+    }
+
+    return { story };
+  });
 
   app.get("/api/admin/sessions", async (request) => {
     const query = request.query as { limit?: string };

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { updateAdminModelConfig, verifyAdminModelConfig } from "@/lib/api";
+import { updateAdminModelConfig, updateAdminStorySummary, verifyAdminModelConfig } from "@/lib/api";
 
 export async function updateModelConfigAction(formData: FormData) {
   const provider = formData.get("provider") === "openai-compatible" ? "openai-compatible" : "mock";
@@ -42,4 +42,23 @@ export async function verifyModelConfigAction() {
   }
 
   redirect(`/admin?${params.toString()}`);
+}
+
+export async function updateStorySummaryAction(formData: FormData) {
+  const storyId = String(formData.get("storyId") ?? "");
+  const title = String(formData.get("title") ?? "").trim();
+  const tagline = String(formData.get("tagline") ?? "").trim();
+  const genre = String(formData.get("genre") ?? "").trim();
+  const aiFreedom = formData.get("aiFreedom") === "high" || formData.get("aiFreedom") === "low"
+    ? String(formData.get("aiFreedom"))
+    : "medium";
+
+  await updateAdminStorySummary(storyId, {
+    title,
+    tagline,
+    genre,
+    aiFreedom: aiFreedom as "low" | "medium" | "high"
+  });
+
+  revalidatePath("/admin");
 }

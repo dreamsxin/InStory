@@ -158,6 +158,17 @@ export async function getAdminStories(): Promise<StoryDetail[]> {
   return data.stories;
 }
 
+export async function updateAdminStorySummary(
+  storyId: string,
+  input: Omit<StorySummary, "id">
+): Promise<StorySummary> {
+  const data = await adminRequest<{ story: StorySummary }>(`/api/admin/stories/${storyId}`, {
+    method: "PUT",
+    body: JSON.stringify(input)
+  });
+  return data.story;
+}
+
 export async function getAdminSessions(limit = 20): Promise<AdminSessionListItem[]> {
   const data = await adminGet<{ sessions: AdminSessionListItem[] }>(`/api/admin/sessions?limit=${limit}`);
   return data.sessions;

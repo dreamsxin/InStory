@@ -286,6 +286,48 @@ describe("server API", () => {
     expect(invalid.statusCode).toBe(400);
   });
 
+  it("updates story summary through admin API", async () => {
+    const updated = await app.inject({
+      method: "PUT",
+      url: "/api/admin/stories/rain-mansion",
+      payload: {
+        title: "雨夜旧宅：作者修订",
+        tagline: "你在雨声里改写旧宅命运。",
+        genre: "悬疑互动",
+        aiFreedom: "high"
+      }
+    });
+
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json()).toEqual({
+      story: {
+        id: "rain-mansion",
+        title: "雨夜旧宅：作者修订",
+        tagline: "你在雨声里改写旧宅命运。",
+        genre: "悬疑互动",
+        aiFreedom: "high"
+      }
+    });
+
+    const loaded = await app.inject({
+      method: "GET",
+      url: "/api/stories/rain-mansion"
+    });
+    expect(loaded.json<StoryDetail>().story.title).toBe("雨夜旧宅：作者修订");
+
+    const missing = await app.inject({
+      method: "PUT",
+      url: "/api/admin/stories/missing",
+      payload: {
+        title: "missing",
+        tagline: "missing",
+        genre: "missing",
+        aiFreedom: "low"
+      }
+    });
+    expect(missing.statusCode).toBe(404);
+  });
+
   it("verifies the active admin model provider", async () => {
     const response = await app.inject({
       method: "POST",

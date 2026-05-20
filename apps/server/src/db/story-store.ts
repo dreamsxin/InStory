@@ -98,6 +98,20 @@ export class StoryStore {
     };
   }
 
+  updateStorySummary(storyId: string, input: Omit<StorySummary, "id">): StorySummary | null {
+    const current = this.findStorySummary(storyId);
+    if (!current) {
+      return null;
+    }
+
+    const updated: StorySummary = {
+      id: current.id,
+      ...input
+    };
+    this.database.db.prepare("UPDATE stories SET payload = ? WHERE id = ?").run(JSON.stringify(updated), storyId);
+    return updated;
+  }
+
   findCharacter(characterId: string): CharacterProfile | null {
     const row = this.database.db.prepare("SELECT payload FROM characters WHERE id = ?").get(characterId) as
       | { payload: string }

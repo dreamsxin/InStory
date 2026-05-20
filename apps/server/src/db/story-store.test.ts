@@ -47,4 +47,38 @@ describe("StoryStore", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("updates story summary payload without changing related configuration", () => {
+    const dir = mkdtempSync(join(tmpdir(), "instory-story-store-"));
+    const database = new AppDatabase(join(dir, "story.sqlite"));
+    const store = new StoryStore(database);
+
+    try {
+      store.seedIfEmpty(loadSeed());
+
+      const updated = store.updateStorySummary("rain-mansion", {
+        title: "雨夜旧宅：修订版",
+        tagline: "新的故事标语",
+        genre: "悬疑测试",
+        aiFreedom: "high"
+      });
+
+      expect(updated).toMatchObject({
+        id: "rain-mansion",
+        title: "雨夜旧宅：修订版",
+        aiFreedom: "high"
+      });
+      expect(store.findStory("rain-mansion")).toMatchObject({
+        story: {
+          title: "雨夜旧宅：修订版",
+          tagline: "新的故事标语"
+        }
+      });
+      expect(store.findStory("rain-mansion")?.characters).toHaveLength(2);
+      expect(store.updateStorySummary("missing", updated!)).toBeNull();
+    } finally {
+      database.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

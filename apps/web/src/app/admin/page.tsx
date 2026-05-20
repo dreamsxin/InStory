@@ -6,7 +6,7 @@ import {
   getAdminStories
 } from "@/lib/api";
 import { BrandMark } from "@/components/brand-mark";
-import { updateModelConfigAction, verifyModelConfigAction } from "./actions";
+import { updateModelConfigAction, updateStorySummaryAction, verifyModelConfigAction } from "./actions";
 
 export default async function AdminPage({
   searchParams
@@ -115,32 +115,38 @@ export default async function AdminPage({
 
       <section className="panel">
         <h2>故事配置</h2>
-        <div className="admin-table-wrap">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>故事</th>
-                <th>类型</th>
-                <th>世界地点</th>
-                <th>角色</th>
-                <th>锚点</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stories.map((item) => (
-                <tr key={item.story.id}>
-                  <td>
-                    <strong>{item.story.title}</strong>
-                    <span className="muted">{item.story.tagline}</span>
-                  </td>
-                  <td>{item.story.genre}</td>
-                  <td>{item.world.locations.length}</td>
-                  <td>{item.characters.length}</td>
-                  <td>{item.anchors.length}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="story-editor-list">
+          {stories.map((item) => (
+            <form className="story-editor-row" action={updateStorySummaryAction} key={item.story.id}>
+              <input name="storyId" type="hidden" value={item.story.id} />
+              <label>
+                <span>标题</span>
+                <input name="title" type="text" defaultValue={item.story.title} required />
+              </label>
+              <label>
+                <span>标语</span>
+                <input name="tagline" type="text" defaultValue={item.story.tagline} required />
+              </label>
+              <label>
+                <span>类型</span>
+                <input name="genre" type="text" defaultValue={item.story.genre} required />
+              </label>
+              <label>
+                <span>AI 自由度</span>
+                <select name="aiFreedom" defaultValue={item.story.aiFreedom}>
+                  <option value="low">low</option>
+                  <option value="medium">medium</option>
+                  <option value="high">high</option>
+                </select>
+              </label>
+              <div className="story-editor-meta">
+                <span>{item.world.locations.length} 地点</span>
+                <span>{item.characters.length} 角色</span>
+                <span>{item.anchors.length} 锚点</span>
+              </div>
+              <button className="secondary" type="submit">保存故事</button>
+            </form>
+          ))}
         </div>
       </section>
 

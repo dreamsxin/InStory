@@ -63,6 +63,7 @@
 - 模型配置写入 SQLite，运行时立即重建 `LLMProvider`，API Key 不通过 Admin API 回显。
 - 管理后台新增“验证当前 Provider”按钮，调用 `POST /api/admin/models/verify` 执行最小叙事生成并校验输出 schema。
 - OpenAI-compatible Provider 支持根地址或完整 `/chat/completions` 地址，并兼容真实模型把 `memoryEvents` 返回为对象数组的情况。
+- 作者工具 MVP 起步：管理后台支持编辑故事基础配置，新增 `PUT /api/admin/stories/:storyId`，可更新标题、标语、类型和 AI 自由度。
 
 ### 验证结果
 
@@ -82,7 +83,7 @@
 
 ### 下一步
 
-1. 在 Web 作者工具中展示/编辑故事配置。
+1. 扩展作者工具，支持编辑世界、角色和剧情锚点。
 2. 增加 Web 阅读器交互测试。
 3. 为 `/admin` 增加页面级测试。
 4. 将故事配置 JSON payload 逐步拆成可查询字段。

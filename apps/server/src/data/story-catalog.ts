@@ -29,6 +29,10 @@ export class StoryCatalog {
     return this.store.findStory(storyId);
   }
 
+  updateStorySummary(storyId: string, input: Omit<StorySummary, "id">): StorySummary | null {
+    return this.store.updateStorySummary(storyId, input);
+  }
+
   findCharacters(storyId: string): CharacterProfile[] {
     return this.findStory(storyId)?.characters ?? [];
   }
