@@ -1,5 +1,6 @@
 "use client";
 
+import { Avatar, Button, Card, CardContent, CardHeader, Chip, Input, Label, TextArea, TextField } from "@heroui/react";
 import Link from "next/link";
 import { useState } from "react";
 import type { ReaderProfile, StorySummary } from "@instory/shared";
@@ -105,7 +106,7 @@ function StoriesView({ profiles, stories }: { profiles: ReaderProfile[]; stories
           <span className="eyebrow">Worlds</span>
           <h2 className="section-title">故事世界</h2>
         </div>
-        <span className="muted">进入前选择入戏身份</span>
+        <Chip size="sm" variant="soft">进入前选择入戏身份</Chip>
       </div>
       <div className="story-grid">
         {stories.map((story) => (
@@ -119,30 +120,32 @@ function StoriesView({ profiles, stories }: { profiles: ReaderProfile[]; stories
 function ProfilesView({ profiles }: { profiles: ReaderProfile[] }) {
   return (
     <div className="app-section two-column-section">
-      <section className="profile-panel">
-        <div className="section-heading">
+      <Card className="profile-panel">
+        <CardHeader className="section-heading card-heading">
           <div>
             <span className="eyebrow">Profiles</span>
             <h2>我的角色</h2>
           </div>
-        </div>
-        {profiles.length ? (
-          <div className="profile-list">
-            {profiles.map((profile) => (
-              <article className="profile-card large" key={profile.id}>
-                <AvatarSeed name={profile.name} src={profile.avatarUrl} />
-                <div>
-                  <strong>{profile.name}</strong>
-                  <p>{profile.personality}</p>
-                  <span>{profile.gender ?? "未设定性别"}</span>
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p className="muted">还没有角色。切到“创作”创建一个入戏身份。</p>
-        )}
-      </section>
+        </CardHeader>
+        <CardContent>
+          {profiles.length ? (
+            <div className="profile-list">
+              {profiles.map((profile) => (
+                <article className="profile-card large" key={profile.id}>
+                  <AvatarSeed name={profile.name} src={profile.avatarUrl} />
+                  <div>
+                    <strong>{profile.name}</strong>
+                    <p>{profile.personality}</p>
+                    <Chip color="accent" size="sm" variant="soft">{profile.gender ?? "未设定性别"}</Chip>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">还没有角色。切到“创作”创建一个入戏身份。</p>
+          )}
+        </CardContent>
+      </Card>
 
       <CreateProfilePanel />
     </div>
@@ -151,15 +154,17 @@ function ProfilesView({ profiles }: { profiles: ReaderProfile[] }) {
 
 function ContinueView({ profiles, stories }: { profiles: ReaderProfile[]; stories: StorySummary[] }) {
   return (
-    <div className="app-section empty-state-panel">
-      <span className="eyebrow">Continue</span>
-      <h2>继续阅读</h2>
-      <p className="muted">会话列表会在后续接入。现在可以从故事世界选择 {profiles.length ? "已有角色" : "默认角色"} 进入。</p>
-      <div className="quick-card-row">
-        <span>{stories.length} 个故事世界</span>
-        <span>{profiles.length} 个我的角色</span>
-      </div>
-    </div>
+    <Card className="app-section empty-state-panel">
+      <CardContent>
+        <span className="eyebrow">Continue</span>
+        <h2>继续阅读</h2>
+        <p className="muted">会话列表会在后续接入。现在可以从故事世界选择 {profiles.length ? "已有角色" : "默认角色"} 进入。</p>
+        <div className="quick-card-row">
+          <Chip variant="soft">{stories.length} 个故事世界</Chip>
+          <Chip variant="soft">{profiles.length} 个我的角色</Chip>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -167,52 +172,69 @@ function CreateView() {
   return (
     <div className="app-section two-column-section">
       <CreateProfilePanel />
-      <section className="profile-panel">
-        <span className="eyebrow">Creator</span>
-        <h2>故事世界创作</h2>
-        <p className="muted">MVP 阶段先在控制台编辑故事基础配置。世界、角色和锚点编辑会在后续进入客户端创作模块。</p>
-        <Link className="secondary center-action" href="/admin">打开控制台</Link>
-      </section>
+      <Card className="profile-panel">
+        <CardContent>
+          <span className="eyebrow">Creator</span>
+          <h2>故事世界创作</h2>
+          <p className="muted">MVP 阶段先在控制台编辑故事基础配置。世界、角色和锚点编辑会在后续进入客户端创作模块。</p>
+          <Link className="secondary center-action" href="/admin">打开控制台</Link>
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
 function CreateProfilePanel() {
   return (
-    <section className="profile-panel create-profile-panel">
-      <span className="eyebrow">Create Profile</span>
-      <h2>创建角色</h2>
-      <form className="profile-form embedded" action={createReaderProfileAction}>
-        <label>
-          <span>名称</span>
-          <input name="name" required maxLength={40} placeholder="林向晚" />
-        </label>
-        <label>
-          <span>性别</span>
-          <input name="gender" maxLength={40} placeholder="可选" />
-        </label>
-        <label>
-          <span>性格</span>
-          <textarea name="personality" required maxLength={1200} placeholder="冷静、敏感，习惯先观察再行动。" />
-        </label>
-        <label>
-          <span>头像 URL</span>
-          <input name="avatarUrl" type="url" placeholder="后续可接 AI 生成形象" />
-        </label>
-        <label>
-          <span>身份背景</span>
-          <textarea name="description" required maxLength={2000} placeholder="现代法医，被卷入雨夜旧宅谜案。" />
-        </label>
-        <button className="primary" type="submit">创建角色</button>
-      </form>
-    </section>
+    <Card className="profile-panel create-profile-panel">
+      <CardHeader className="card-heading">
+        <div>
+          <span className="eyebrow">Create Profile</span>
+          <h2>创建角色</h2>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <form className="profile-form embedded" action={createReaderProfileAction}>
+          <TextField isRequired name="name">
+            <Label>名称</Label>
+            <Input maxLength={40} placeholder="林向晚" />
+          </TextField>
+          <TextField name="gender">
+            <Label>性别</Label>
+            <Input maxLength={40} placeholder="可选" />
+          </TextField>
+          <TextField isRequired name="personality">
+            <Label>性格</Label>
+            <TextArea maxLength={1200} rows={3} placeholder="冷静、敏感，习惯先观察再行动。" />
+          </TextField>
+          <TextField name="avatarUrl" type="url">
+            <Label>头像 URL</Label>
+            <Input placeholder="后续可接 AI 生成形象" />
+          </TextField>
+          <TextField isRequired name="description">
+            <Label>身份背景</Label>
+            <TextArea maxLength={2000} rows={3} placeholder="现代法医，被卷入雨夜旧宅谜案。" />
+          </TextField>
+          <Button type="submit">创建角色</Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 
 function AvatarSeed({ name, src }: { name: string; src: string | null }) {
   if (src) {
-    return <img alt="" className="profile-avatar" src={src} />;
+    return (
+      <Avatar className="profile-avatar">
+        <Avatar.Image alt="" src={src} />
+        <Avatar.Fallback>{name.slice(0, 1)}</Avatar.Fallback>
+      </Avatar>
+    );
   }
 
-  return <div className="profile-avatar">{name.slice(0, 1)}</div>;
+  return (
+    <Avatar className="profile-avatar">
+      <Avatar.Fallback>{name.slice(0, 1)}</Avatar.Fallback>
+    </Avatar>
+  );
 }

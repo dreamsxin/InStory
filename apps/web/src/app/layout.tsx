@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "@heroui/react/styles";
 import "./styles.css";
+import { Providers } from "@/components/providers";
 
 export const metadata: Metadata = {
   title: "InStory",
@@ -13,7 +14,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }
