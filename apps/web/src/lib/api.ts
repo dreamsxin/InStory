@@ -347,6 +347,117 @@ export async function createTurn(params: {
   return (await response.json()) as CreateTurnResponse;
 }
 
+/** Thrown when the active model provider has no streaming support. */
+export class StreamingUnsupportedError extends Error {
+  constructor(message = "当前模型不支持流式生成。") {
+    super(message);
+    this.name = "StreamingUnsupportedError";
+  }
+}
+
+/**
+ * Advances a turn while reporting narration as it is written. Resolves with the same
+ * payload createTurn returns. Callers should fall back to createTurn on
+ * StreamingUnsupportedError, or on any failure raised before the stream completed.
+ */
+export async function streamTurn(
+  params: {
+    sessionId: string;
+    content: string;
+    inputType: "free_text" | "choice" | "read_continue";
+    choiceId?: string | null;
+  },
+  onDelta: (text: string) => void
+): Promise<CreateTurnResponse> {
+  const response = await apiFetch(`/api/sessions/${params.sessionId}/turns/stream`, {
+    method: "POST",
+    body: JSON.stringify({
+      inputType: params.inputType,
+      content: params.content,
+      choiceId: params.choiceId ?? null
+    })
+  });
+
+  if (response.status === 401) {
+    throw new UnauthenticatedError();
+  }
+
+  if (response.status === 501) {
+    throw new StreamingUnsupportedError();
+  }
+
+  if (!response.ok || !response.body) {
+    const detail = await readApiError(response);
+    throw new Error(detail ?? "推进故事失败");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let completed: CreateTurnResponse | null = null;
+  let failure: string | null = null;
+
+  const handleBlock = (block: string): void => {
+    let event: string | null = null;
+    const dataLines: string[] = [];
+
+    for (const line of block.split("\n")) {
+      if (line.startsWith("event:")) {
+        event = line.slice("event:".length).trim();
+      } else if (line.startsWith("data:")) {
+        dataLines.push(line.slice("data:".length).trim());
+      }
+    }
+
+    if (!event || dataLines.length === 0) {
+      return;
+    }
+
+    const payload = JSON.parse(dataLines.join("\n")) as unknown;
+    if (event === "narration_delta") {
+      onDelta((payload as { text: string }).text);
+    } else if (event === "complete") {
+      completed = payload as CreateTurnResponse;
+    } else if (event === "error") {
+      failure = (payload as { error?: string }).error ?? "生成失败";
+    }
+  };
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // Events are separated by a blank line; the tail may be a partial event.
+      const blocks = buffer.split("\n\n");
+      buffer = blocks.pop() ?? "";
+      for (const block of blocks) {
+        handleBlock(block);
+      }
+    }
+
+    if (buffer.trim()) {
+      handleBlock(buffer);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (failure) {
+    throw new Error(failure);
+  }
+
+  if (!completed) {
+    throw new Error("生成中断，未收到完整结果");
+  }
+
+  return completed;
+}
+
 export async function rewindSession(sessionId: string, timelineNodeId: string): Promise<StorySession> {
   const response = await apiFetch(`/api/sessions/${sessionId}/rewind`, {
     method: "POST",

@@ -2,7 +2,7 @@
 
 import { Button, Card, Chip, Label, TextArea, TextField } from "@heroui/react";
 import type { SessionTurn, StorySession, WorldState } from "@instory/shared";
-import { createTurn, resetSession, rewindSession } from "@/lib/api";
+import { createTurn, resetSession, rewindSession, streamTurn, UnauthenticatedError } from "@/lib/api";
 import { BrandMark } from "@/components/brand-mark";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -15,6 +15,7 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
   const [activePanel, setActivePanel] = useState<ReaderPanel>(null);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
+  const [streamingNarration, setStreamingNarration] = useState("");
   const [error, setError] = useState<string | null>(null);
   const latestTurn = session.turns.at(-1);
 
@@ -25,14 +26,29 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
 
     setLoading(true);
     setError(null);
+    setStreamingNarration("");
 
     try {
-      const response = await createTurn({
-        sessionId: session.id,
-        content,
-        inputType,
-        choiceId
-      });
+      // Streaming is preferred so the reader sees text as it is written; the plain
+      // endpoint stays as the fallback when the provider or transport cannot stream.
+      let response;
+      try {
+        response = await streamTurn(
+          { sessionId: session.id, content, inputType, choiceId },
+          (delta) => setStreamingNarration((current) => current + delta)
+        );
+      } catch (streamError) {
+        if (streamError instanceof UnauthenticatedError) {
+          throw streamError;
+        }
+        setStreamingNarration("");
+        response = await createTurn({
+          sessionId: session.id,
+          content,
+          inputType,
+          choiceId
+        });
+      }
 
       setSession((current) => ({
         ...current,
@@ -46,6 +62,7 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
     } catch (err) {
       setError(err instanceof Error ? err.message : "提交失败");
     } finally {
+      setStreamingNarration("");
       setLoading(false);
     }
   }
@@ -68,6 +85,7 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
             {session.turns.map((turn) => (
               <TurnView key={turn.id} turn={turn} />
             ))}
+            {loading ? <StreamingTurnView narration={streamingNarration} /> : null}
           </div>
         </div>
 
@@ -187,6 +205,28 @@ function TurnView({ turn }: { turn: SessionTurn }) {
           <strong>{dialogue.speaker}</strong>：{dialogue.text}
         </p>
       ))}
+    </article>
+  );
+}
+
+/**
+ * The turn being written right now. Dialogues and choices are omitted because they
+ * are only trustworthy once the whole result has arrived.
+ */
+function StreamingTurnView({ narration }: { narration: string }) {
+  const paragraphs = narration.split(/\n{2,}/).filter((paragraph) => paragraph.trim());
+
+  return (
+    <article className="turn turn-streaming w-full min-w-0" aria-busy="true" aria-live="polite">
+      {paragraphs.length > 0 ? (
+        paragraphs.map((paragraph, index) => (
+          <p className="reader-paragraph" key={`streaming_p_${index}`}>
+            {paragraph}
+          </p>
+        ))
+      ) : (
+        <p className="reader-paragraph muted">正在续写…</p>
+      )}
     </article>
   );
 }
