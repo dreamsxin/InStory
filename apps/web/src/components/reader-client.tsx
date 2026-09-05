@@ -1,10 +1,17 @@
 "use client";
 
 import { Button, Card, Chip, Label, TextArea, TextField } from "@heroui/react";
-import type { SessionTurn, StorySession, WorldState } from "@instory/shared";
-import { createTurn, resetSession, rewindSession, streamTurn, UnauthenticatedError } from "@/lib/api";
+import type { SessionTurn, StorySession, TurnQuota, WorldState } from "@instory/shared";
+import {
+  createTurn,
+  QuotaExceededError,
+  resetSession,
+  rewindSession,
+  streamTurn,
+  UnauthenticatedError
+} from "@/lib/api";
 import { BrandMark } from "@/components/brand-mark";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type ReaderPanel = "status" | "memory" | "action" | null;
@@ -16,8 +23,25 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [streamingNarration, setStreamingNarration] = useState("");
+  const [quota, setQuota] = useState<TurnQuota | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const latestTurn = session.turns.at(-1);
+
+  // Follow the text while it is being written; text appearing below the fold is
+  // text the reader never sees.
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container || !loading) {
+      return;
+    }
+    container.scrollTop = container.scrollHeight;
+  }, [streamingNarration, loading]);
+
+  function stopGeneration() {
+    abortRef.current?.abort();
+  }
 
   async function submit(content: string, inputType: "free_text" | "choice" | "read_continue", choiceId?: string) {
     if (!content.trim()) {
@@ -28,17 +52,24 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
     setError(null);
     setStreamingNarration("");
 
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
       // Streaming is preferred so the reader sees text as it is written; the plain
       // endpoint stays as the fallback when the provider or transport cannot stream.
       let response;
       try {
         response = await streamTurn(
-          { sessionId: session.id, content, inputType, choiceId },
+          { sessionId: session.id, content, inputType, choiceId, signal: controller.signal },
           (delta) => setStreamingNarration((current) => current + delta)
         );
       } catch (streamError) {
-        if (streamError instanceof UnauthenticatedError) {
+        if (
+          streamError instanceof UnauthenticatedError ||
+          streamError instanceof QuotaExceededError ||
+          controller.signal.aborted
+        ) {
           throw streamError;
         }
         setStreamingNarration("");
@@ -57,11 +88,17 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
         timeline: response.timelineNode ? [...current.timeline, response.timelineNode] : current.timeline,
         updatedAt: new Date().toISOString()
       }));
+      setQuota(response.quota);
       setText("");
       setActivePanel(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "提交失败");
+      if (controller.signal.aborted) {
+        setError("已停止这次生成。");
+      } else {
+        setError(err instanceof Error ? err.message : "提交失败");
+      }
     } finally {
+      abortRef.current = null;
       setStreamingNarration("");
       setLoading(false);
     }
@@ -78,14 +115,24 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
               <p className="muted">身份：{session.readerRole.name}</p>
             </div>
           </div>
+          {quota ? (
+            <Chip className="quota-chip" aria-label={`今日剩余推进 ${quota.remainingTurnsToday} 次`}>
+              今日剩余 {quota.remainingTurnsToday}/{quota.dailyLimit}
+            </Chip>
+          ) : null}
         </div>
 
-        <div className="reader-scroll w-full min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <div
+          className="reader-scroll w-full min-w-0 flex-1 overflow-x-hidden overflow-y-auto"
+          ref={scrollRef}
+        >
           <div className="turns reading-surface w-full min-w-0 sm:max-w-[760px]">
             {session.turns.map((turn) => (
               <TurnView key={turn.id} turn={turn} />
             ))}
-            {loading ? <StreamingTurnView narration={streamingNarration} /> : null}
+            {loading ? (
+              <StreamingTurnView narration={streamingNarration} onStop={stopGeneration} />
+            ) : null}
           </div>
         </div>
 
@@ -213,7 +260,7 @@ function TurnView({ turn }: { turn: SessionTurn }) {
  * The turn being written right now. Dialogues and choices are omitted because they
  * are only trustworthy once the whole result has arrived.
  */
-function StreamingTurnView({ narration }: { narration: string }) {
+function StreamingTurnView({ narration, onStop }: { narration: string; onStop: () => void }) {
   const paragraphs = narration.split(/\n{2,}/).filter((paragraph) => paragraph.trim());
 
   return (
@@ -227,6 +274,11 @@ function StreamingTurnView({ narration }: { narration: string }) {
       ) : (
         <p className="reader-paragraph muted">正在续写…</p>
       )}
+      <div className="streaming-controls">
+        <button className="streaming-stop" type="button" onClick={onStop}>
+          停止生成
+        </button>
+      </div>
     </article>
   );
 }

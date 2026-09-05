@@ -355,6 +355,14 @@ export class StreamingUnsupportedError extends Error {
   }
 }
 
+/** Thrown when the reader has spent today's generation quota. */
+export class QuotaExceededError extends Error {
+  constructor(message = "今日推进次数已用完，请明天再来。") {
+    super(message);
+    this.name = "QuotaExceededError";
+  }
+}
+
 /**
  * Advances a turn while reporting narration as it is written. Resolves with the same
  * payload createTurn returns. Callers should fall back to createTurn on
@@ -366,11 +374,13 @@ export async function streamTurn(
     content: string;
     inputType: "free_text" | "choice" | "read_continue";
     choiceId?: string | null;
+    signal?: AbortSignal;
   },
   onDelta: (text: string) => void
 ): Promise<CreateTurnResponse> {
   const response = await apiFetch(`/api/sessions/${params.sessionId}/turns/stream`, {
     method: "POST",
+    signal: params.signal,
     body: JSON.stringify({
       inputType: params.inputType,
       content: params.content,
@@ -384,6 +394,10 @@ export async function streamTurn(
 
   if (response.status === 501) {
     throw new StreamingUnsupportedError();
+  }
+
+  if (response.status === 429) {
+    throw new QuotaExceededError((await readApiError(response)) ?? undefined);
   }
 
   if (!response.ok || !response.body) {
@@ -562,6 +576,28 @@ async function readApiError(response: Response): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+export interface AdminUsageSummary {
+  today: {
+    date: string;
+    generations: number;
+    successes: number;
+    failures: number;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    averageLatencyMs: number;
+    byModel: Array<{ provider: string; model: string | null; generations: number; totalTokens: number }>;
+  };
+  dailyTurnQuota: number;
+  pricing: { inputPerMillion: number; outputPerMillion: number };
+  /** Null when no per-token price is configured. */
+  estimatedCost: number | null;
+}
+
+export async function getAdminUsage(): Promise<AdminUsageSummary> {
+  return adminGet<AdminUsageSummary>("/api/admin/usage");
 }
 
 export async function getAdminStatus(): Promise<AdminStatus> {

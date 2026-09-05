@@ -4,7 +4,8 @@ import {
   getAdminModerationEvents,
   getAdminSessions,
   getAdminStatus,
-  getAdminStories
+  getAdminStories,
+  getAdminUsage
 } from "@/lib/api";
 import { ModelConfigForm, StorySummaryForm } from "@/components/admin-console-forms";
 import { BrandMark } from "@/components/brand-mark";
@@ -16,12 +17,13 @@ export default async function AdminPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const query = await searchParams;
-  const [status, modelConfig, stories, sessions, moderationEvents] = await Promise.all([
+  const [status, modelConfig, stories, sessions, moderationEvents, usage] = await Promise.all([
     getAdminStatus(),
     getAdminModelConfig(),
     getAdminStories(),
     getAdminSessions(),
-    getAdminModerationEvents()
+    getAdminModerationEvents(),
+    getAdminUsage()
   ]);
 
   return (
@@ -36,6 +38,7 @@ export default async function AdminPage({
         </div>
         <nav className="app-nav" aria-label="Admin navigation">
           <a href="#model">模型</a>
+          <a href="#usage">用量</a>
           <a href="#stories">故事</a>
           <a href="#sessions">会话</a>
           <Link href="/">客户端</Link>
@@ -61,6 +64,65 @@ export default async function AdminPage({
         <Metric label="故事数" value={status.counts.stories.toString()} />
         <Metric label="会话数" value={status.counts.sessions.toString()} />
       </section>
+
+      <section className="admin-usage" id="usage">
+        <div className="admin-usage-head">
+          <h2>今日生成用量</h2>
+          <span className="muted">{usage.today.date}（UTC）</span>
+        </div>
+        <div className="admin-kpis">
+          <Metric label="生成次数" value={usage.today.generations.toString()} />
+          <Metric
+            label="成功率"
+            value={
+              usage.today.generations > 0
+                ? `${Math.round((usage.today.successes / usage.today.generations) * 100)}%`
+                : "—"
+            }
+          />
+          <Metric label="失败次数" value={usage.today.failures.toString()} />
+          <Metric label="Token 合计" value={usage.today.totalTokens.toLocaleString()} />
+          <Metric label="平均耗时" value={`${(usage.today.averageLatencyMs / 1000).toFixed(1)}s`} />
+          <Metric
+            label="预估成本"
+            value={usage.estimatedCost === null ? "未配置单价" : `¥${usage.estimatedCost.toFixed(4)}`}
+          />
+        </div>
+        <p className="muted admin-usage-note">
+          输入 {usage.today.promptTokens.toLocaleString()} / 输出 {usage.today.completionTokens.toLocaleString()}{" "}
+          token，每位读者每日限 {usage.dailyTurnQuota} 次推进。失败的尝试会被记录但不占用配额。
+          {usage.estimatedCost === null
+            ? " 配置 LLM_PRICE_INPUT_PER_MTOK 与 LLM_PRICE_OUTPUT_PER_MTOK 后可显示成本。"
+            : null}
+        </p>
+        {usage.today.byModel.length > 0 ? (
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Provider</th>
+                  <th>模型</th>
+                  <th>次数</th>
+                  <th>Token</th>
+                </tr>
+              </thead>
+              <tbody>
+                {usage.today.byModel.map((row) => (
+                  <tr key={`${row.provider}_${row.model ?? "default"}`}>
+                    <td>{row.provider}</td>
+                    <td>{row.model ?? "—"}</td>
+                    <td>{row.generations}</td>
+                    <td>{row.totalTokens.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="muted">今天还没有生成记录。</p>
+        )}
+      </section>
+
 
       <section className="admin-grid">
         <Card className="panel" id="model">

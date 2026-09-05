@@ -127,6 +127,39 @@ describe("streamTurn", () => {
     ).rejects.toBeInstanceOf(UnauthenticatedError);
   });
 
+  it("signals an exhausted quota separately, so it is not retried as a fallback", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: "今日推进次数已用完，请明天再来。" }), {
+        status: 429,
+        headers: { "content-type": "application/json" }
+      })
+    );
+
+    const { streamTurn, QuotaExceededError } = await import("./api.js");
+
+    const attempt = streamTurn(
+      { sessionId: "sess_1", content: "继续阅读", inputType: "read_continue" },
+      () => {}
+    );
+
+    await expect(attempt).rejects.toBeInstanceOf(QuotaExceededError);
+    await expect(attempt).rejects.toThrow("今日推进次数已用完");
+  });
+
+  it("passes the abort signal through so a generation can be stopped", async () => {
+    respondWithChunks([sseEvent("complete", completePayload)]);
+    const controller = new AbortController();
+
+    const { streamTurn } = await import("./api.js");
+    await streamTurn(
+      { sessionId: "sess_1", content: "继续阅读", inputType: "read_continue", signal: controller.signal },
+      () => {}
+    );
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.signal).toBe(controller.signal);
+  });
+
   it("posts to the streaming endpoint with the turn payload", async () => {
     respondWithChunks([sseEvent("complete", completePayload)]);
 

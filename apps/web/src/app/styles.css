@@ -1940,3 +1940,54 @@ a {
     animation: none;
   }
 }
+
+.streaming-controls {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 10px;
+}
+
+.streaming-stop {
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.streaming-stop:hover {
+  border-color: currentColor;
+}
+
+.quota-chip {
+  margin-left: auto;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* Admin usage */
+
+.admin-usage {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 8px 0 4px;
+}
+
+.admin-usage-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.admin-usage-head h2 {
+  margin: 0;
+}
+
+.admin-usage-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+}
