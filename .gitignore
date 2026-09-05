@@ -5,6 +5,8 @@ coverage/
 .turbo/
 /data/
 /apps/server/data/
+test-results/
+playwright-report/
 .env
 .env.local
 npm-debug.log*

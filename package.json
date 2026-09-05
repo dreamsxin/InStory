@@ -8,8 +8,10 @@
     "dev:server": "npm run dev -w apps/server",
     "dev:web": "npm run dev -w apps/web",
     "build": "npm run build --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present && npm run typecheck:e2e",
+    "typecheck:e2e": "tsc -p tsconfig.e2e.json",
     "test": "npm run test --workspaces --if-present",
+    "test:e2e": "playwright test",
     "verify:llm": "tsx scripts/verify-llm-provider.ts"
   },
   "workspaces": [
@@ -17,6 +19,7 @@
     "packages/*"
   ],
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/node": "^24.10.0",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
