@@ -45,15 +45,17 @@ export class ModelRuntime {
 
   async verify(): Promise<ModelVerificationResult> {
     const startedAt = Date.now();
-    const result = await this.provider.generateNarrative({
+    const generation = await this.provider.generateNarrative({
       session: createVerificationSession(),
       userInput: "我压低声音问陆清河：外面是谁？"
     });
-    const parsed = narrativeResultSchema.safeParse(result);
+    const parsed = narrativeResultSchema.safeParse(generation.result);
 
     if (!parsed.success) {
       throw new Error(`Model output failed schema validation: ${parsed.error.message}`);
     }
+
+    const result = parsed.data;
 
     return {
       ok: true,
@@ -63,6 +65,7 @@ export class ModelRuntime {
       narrationLength: result.narration.length,
       choices: result.choices.length,
       memoryEvents: result.memoryEvents.length,
+      totalTokens: generation.usage?.totalTokens ?? null,
       checkedAt: new Date().toISOString()
     };
   }
@@ -88,6 +91,8 @@ export interface ModelVerificationResult {
   narrationLength: number;
   choices: number;
   memoryEvents: number;
+  /** Null when the provider reported no token accounting. */
+  totalTokens: number | null;
   checkedAt: string;
 }
 

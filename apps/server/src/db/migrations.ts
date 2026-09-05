@@ -212,6 +212,38 @@ export const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_reader_sessions_user_story
       ON reader_sessions(user_id, story_id, updated_at DESC);
     `
+  },
+  {
+    id: 6,
+    name: "add_generation_usage",
+    up: `
+      -- One row per generation attempt, so token spend and failure rate are visible
+      -- instead of being invisible side effects of a request.
+      CREATE TABLE IF NOT EXISTS generation_usage (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        session_id TEXT,
+        story_id TEXT,
+        provider TEXT NOT NULL,
+        model TEXT,
+        intent TEXT NOT NULL,
+        status TEXT NOT NULL,
+        prompt_tokens INTEGER NOT NULL DEFAULT 0,
+        completion_tokens INTEGER NOT NULL DEFAULT 0,
+        total_tokens INTEGER NOT NULL DEFAULT 0,
+        latency_ms INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        -- Stored as YYYY-MM-DD so daily rollups are an index lookup rather than a
+        -- scan with date arithmetic.
+        created_date TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_generation_usage_user_date
+      ON generation_usage(user_id, created_date);
+
+      CREATE INDEX IF NOT EXISTS idx_generation_usage_date
+      ON generation_usage(created_date);
+    `
   }
 ];
 

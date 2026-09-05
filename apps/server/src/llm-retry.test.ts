@@ -98,7 +98,7 @@ describe("LLM request retries", () => {
       .mockResolvedValueOnce(errorResponse(500))
       .mockResolvedValueOnce(completionResponse(validNarrative));
 
-    const result = await createProvider().generateNarrative(createInput());
+    const { result } = await createProvider().generateNarrative(createInput());
 
     expect(result.narration).toBe(validNarrative.narration);
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -133,7 +133,7 @@ describe("LLM request retries", () => {
       .mockResolvedValueOnce(completionResponse({ narration: "缺少其它字段" }))
       .mockResolvedValueOnce(completionResponse(validNarrative));
 
-    const result = await createProvider().generateNarrative(createInput());
+    const { result } = await createProvider().generateNarrative(createInput());
 
     expect(result.narration).toBe(validNarrative.narration);
     expect(fetchMock).toHaveBeenCalledTimes(2);

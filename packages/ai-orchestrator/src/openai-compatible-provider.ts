@@ -1,6 +1,11 @@
 import { narrativeResultSchema, type NarrativeResult } from "@instory/shared";
-import { NarrationExtractor, SseContentReader } from "./narration-stream.js";
-import type { GenerateNarrativeInput, LLMProvider, NarrativeStreamEvent } from "./provider.js";
+import { NarrationExtractor, readUsage, SseContentReader } from "./narration-stream.js";
+import type {
+  GenerateNarrativeInput,
+  LLMProvider,
+  NarrativeGeneration,
+  NarrativeStreamEvent
+} from "./provider.js";
 
 export interface OpenAICompatibleProviderOptions {
   baseUrl: string;
@@ -35,6 +40,7 @@ interface ChatCompletionResponse {
       content?: string;
     };
   }>;
+  usage?: unknown;
 }
 
 export class OpenAICompatibleNarrativeProvider implements LLMProvider {
@@ -56,7 +62,7 @@ export class OpenAICompatibleNarrativeProvider implements LLMProvider {
     this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   }
 
-  async generateNarrative(input: GenerateNarrativeInput): Promise<NarrativeResult> {
+  async generateNarrative(input: GenerateNarrativeInput): Promise<NarrativeGeneration> {
     return this.withRetries(async () => {
       const response = await this.startRequest(input, false);
 
@@ -66,7 +72,10 @@ export class OpenAICompatibleNarrativeProvider implements LLMProvider {
         throw new LlmRequestError("LLM response did not include message content", true);
       }
 
-      return validateNarrative(content);
+      return {
+        result: validateNarrative(content),
+        usage: readUsage(payload.usage) ?? undefined
+      };
     });
   }
 
@@ -139,7 +148,11 @@ export class OpenAICompatibleNarrativeProvider implements LLMProvider {
       throw new LlmRequestError("LLM streaming response did not include message content", true);
     }
 
-    yield { type: "complete", result: validateNarrative(narration.raw) };
+    yield {
+      type: "complete",
+      result: validateNarrative(narration.raw),
+      usage: sse.usage ?? undefined
+    };
   }
 
   private async withRetries<T>(attemptFn: () => Promise<T>): Promise<T> {
@@ -215,7 +228,9 @@ export class OpenAICompatibleNarrativeProvider implements LLMProvider {
       model: this.model,
       temperature: 0.8,
       max_tokens: estimateMaxTokens(input.lengthGuide),
-      ...(stream ? { stream: true } : {}),
+      // include_usage adds a final chunk carrying token counts, which is the only way
+      // to get accounting out of a streamed completion.
+      ...(stream ? { stream: true, stream_options: { include_usage: true } } : {}),
       response_format: {
         type: "json_object"
       },

@@ -10,6 +10,7 @@ import { ModelConfigStore } from "./db/model-config-store.js";
 import { ReaderProfileStore } from "./db/reader-profile-store.js";
 import { SessionStore } from "./db/session-store.js";
 import { UserStore } from "./db/user-store.js";
+import { UsageStore } from "./db/usage-store.js";
 import { ModelRuntime } from "./model-runtime.js";
 
 type TestApp = Awaited<ReturnType<typeof buildApp>>;
@@ -27,8 +28,9 @@ beforeEach(async () => {
     sessionStore: new SessionStore(database),
     readerProfileStore: new ReaderProfileStore(database),
     storyCatalog: new StoryCatalog(database),
-    userStore,
-    modelRuntime: new ModelRuntime(new ModelConfigStore(database), {
+      userStore,
+      usageStore: new UsageStore(database),
+      modelRuntime: new ModelRuntime(new ModelConfigStore(database), {
       provider: "mock",
       updatedAt: "2026-05-20T00:00:00.000Z"
     }),
@@ -410,6 +412,7 @@ describe("server API", () => {
       readerProfileStore: new ReaderProfileStore(database),
       storyCatalog: new StoryCatalog(database),
       userStore,
+      usageStore: new UsageStore(database),
       modelRuntime: new ModelRuntime(new ModelConfigStore(database), {
         provider: "mock",
         updatedAt: "2026-05-20T00:00:00.000Z"
@@ -893,6 +896,129 @@ function parseSseEvents(body: string): SseEvent[] {
   return events;
 }
 
+describe("generation quota and usage", () => {
+  let quotaApp: TestApp;
+  let quotaDatabase: AppDatabase;
+  let quotaUsageStore: UsageStore;
+  let quotaTempDir: string;
+
+  beforeEach(async () => {
+    quotaTempDir = mkdtempSync(join(tmpdir(), "instory-quota-"));
+    quotaDatabase = new AppDatabase(join(quotaTempDir, "quota.sqlite"));
+    quotaUsageStore = new UsageStore(quotaDatabase);
+    quotaApp = await buildApp({
+      sessionStore: new SessionStore(quotaDatabase),
+      readerProfileStore: new ReaderProfileStore(quotaDatabase),
+      storyCatalog: new StoryCatalog(quotaDatabase),
+      userStore: new UserStore(quotaDatabase),
+      usageStore: quotaUsageStore,
+      modelRuntime: new ModelRuntime(new ModelConfigStore(quotaDatabase), {
+        provider: "mock",
+        updatedAt: "2026-05-20T00:00:00.000Z"
+      }),
+      adminToken: "secret",
+      dailyTurnQuota: 2,
+      pricing: { inputPerMillion: 1, outputPerMillion: 2 },
+      allowLegacyAnonymousUser: true,
+      logger: false
+    });
+  });
+
+  afterEach(async () => {
+    await quotaApp.close();
+    quotaDatabase.close();
+    rmSync(quotaTempDir, { recursive: true, force: true });
+  });
+
+  async function startSession(): Promise<string> {
+    const response = await quotaApp.inject({
+      method: "POST",
+      url: "/api/stories/rain-mansion/sessions",
+      payload: { entryMode: "existing_character", characterId: "lu_qinghe" }
+    });
+    return response.json<CreateSessionResponse>().session.id;
+  }
+
+  async function advance(sessionId: string) {
+    return quotaApp.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/turns`,
+      payload: { inputType: "read_continue", content: "继续阅读" }
+    });
+  }
+
+  it("counts down the quota and refuses once it is spent", async () => {
+    const sessionId = await startSession();
+
+    const first = await advance(sessionId);
+    expect(first.statusCode).toBe(200);
+    expect(first.json<CreateTurnResponse>().quota).toEqual({
+      dailyLimit: 2,
+      usedToday: 1,
+      remainingTurnsToday: 1
+    });
+
+    const second = await advance(sessionId);
+    expect(second.json<CreateTurnResponse>().quota.remainingTurnsToday).toBe(0);
+
+    const third = await advance(sessionId);
+    expect(third.statusCode).toBe(429);
+    expect(third.json<{ quota: { remainingTurnsToday: number } }>().quota.remainingTurnsToday).toBe(0);
+  });
+
+  it("applies the same quota to the streaming endpoint", async () => {
+    const sessionId = await startSession();
+
+    await advance(sessionId);
+    await advance(sessionId);
+
+    const streamed = await quotaApp.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/turns/stream`,
+      payload: { inputType: "read_continue", content: "继续阅读" }
+    });
+
+    // Refused before the stream opens, so the client gets JSON rather than SSE.
+    expect(streamed.statusCode).toBe(429);
+    expect(streamed.headers["content-type"]).toContain("application/json");
+  });
+
+  it("records token usage for each generation", async () => {
+    const sessionId = await startSession();
+    await advance(sessionId);
+
+    const summary = quotaUsageStore.summarizeDay();
+
+    expect(summary.generations).toBe(1);
+    expect(summary.successes).toBe(1);
+    expect(summary.totalTokens).toBeGreaterThan(0);
+    expect(summary.byModel[0]?.provider).toBe("mock");
+  });
+
+  it("exposes today's spend and derived cost to admins", async () => {
+    const sessionId = await startSession();
+    await advance(sessionId);
+
+    const response = await quotaApp.inject({
+      method: "GET",
+      url: "/api/admin/usage",
+      headers: { authorization: "Bearer secret" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json<{
+      today: { generations: number; totalTokens: number };
+      dailyTurnQuota: number;
+      estimatedCost: number | null;
+    }>();
+
+    expect(body.today.generations).toBe(1);
+    expect(body.today.totalTokens).toBeGreaterThan(0);
+    expect(body.dailyTurnQuota).toBe(2);
+    expect(body.estimatedCost).toBeGreaterThan(0);
+  });
+});
+
 describe("authentication", () => {
   let authApp: TestApp;
   let authDatabase: AppDatabase;
@@ -906,6 +1032,7 @@ describe("authentication", () => {
       readerProfileStore: new ReaderProfileStore(authDatabase),
       storyCatalog: new StoryCatalog(authDatabase),
       userStore: new UserStore(authDatabase),
+      usageStore: new UsageStore(authDatabase),
       modelRuntime: new ModelRuntime(new ModelConfigStore(authDatabase), {
         provider: "mock",
         updatedAt: "2026-05-20T00:00:00.000Z"
@@ -1163,6 +1290,7 @@ describe("authentication", () => {
       readerProfileStore: new ReaderProfileStore(authDatabase),
       storyCatalog: new StoryCatalog(authDatabase),
       userStore: adminUserStore,
+      usageStore: new UsageStore(authDatabase),
       modelRuntime: new ModelRuntime(new ModelConfigStore(authDatabase), {
         provider: "mock",
         updatedAt: "2026-05-20T00:00:00.000Z"

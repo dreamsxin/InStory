@@ -1,4 +1,10 @@
-import type { NarrativeResult, SegmentLengthPreset, StoryDetail, StorySession } from "@instory/shared";
+import type {
+  GenerationUsage,
+  NarrativeResult,
+  SegmentLengthPreset,
+  StoryDetail,
+  StorySession
+} from "@instory/shared";
 
 export interface NarrativeLengthGuide {
   preset: SegmentLengthPreset;
@@ -14,6 +20,12 @@ export interface GenerateNarrativeInput {
   lengthGuide?: NarrativeLengthGuide;
 }
 
+/** A validated result plus whatever token accounting the provider reported. */
+export interface NarrativeGeneration {
+  result: NarrativeResult;
+  usage?: GenerationUsage;
+}
+
 /** Emitted while a narration is still being generated. */
 export interface NarrationDeltaEvent {
   type: "narration_delta";
@@ -24,12 +36,13 @@ export interface NarrationDeltaEvent {
 export interface NarrativeCompleteEvent {
   type: "complete";
   result: NarrativeResult;
+  usage?: GenerationUsage;
 }
 
 export type NarrativeStreamEvent = NarrationDeltaEvent | NarrativeCompleteEvent;
 
 export interface LLMProvider {
-  generateNarrative(input: GenerateNarrativeInput): Promise<NarrativeResult>;
+  generateNarrative(input: GenerateNarrativeInput): Promise<NarrativeGeneration>;
 
   /**
    * Optional incremental variant. Callers must fall back to generateNarrative when a

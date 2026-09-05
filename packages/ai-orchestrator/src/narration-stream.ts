@@ -1,3 +1,5 @@
+import type { GenerationUsage } from "@instory/shared";
+
 /**
  * The model returns one JSON object, so the raw stream cannot be shown to the reader
  * as-is. This extractor pulls the `narration` string out of a JSON document that is
@@ -141,6 +143,7 @@ function decodeEscape(raw: string, index: number): { text: string; length: numbe
 export class SseContentReader {
   private buffer = "";
   private done = false;
+  private usageValue: GenerationUsage | null = null;
 
   push(chunk: string): string[] {
     this.buffer += chunk;
@@ -172,6 +175,14 @@ export class SseContentReader {
     return this.done;
   }
 
+  /**
+   * Token accounting from the final chunk. Providers only send it when the request
+   * asked for it, and some omit it entirely, so this stays null in that case.
+   */
+  get usage(): GenerationUsage | null {
+    return this.usageValue;
+  }
+
   private readLine(line: string): string | null {
     const trimmed = line.trim();
     if (!trimmed.startsWith("data:")) {
@@ -187,7 +198,14 @@ export class SseContentReader {
     try {
       const parsed = JSON.parse(payload) as {
         choices?: Array<{ delta?: { content?: string }; message?: { content?: string } }>;
+        usage?: unknown;
       };
+
+      const usage = readUsage(parsed.usage);
+      if (usage) {
+        this.usageValue = usage;
+      }
+
       const choice = parsed.choices?.[0];
       return choice?.delta?.content ?? choice?.message?.content ?? null;
     } catch {
@@ -195,4 +213,33 @@ export class SseContentReader {
       return null;
     }
   }
+}
+
+/** Normalises the snake_case token fields providers report. */
+export function readUsage(value: unknown): GenerationUsage | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const promptTokens = toCount(record.prompt_tokens ?? record.promptTokens);
+  const completionTokens = toCount(record.completion_tokens ?? record.completionTokens);
+  const totalTokens = toCount(record.total_tokens ?? record.totalTokens);
+
+  if (promptTokens === null && completionTokens === null && totalTokens === null) {
+    return null;
+  }
+
+  const prompt = promptTokens ?? 0;
+  const completion = completionTokens ?? 0;
+
+  return {
+    promptTokens: prompt,
+    completionTokens: completion,
+    totalTokens: totalTokens ?? prompt + completion
+  };
+}
+
+function toCount(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
 }

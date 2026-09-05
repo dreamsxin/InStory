@@ -1,5 +1,19 @@
 export type UserRole = "reader" | "admin";
 
+/** Token accounting for one generation attempt. Absent when the provider omits it. */
+export interface GenerationUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+/** What the reader may still spend today. */
+export interface TurnQuota {
+  remainingTurnsToday: number;
+  dailyLimit: number;
+  usedToday: number;
+}
+
 /** The authenticated account, as exposed to clients. Never carries credentials. */
 export interface AuthUser {
   id: string;
@@ -243,7 +257,5 @@ export interface CreateTurnResponse {
   turn: SessionTurn;
   state: WorldState;
   timelineNode: TimelineNode | null;
-  quota: {
-    remainingTurnsToday: number;
-  };
+  quota: TurnQuota;
 }

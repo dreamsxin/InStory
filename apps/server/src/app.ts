@@ -27,12 +27,14 @@ import type {
   StorySession,
   TimelineNode,
   TurnInputType,
+  TurnQuota,
   WorldState
 } from "@instory/shared";
 import type { StoryCatalog } from "./data/story-catalog.js";
 import type { ReaderProfileStore } from "./db/reader-profile-store.js";
 import type { SessionOverview, SessionStore } from "./db/session-store.js";
 import { LEGACY_USER_ID, SESSION_TTL_MS, type UserRecord, type UserStore } from "./db/user-store.js";
+import { estimateCost, type TokenPricing, type UsageStore } from "./db/usage-store.js";
 import type { ModelRuntime } from "./model-runtime.js";
 
 const SESSION_COOKIE_NAME = "instory_session";
@@ -120,6 +122,7 @@ function commitTurn(params: {
   input: string;
   result: NarrativeResult;
   sessionStore: SessionStore;
+  quota: TurnQuota;
 }): CreateTurnResponse {
   const { session, sessionId, result } = params;
   const nextState = applyStateDelta(session.state, result.stateDelta);
@@ -165,9 +168,18 @@ function commitTurn(params: {
     turn,
     state: nextState,
     timelineNode,
-    quota: {
-      remainingTurnsToday: Math.max(0, 20 - session.turns.length)
-    }
+    quota: params.quota
+  };
+}
+
+/** Turn quota is counted from recorded successful generations, not from turn ids. */
+function resolveQuota(usageStore: UsageStore, userId: string, dailyLimit: number): TurnQuota {
+  const usedToday = usageStore.countSuccessfulToday(userId);
+
+  return {
+    dailyLimit,
+    usedToday,
+    remainingTurnsToday: Math.max(0, dailyLimit - usedToday)
   };
 }
 
@@ -246,8 +258,13 @@ export interface BuildAppOptions {
   readerProfileStore: ReaderProfileStore;
   storyCatalog: StoryCatalog;
   userStore: UserStore;
+  usageStore: UsageStore;
   modelRuntime: ModelRuntime;
   adminToken?: string;
+  /** Successful generations allowed per reader per UTC day. Defaults to 20. */
+  dailyTurnQuota?: number;
+  /** Per-million-token prices used to derive cost. Zero means "unknown". */
+  pricing?: TokenPricing;
   /**
    * When true, unauthenticated requests are treated as the seeded legacy user so
    * the current web client keeps working while sign-in is being built. main.ts
@@ -468,6 +485,22 @@ export async function buildApp(options: BuildAppOptions) {
   app.get("/api/admin/moderation/events", async () => ({
     events: []
   }));
+
+  /**
+   * Today's generation spend. Cost is null when no per-token price is configured,
+   * so the console can say "unknown" instead of showing a misleading zero.
+   */
+  app.get("/api/admin/usage", async () => {
+    const pricing = options.pricing ?? { inputPerMillion: 0, outputPerMillion: 0 };
+    const today = options.usageStore.summarizeDay();
+
+    return {
+      today,
+      dailyTurnQuota: options.dailyTurnQuota ?? 20,
+      pricing,
+      estimatedCost: estimateCost(today, pricing)
+    };
+  });
 
   app.get("/api/stories", async () => ({
     stories: options.storyCatalog.listPublicStories()
@@ -751,25 +784,62 @@ export async function buildApp(options: BuildAppOptions) {
       return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
     }
 
+    const dailyTurnQuota = options.dailyTurnQuota ?? 20;
+
+    const quotaBefore = resolveQuota(options.usageStore, request.authUser.id, dailyTurnQuota);
+    if (quotaBefore.remainingTurnsToday <= 0) {
+      return reply.code(429).send({ error: "今日推进次数已用完，请明天再来。", quota: quotaBefore });
+    }
+
     const storyDetail = options.storyCatalog.findStory(session.storyId) ?? undefined;
-    const result = await options.modelRuntime.getProvider().generateNarrative({
-      session,
-      story: storyDetail,
-      userInput: parsed.data.content,
-      intent: parsed.data.inputType === "read_continue" ? "read_segment" : "reader_action",
-      lengthGuide: createLengthGuide(storyDetail)
+    const intent = parsed.data.inputType === "read_continue" ? "read_segment" : "reader_action";
+    const modelConfig = options.modelRuntime.getPublicConfig();
+    const startedAt = Date.now();
+
+    let generation;
+    try {
+      generation = await options.modelRuntime.getProvider().generateNarrative({
+        session,
+        story: storyDetail,
+        userInput: parsed.data.content,
+        intent,
+        lengthGuide: createLengthGuide(storyDetail)
+      });
+    } catch (error) {
+      options.usageStore.record({
+        userId: request.authUser.id,
+        sessionId,
+        storyId: session.storyId,
+        provider: modelConfig.provider,
+        model: modelConfig.model,
+        intent,
+        status: "error",
+        latencyMs: Date.now() - startedAt
+      });
+      throw error;
+    }
+
+    options.usageStore.record({
+      userId: request.authUser.id,
+      sessionId,
+      storyId: session.storyId,
+      provider: modelConfig.provider,
+      model: modelConfig.model,
+      intent,
+      status: "success",
+      usage: generation.usage,
+      latencyMs: Date.now() - startedAt
     });
 
-    const response = commitTurn({
+    return commitTurn({
       session,
       sessionId,
       inputType: parsed.data.inputType,
       input: parsed.data.content,
-      result,
-      sessionStore: options.sessionStore
+      result: generation.result,
+      sessionStore: options.sessionStore,
+      quota: resolveQuota(options.usageStore, request.authUser.id, dailyTurnQuota)
     });
-
-    return response;
   });
 
   /**
@@ -801,16 +871,27 @@ export async function buildApp(options: BuildAppOptions) {
       return reply.code(501).send({ error: "当前模型不支持流式生成" });
     }
 
+    const dailyTurnQuota = options.dailyTurnQuota ?? 20;
+    const quotaBefore = resolveQuota(options.usageStore, request.authUser.id, dailyTurnQuota);
+    if (quotaBefore.remainingTurnsToday <= 0) {
+      // Refused before opening the stream, so the client gets a normal JSON error.
+      return reply.code(429).send({ error: "今日推进次数已用完，请明天再来。", quota: quotaBefore });
+    }
+
     const storyDetail = options.storyCatalog.findStory(session.storyId) ?? undefined;
+    const intent = (parsed.data.inputType === "read_continue" ? "read_segment" : "reader_action") as
+      | "read_segment"
+      | "reader_action";
     const input = {
       session,
       story: storyDetail,
       userInput: parsed.data.content,
-      intent: (parsed.data.inputType === "read_continue" ? "read_segment" : "reader_action") as
-        | "read_segment"
-        | "reader_action",
+      intent,
       lengthGuide: createLengthGuide(storyDetail)
     };
+    const modelConfig = options.modelRuntime.getPublicConfig();
+    const startedAt = Date.now();
+    const authUserId = request.authUser.id;
 
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream; charset=utf-8",
@@ -833,13 +914,26 @@ export async function buildApp(options: BuildAppOptions) {
           continue;
         }
 
+        options.usageStore.record({
+          userId: authUserId,
+          sessionId,
+          storyId: session.storyId,
+          provider: modelConfig.provider,
+          model: modelConfig.model,
+          intent,
+          status: "success",
+          usage: event.usage,
+          latencyMs: Date.now() - startedAt
+        });
+
         const response = commitTurn({
           session,
           sessionId,
           inputType: parsed.data.inputType,
           input: parsed.data.content,
           result: event.result,
-          sessionStore: options.sessionStore
+          sessionStore: options.sessionStore,
+          quota: resolveQuota(options.usageStore, authUserId, dailyTurnQuota)
         });
         send("complete", response);
         completed = true;
@@ -850,6 +944,16 @@ export async function buildApp(options: BuildAppOptions) {
       }
     } catch (error) {
       request.log.error({ err: error }, "streaming turn failed");
+      options.usageStore.record({
+        userId: authUserId,
+        sessionId,
+        storyId: session.storyId,
+        provider: modelConfig.provider,
+        model: modelConfig.model,
+        intent,
+        status: "error",
+        latencyMs: Date.now() - startedAt
+      });
       send("error", { error: error instanceof Error ? error.message : "生成失败" });
     } finally {
       reply.raw.end();

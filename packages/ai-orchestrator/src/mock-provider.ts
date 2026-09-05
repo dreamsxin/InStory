@@ -1,5 +1,10 @@
-import type { CharacterProfile, NarrativeResult, StoryDetail } from "@instory/shared";
-import type { GenerateNarrativeInput, LLMProvider, NarrativeStreamEvent } from "./provider.js";
+import type { CharacterProfile, GenerationUsage, NarrativeResult, StoryDetail } from "@instory/shared";
+import type {
+  GenerateNarrativeInput,
+  LLMProvider,
+  NarrativeGeneration,
+  NarrativeStreamEvent
+} from "./provider.js";
 
 /**
  * Deterministic offline provider used for local development and tests. It derives
@@ -7,7 +12,26 @@ import type { GenerateNarrativeInput, LLMProvider, NarrativeStreamEvent } from "
  * newly authored story never reads back the seed story's content.
  */
 export class MockNarrativeProvider implements LLMProvider {
-  async generateNarrative(input: GenerateNarrativeInput): Promise<NarrativeResult> {
+  async generateNarrative(input: GenerateNarrativeInput): Promise<NarrativeGeneration> {
+    const result = this.buildResult(input);
+    return { result, usage: estimateUsage(input, result) };
+  }
+
+  /**
+   * Replays the generated narration in small pieces so the reader UI can be
+   * exercised end to end without a real model.
+   */
+  async *streamNarrative(input: GenerateNarrativeInput): AsyncGenerator<NarrativeStreamEvent> {
+    const result = this.buildResult(input);
+
+    for (const piece of chunkText(result.narration, 24)) {
+      yield { type: "narration_delta", text: piece };
+    }
+
+    yield { type: "complete", result, usage: estimateUsage(input, result) };
+  }
+
+  private buildResult(input: GenerateNarrativeInput): NarrativeResult {
     const turn = input.session.state.turnCount + 1;
     const stage = describeStage(input.story, turn);
     const host = pickHost(input.story, input.session.readerRole.characterId);
@@ -69,20 +93,6 @@ export class MockNarrativeProvider implements LLMProvider {
       ]
     };
   }
-
-  /**
-   * Replays the generated narration in small pieces so the reader UI can be
-   * exercised end to end without a real model.
-   */
-  async *streamNarrative(input: GenerateNarrativeInput): AsyncGenerator<NarrativeStreamEvent> {
-    const result = await this.generateNarrative(input);
-
-    for (const piece of chunkText(result.narration, 24)) {
-      yield { type: "narration_delta", text: piece };
-    }
-
-    yield { type: "complete", result };
-  }
 }
 
 function chunkText(text: string, size: number): string[] {
@@ -91,6 +101,26 @@ function chunkText(text: string, size: number): string[] {
     chunks.push(text.slice(index, index + size));
   }
   return chunks;
+}
+
+/**
+ * Plausible token counts so quota and cost reporting can be exercised without a real
+ * model. Roughly one token per 1.6 characters, which is in the right range for
+ * Chinese text; it is an estimate, not a billing figure.
+ */
+function estimateUsage(input: GenerateNarrativeInput, result: NarrativeResult): GenerationUsage {
+  const promptChars =
+    JSON.stringify(input.story ?? {}).length + JSON.stringify(input.session.turns.slice(-6)).length + input.userInput.length;
+  const completionChars = JSON.stringify(result).length;
+
+  const promptTokens = Math.ceil(promptChars / 1.6);
+  const completionTokens = Math.ceil(completionChars / 1.6);
+
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens: promptTokens + completionTokens
+  };
 }
 
 /** Prefers a cast member other than the one the reader is playing. */
