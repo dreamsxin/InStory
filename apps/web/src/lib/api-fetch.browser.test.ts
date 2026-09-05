@@ -26,13 +26,15 @@ function lastRequest(): { url: string; init: RequestInit & { headers: Headers } 
 }
 
 describe("apiFetch in the browser", () => {
-  it("lets the browser attach the session cookie itself", async () => {
+  it("stays on this origin so the host-only session cookie is attached", async () => {
     const { apiFetch } = await import("./api.js");
 
     await apiFetch("/api/me/sessions");
 
     const { url, init } = lastRequest();
-    expect(url).toBe("http://localhost:4000/api/me/sessions");
+    // Relative on purpose: next.config.ts rewrites /api/* to the API. Aiming at the
+    // API host directly would drop the cookie, since it belongs to the web origin.
+    expect(url).toBe("/api/me/sessions");
     expect(init.credentials).toBe("include");
     // The cookie is never set by hand here; document.cookie is HttpOnly.
     expect(init.headers.has("cookie")).toBe(false);

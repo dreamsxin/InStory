@@ -166,7 +166,7 @@ describe("streamTurn", () => {
     await runStreamTurn();
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("http://localhost:4000/api/sessions/sess_1/turns/stream");
+    expect(url).toBe("/api/sessions/sess_1/turns/stream");
     expect(init.method).toBe("POST");
     expect(JSON.parse(String(init.body))).toEqual({
       inputType: "read_continue",

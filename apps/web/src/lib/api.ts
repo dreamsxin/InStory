@@ -25,13 +25,15 @@ export const SESSION_COOKIE_NAME = "instory_session";
 
 /**
  * Single entry point for reader-facing API calls. This module is imported from both
- * client components and server components/actions, so credentials have to be
- * attached differently in each environment:
+ * client components and server components/actions, so requests differ per environment:
  *
- * - In the browser, `credentials: "include"` lets it send the session cookie itself.
- * - On the server, fetch inherits nothing, so the caller's cookie is read from the
- *   incoming request and forwarded by hand. `next/headers` is imported lazily so it
- *   never reaches the client bundle.
+ * - In the browser the request stays on this origin and is proxied to the API by the
+ *   rewrite in next.config.ts. That is what makes the session cookie work: it is
+ *   host-only on the web origin, so a browser would never attach it to a request
+ *   aimed at a different API host.
+ * - On the server there is no origin to be relative to, so the absolute API base is
+ *   used and the caller's cookie is forwarded by hand. `next/headers` is imported
+ *   lazily so it never reaches the client bundle.
  */
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
@@ -49,7 +51,7 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
     return fetch(`${API_BASE}${path}`, { cache: "no-store", ...init, headers });
   }
 
-  return fetch(`${API_BASE}${path}`, {
+  return fetch(path, {
     cache: "no-store",
     ...init,
     headers,
