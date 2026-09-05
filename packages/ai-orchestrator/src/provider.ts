@@ -46,4 +46,6 @@ export interface LLMProviderConfig {
   apiKey?: string;
   model?: string;
   timeoutMs?: number;
+  maxAttempts?: number;
+  retryBaseDelayMs?: number;
 }

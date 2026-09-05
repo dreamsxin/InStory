@@ -7,6 +7,26 @@ export interface OpenAICompatibleProviderOptions {
   apiKey: string;
   model: string;
   timeoutMs?: number;
+  /** Total attempts, including the first. Defaults to 3. */
+  maxAttempts?: number;
+  /** First backoff delay; each further attempt doubles it. Defaults to 500ms. */
+  retryBaseDelayMs?: number;
+  /** Injectable so tests do not have to wait out the backoff. */
+  sleep?: (ms: number) => Promise<void>;
+}
+
+/**
+ * Carries whether retrying is worth it. Config and auth problems are not retried
+ * because a second identical call fails the same way and still costs money.
+ */
+export class LlmRequestError extends Error {
+  readonly retryable: boolean;
+
+  constructor(message: string, retryable: boolean) {
+    super(message);
+    this.name = "LlmRequestError";
+    this.retryable = retryable;
+  }
 }
 
 interface ChatCompletionResponse {
@@ -22,35 +42,67 @@ export class OpenAICompatibleNarrativeProvider implements LLMProvider {
   private readonly apiKey: string;
   private readonly model: string;
   private readonly timeoutMs: number;
+  private readonly maxAttempts: number;
+  private readonly retryBaseDelayMs: number;
+  private readonly sleep: (ms: number) => Promise<void>;
 
   constructor(options: OpenAICompatibleProviderOptions) {
     this.endpointUrl = buildChatCompletionsUrl(options.baseUrl);
     this.apiKey = options.apiKey;
     this.model = options.model;
     this.timeoutMs = options.timeoutMs ?? 45_000;
+    this.maxAttempts = Math.max(1, options.maxAttempts ?? 3);
+    this.retryBaseDelayMs = options.retryBaseDelayMs ?? 500;
+    this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   }
 
   async generateNarrative(input: GenerateNarrativeInput): Promise<NarrativeResult> {
-    const response = await this.startRequest(input, false);
+    return this.withRetries(async () => {
+      const response = await this.startRequest(input, false);
 
-    const payload = (await response.json()) as ChatCompletionResponse;
-    const content = payload.choices?.[0]?.message?.content;
-    if (!content) {
-      throw new Error("LLM response did not include message content");
-    }
+      const payload = (await response.json()) as ChatCompletionResponse;
+      const content = payload.choices?.[0]?.message?.content;
+      if (!content) {
+        throw new LlmRequestError("LLM response did not include message content", true);
+      }
 
-    return validateNarrative(content);
+      return validateNarrative(content);
+    });
   }
 
   /**
    * Streams the upstream response and republishes the `narration` field as it
    * arrives. The structured fields are only trustworthy once the whole document has
    * been received, so the validated result is emitted last.
+   *
+   * Retrying is only safe before the first delta reaches the caller; once text is on
+   * screen it cannot be taken back, so a later failure is surfaced as-is.
    */
   async *streamNarrative(input: GenerateNarrativeInput): AsyncGenerator<NarrativeStreamEvent> {
+    for (let attempt = 1; ; attempt += 1) {
+      let emitted = false;
+
+      try {
+        for await (const event of this.streamOnce(input)) {
+          if (event.type === "narration_delta") {
+            emitted = true;
+          }
+          yield event;
+        }
+        return;
+      } catch (error) {
+        if (emitted || !this.shouldRetry(error, attempt)) {
+          throw error;
+        }
+        await this.sleep(this.backoffFor(attempt));
+      }
+    }
+  }
+
+  private async *streamOnce(input: GenerateNarrativeInput): AsyncGenerator<NarrativeStreamEvent> {
     const response = await this.startRequest(input, true);
     if (!response.body) {
-      throw new Error("LLM streaming response had no body");
+      throw new LlmRequestError("LLM streaming response had no body", true);
     }
 
     const decoder = new TextDecoder();
@@ -84,10 +136,40 @@ export class OpenAICompatibleNarrativeProvider implements LLMProvider {
     }
 
     if (!narration.raw) {
-      throw new Error("LLM streaming response did not include message content");
+      throw new LlmRequestError("LLM streaming response did not include message content", true);
     }
 
     yield { type: "complete", result: validateNarrative(narration.raw) };
+  }
+
+  private async withRetries<T>(attemptFn: () => Promise<T>): Promise<T> {
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await attemptFn();
+      } catch (error) {
+        if (!this.shouldRetry(error, attempt)) {
+          throw error;
+        }
+        await this.sleep(this.backoffFor(attempt));
+      }
+    }
+  }
+
+  private shouldRetry(error: unknown, attempt: number): boolean {
+    if (attempt >= this.maxAttempts) {
+      return false;
+    }
+
+    if (error instanceof LlmRequestError) {
+      return error.retryable;
+    }
+
+    // Anything unclassified is most likely a transport fault, which is worth a retry.
+    return true;
+  }
+
+  private backoffFor(attempt: number): number {
+    return this.retryBaseDelayMs * 2 ** (attempt - 1);
   }
 
   private async startRequest(input: GenerateNarrativeInput, stream: boolean): Promise<Response> {
@@ -108,9 +190,12 @@ export class OpenAICompatibleNarrativeProvider implements LLMProvider {
       });
     } catch (error) {
       if (isAbortError(error)) {
-        throw new Error(`LLM request timed out after ${this.timeoutMs}ms`);
+        throw new LlmRequestError(`LLM request timed out after ${this.timeoutMs}ms`, true);
       }
-      throw error;
+      throw new LlmRequestError(
+        `LLM request failed to reach ${this.endpointUrl}: ${error instanceof Error ? error.message : String(error)}`,
+        true
+      );
     } finally {
       // The stream is consumed after this method returns, so the timeout only
       // bounds time-to-first-byte, not the whole generation.
@@ -119,7 +204,7 @@ export class OpenAICompatibleNarrativeProvider implements LLMProvider {
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`LLM request failed: ${response.status} ${body}`);
+      throw new LlmRequestError(`LLM request failed: ${response.status} ${body}`, isRetryableStatus(response.status));
     }
 
     return response;
@@ -176,13 +261,28 @@ export class OpenAICompatibleNarrativeProvider implements LLMProvider {
 }
 
 export function validateNarrative(content: string): NarrativeResult {
-  const parsedJson = normalizeNarrativeJson(parseJsonObject(content));
+  let parsedJson: unknown;
+  try {
+    parsedJson = normalizeNarrativeJson(parseJsonObject(content));
+  } catch (error) {
+    // A retry is worth it: with temperature above zero the next draft usually parses.
+    throw new LlmRequestError(error instanceof Error ? error.message : "LLM response was not valid JSON", true);
+  }
+
   const parsed = narrativeResultSchema.safeParse(parsedJson);
   if (!parsed.success) {
-    throw new Error(`LLM response failed schema validation: ${parsed.error.message}`);
+    throw new LlmRequestError(`LLM response failed schema validation: ${parsed.error.message}`, true);
   }
 
   return parsed.data;
+}
+
+/**
+ * 429 and 5xx are transient. 4xx otherwise means the request itself is wrong
+ * (bad key, unknown model, malformed body), which no retry will fix.
+ */
+function isRetryableStatus(status: number): boolean {
+  return status === 408 || status === 409 || status === 429 || status >= 500;
 }
 
 function buildSystemPrompt(): string {

@@ -15,6 +15,8 @@ export function createLLMProvider(config: LLMProviderConfig): LLMProvider {
     baseUrl: config.baseUrl,
     apiKey: config.apiKey,
     model: config.model,
-    timeoutMs: config.timeoutMs
+    timeoutMs: config.timeoutMs,
+    maxAttempts: config.maxAttempts,
+    retryBaseDelayMs: config.retryBaseDelayMs
   });
 }
