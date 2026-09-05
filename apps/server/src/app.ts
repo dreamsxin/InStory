@@ -18,6 +18,7 @@ import type {
   CharacterProfile,
   CreateSessionResponse,
   CreateTurnResponse,
+  NarrativeResult,
   ReaderSessionListItem,
   ReaderProfile,
   SegmentLengthPreset,
@@ -25,6 +26,7 @@ import type {
   StoryDetail,
   StorySession,
   TimelineNode,
+  TurnInputType,
   WorldState
 } from "@instory/shared";
 import type { StoryCatalog } from "./data/story-catalog.js";
@@ -104,6 +106,69 @@ interface OpeningScene {
   state: WorldState;
   turn: SessionTurn;
   node: TimelineNode;
+}
+
+/**
+ * Applies a generated result to the session and persists it. Shared by the plain and
+ * streaming turn endpoints so both produce identical state, ids and timeline nodes.
+ * The passed-in session is mutated, matching what the callers already relied on.
+ */
+function commitTurn(params: {
+  session: StorySession;
+  sessionId: string;
+  inputType: TurnInputType;
+  input: string;
+  result: NarrativeResult;
+  sessionStore: SessionStore;
+}): CreateTurnResponse {
+  const { session, sessionId, result } = params;
+  const nextState = applyStateDelta(session.state, result.stateDelta);
+  const now = new Date().toISOString();
+
+  const turn: SessionTurn = {
+    // Derived before the push, so the first generated turn follows the opening turn.
+    id: `turn_${session.turns.length}`,
+    sessionId,
+    inputType: params.inputType,
+    input: params.input,
+    narration: result.narration,
+    dialogues: result.dialogues,
+    choices: result.choices,
+    stateSnapshot: nextState,
+    createdAt: now
+  };
+
+  session.turns.push(turn);
+  session.state = nextState;
+  session.updatedAt = now;
+
+  let timelineNode: TimelineNode | null = null;
+  if (shouldCreateTimelineNode(session.state, result)) {
+    timelineNode = createTimelineNode({
+      session,
+      turnId: turn.id,
+      result,
+      state: nextState,
+      now
+    });
+    session.timeline.push(timelineNode);
+  }
+
+  params.sessionStore.appendTurn(sessionId, {
+    turn,
+    state: nextState,
+    timelineNode,
+    updatedAt: now
+  });
+
+  return {
+    turn,
+    state: nextState,
+    timelineNode,
+    quota: {
+      remainingTurnsToday: Math.max(0, 20 - session.turns.length)
+    }
+  };
 }
 
 /**
@@ -694,52 +759,103 @@ export async function buildApp(options: BuildAppOptions) {
       intent: parsed.data.inputType === "read_continue" ? "read_segment" : "reader_action",
       lengthGuide: createLengthGuide(storyDetail)
     });
-    const nextState = applyStateDelta(session.state, result.stateDelta);
-    const now = new Date().toISOString();
-    const turn: SessionTurn = {
-      id: `turn_${session.turns.length}`,
+
+    const response = commitTurn({
+      session,
       sessionId,
       inputType: parsed.data.inputType,
       input: parsed.data.content,
-      narration: result.narration,
-      dialogues: result.dialogues,
-      choices: result.choices,
-      stateSnapshot: nextState,
-      createdAt: now
-    };
-
-    session.turns.push(turn);
-    session.state = nextState;
-    session.updatedAt = now;
-
-    let timelineNode: TimelineNode | null = null;
-    if (shouldCreateTimelineNode(session.state, result)) {
-      timelineNode = createTimelineNode({
-        session,
-        turnId: turn.id,
-        result,
-        state: nextState,
-        now
-      });
-      session.timeline.push(timelineNode);
-    }
-    options.sessionStore.appendTurn(sessionId, {
-      turn,
-      state: nextState,
-      timelineNode,
-      updatedAt: now
+      result,
+      sessionStore: options.sessionStore
     });
 
-    const response: CreateTurnResponse = {
-      turn,
-      state: nextState,
-      timelineNode,
-      quota: {
-        remainingTurnsToday: Math.max(0, 20 - session.turns.length)
-      }
+    return response;
+  });
+
+  /**
+   * Streaming twin of the turn endpoint. The reader sees narration as it is written
+   * instead of waiting for a whole generation, which can take tens of seconds.
+   *
+   * Events: `narration_delta` while writing, then exactly one `complete` carrying the
+   * same payload the non-streaming endpoint returns, or one `error`. Nothing is
+   * persisted until the model finishes, so a dropped connection leaves no half turn.
+   */
+  app.post("/api/sessions/:sessionId/turns/stream", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string };
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
+    }
+
+    const session = options.sessionStore.findById(sessionId, request.authUser.id);
+    if (!session) {
+      return reply.code(404).send({ error: "Session not found" });
+    }
+
+    const parsed = createTurnRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
+    }
+
+    const provider = options.modelRuntime.getProvider();
+    if (!provider.streamNarrative) {
+      return reply.code(501).send({ error: "当前模型不支持流式生成" });
+    }
+
+    const storyDetail = options.storyCatalog.findStory(session.storyId) ?? undefined;
+    const input = {
+      session,
+      story: storyDetail,
+      userInput: parsed.data.content,
+      intent: (parsed.data.inputType === "read_continue" ? "read_segment" : "reader_action") as
+        | "read_segment"
+        | "reader_action",
+      lengthGuide: createLengthGuide(storyDetail)
     };
 
-    return response;
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      // Stops nginx and friends from buffering the whole response.
+      "X-Accel-Buffering": "no"
+    });
+
+    const send = (event: string, data: unknown): void => {
+      reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    try {
+      let completed = false;
+
+      for await (const event of provider.streamNarrative(input)) {
+        if (event.type === "narration_delta") {
+          send("narration_delta", { text: event.text });
+          continue;
+        }
+
+        const response = commitTurn({
+          session,
+          sessionId,
+          inputType: parsed.data.inputType,
+          input: parsed.data.content,
+          result: event.result,
+          sessionStore: options.sessionStore
+        });
+        send("complete", response);
+        completed = true;
+      }
+
+      if (!completed) {
+        send("error", { error: "生成未返回完整结果" });
+      }
+    } catch (error) {
+      request.log.error({ err: error }, "streaming turn failed");
+      send("error", { error: error instanceof Error ? error.message : "生成失败" });
+    } finally {
+      reply.raw.end();
+    }
+
+    return reply;
   });
 
   app.post("/api/sessions/:sessionId/rewind", async (request, reply) => {

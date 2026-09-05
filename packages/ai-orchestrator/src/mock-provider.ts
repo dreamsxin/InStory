@@ -1,5 +1,5 @@
 import type { CharacterProfile, NarrativeResult, StoryDetail } from "@instory/shared";
-import type { GenerateNarrativeInput, LLMProvider } from "./provider.js";
+import type { GenerateNarrativeInput, LLMProvider, NarrativeStreamEvent } from "./provider.js";
 
 /**
  * Deterministic offline provider used for local development and tests. It derives
@@ -69,6 +69,28 @@ export class MockNarrativeProvider implements LLMProvider {
       ]
     };
   }
+
+  /**
+   * Replays the generated narration in small pieces so the reader UI can be
+   * exercised end to end without a real model.
+   */
+  async *streamNarrative(input: GenerateNarrativeInput): AsyncGenerator<NarrativeStreamEvent> {
+    const result = await this.generateNarrative(input);
+
+    for (const piece of chunkText(result.narration, 24)) {
+      yield { type: "narration_delta", text: piece };
+    }
+
+    yield { type: "complete", result };
+  }
+}
+
+function chunkText(text: string, size: number): string[] {
+  const chunks: string[] = [];
+  for (let index = 0; index < text.length; index += size) {
+    chunks.push(text.slice(index, index + size));
+  }
+  return chunks;
 }
 
 /** Prefers a cast member other than the one the reader is playing. */

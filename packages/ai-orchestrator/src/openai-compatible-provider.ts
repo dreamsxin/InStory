@@ -1,5 +1,6 @@
 import { narrativeResultSchema, type NarrativeResult } from "@instory/shared";
-import type { GenerateNarrativeInput, LLMProvider } from "./provider.js";
+import { NarrationExtractor, SseContentReader } from "./narration-stream.js";
+import type { GenerateNarrativeInput, LLMProvider, NarrativeStreamEvent } from "./provider.js";
 
 export interface OpenAICompatibleProviderOptions {
   baseUrl: string;
@@ -30,6 +31,66 @@ export class OpenAICompatibleNarrativeProvider implements LLMProvider {
   }
 
   async generateNarrative(input: GenerateNarrativeInput): Promise<NarrativeResult> {
+    const response = await this.startRequest(input, false);
+
+    const payload = (await response.json()) as ChatCompletionResponse;
+    const content = payload.choices?.[0]?.message?.content;
+    if (!content) {
+      throw new Error("LLM response did not include message content");
+    }
+
+    return validateNarrative(content);
+  }
+
+  /**
+   * Streams the upstream response and republishes the `narration` field as it
+   * arrives. The structured fields are only trustworthy once the whole document has
+   * been received, so the validated result is emitted last.
+   */
+  async *streamNarrative(input: GenerateNarrativeInput): AsyncGenerator<NarrativeStreamEvent> {
+    const response = await this.startRequest(input, true);
+    if (!response.body) {
+      throw new Error("LLM streaming response had no body");
+    }
+
+    const decoder = new TextDecoder();
+    const sse = new SseContentReader();
+    const narration = new NarrationExtractor();
+    const reader = response.body.getReader();
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+
+        for (const content of sse.push(decoder.decode(value, { stream: true }))) {
+          const delta = narration.push(content);
+          if (delta) {
+            yield { type: "narration_delta", text: delta };
+          }
+        }
+      }
+
+      for (const content of sse.flush()) {
+        const delta = narration.push(content);
+        if (delta) {
+          yield { type: "narration_delta", text: delta };
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    if (!narration.raw) {
+      throw new Error("LLM streaming response did not include message content");
+    }
+
+    yield { type: "complete", result: validateNarrative(narration.raw) };
+  }
+
+  private async startRequest(input: GenerateNarrativeInput, stream: boolean): Promise<Response> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
@@ -40,53 +101,10 @@ export class OpenAICompatibleNarrativeProvider implements LLMProvider {
         signal: controller.signal,
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          ...(stream ? { Accept: "text/event-stream" } : {})
         },
-        body: JSON.stringify({
-          model: this.model,
-          temperature: 0.8,
-          max_tokens: estimateMaxTokens(input.lengthGuide),
-          response_format: {
-            type: "json_object"
-          },
-          messages: [
-            {
-              role: "system",
-              content: buildSystemPrompt()
-            },
-            {
-              role: "user",
-              content: JSON.stringify({
-                userInput: input.userInput,
-                intent: input.intent ?? "reader_action",
-                lengthGuide: input.lengthGuide ?? {
-                  preset: "standard",
-                  targetWords: 800,
-                  paragraphs: 6
-                },
-                story: input.story
-                  ? {
-                      summary: input.story.story,
-                      world: input.story.world,
-                      characters: input.story.characters,
-                      anchors: input.story.anchors
-                    }
-                  : null,
-                readerRole: input.session.readerRole,
-                currentState: input.session.state,
-                recentTurns: input.session.turns.slice(-6).map((turn) => ({
-                  input: turn.input,
-                  narration: turn.narration,
-                  choices: turn.choices
-                })),
-                timeline: input.session.timeline.slice(-5).map((node) => ({
-                  title: node.title,
-                  summary: node.summary
-                }))
-              })
-            }
-          ]
-        })
+        body: JSON.stringify(this.buildRequestBody(input, stream))
       });
     } catch (error) {
       if (isAbortError(error)) {
@@ -94,6 +112,8 @@ export class OpenAICompatibleNarrativeProvider implements LLMProvider {
       }
       throw error;
     } finally {
+      // The stream is consumed after this method returns, so the timeout only
+      // bounds time-to-first-byte, not the whole generation.
       clearTimeout(timeout);
     }
 
@@ -102,20 +122,67 @@ export class OpenAICompatibleNarrativeProvider implements LLMProvider {
       throw new Error(`LLM request failed: ${response.status} ${body}`);
     }
 
-    const payload = (await response.json()) as ChatCompletionResponse;
-    const content = payload.choices?.[0]?.message?.content;
-    if (!content) {
-      throw new Error("LLM response did not include message content");
-    }
-
-    const parsedJson = normalizeNarrativeJson(parseJsonObject(content));
-    const parsed = narrativeResultSchema.safeParse(parsedJson);
-    if (!parsed.success) {
-      throw new Error(`LLM response failed schema validation: ${parsed.error.message}`);
-    }
-
-    return parsed.data;
+    return response;
   }
+
+  private buildRequestBody(input: GenerateNarrativeInput, stream: boolean): unknown {
+    return {
+      model: this.model,
+      temperature: 0.8,
+      max_tokens: estimateMaxTokens(input.lengthGuide),
+      ...(stream ? { stream: true } : {}),
+      response_format: {
+        type: "json_object"
+      },
+      messages: [
+        {
+          role: "system",
+          content: buildSystemPrompt()
+        },
+        {
+          role: "user",
+          content: JSON.stringify({
+            userInput: input.userInput,
+            intent: input.intent ?? "reader_action",
+            lengthGuide: input.lengthGuide ?? {
+              preset: "standard",
+              targetWords: 800,
+              paragraphs: 6
+            },
+            story: input.story
+              ? {
+                  summary: input.story.story,
+                  world: input.story.world,
+                  characters: input.story.characters,
+                  anchors: input.story.anchors
+                }
+              : null,
+            readerRole: input.session.readerRole,
+            currentState: input.session.state,
+            recentTurns: input.session.turns.slice(-6).map((turn) => ({
+              input: turn.input,
+              narration: turn.narration,
+              choices: turn.choices
+            })),
+            timeline: input.session.timeline.slice(-5).map((node) => ({
+              title: node.title,
+              summary: node.summary
+            }))
+          })
+        }
+      ]
+    };
+  }
+}
+
+export function validateNarrative(content: string): NarrativeResult {
+  const parsedJson = normalizeNarrativeJson(parseJsonObject(content));
+  const parsed = narrativeResultSchema.safeParse(parsedJson);
+  if (!parsed.success) {
+    throw new Error(`LLM response failed schema validation: ${parsed.error.message}`);
+  }
+
+  return parsed.data;
 }
 
 function buildSystemPrompt(): string {

@@ -777,6 +777,63 @@ describe("server API", () => {
     expect(deletedStory.statusCode).toBe(404);
   });
 
+  it("streams a turn as server-sent events and persists it once", async () => {
+    const created = await createSession();
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/sessions/${created.session.id}/turns/stream`,
+      payload: { inputType: "read_continue", content: "继续阅读" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/event-stream");
+
+    const events = parseSseEvents(response.body);
+    const deltas = events.filter((event) => event.event === "narration_delta");
+    const completions = events.filter((event) => event.event === "complete");
+
+    expect(deltas.length).toBeGreaterThan(1);
+    expect(completions).toHaveLength(1);
+    expect(events.some((event) => event.event === "error")).toBe(false);
+    // The last event must be the completion, so a client can stop on it.
+    expect(events.at(-1)?.event).toBe("complete");
+
+    const completed = completions[0]!.data as CreateTurnResponse;
+    const streamedText = deltas.map((event) => (event.data as { text: string }).text).join("");
+    expect(streamedText).toBe(completed.turn.narration);
+
+    // Exactly one turn was appended, and it matches what was streamed.
+    const loaded = await app.inject({ method: "GET", url: `/api/sessions/${created.session.id}` });
+    const session = loaded.json<{ session: StorySession }>().session;
+    expect(session.turns).toHaveLength(2);
+    expect(session.turns.at(-1)?.narration).toBe(completed.turn.narration);
+    expect(session.turns.at(-1)?.id).toBe(completed.turn.id);
+    expect(session.state).toEqual(completed.state);
+  });
+
+  it("rejects a streaming turn for an unknown session", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/sessions/sess_missing/turns/stream",
+      payload: { inputType: "read_continue", content: "继续阅读" }
+    });
+
+    expect(response.statusCode).toBe(404);
+  });
+
+  it("validates the streaming turn payload before opening the stream", async () => {
+    const created = await createSession();
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/sessions/${created.session.id}/turns/stream`,
+      payload: { inputType: "read_continue", content: "" }
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
   it("verifies the active admin model provider", async () => {
     const response = await app.inject({
       method: "POST",
@@ -805,6 +862,35 @@ async function createSession(): Promise<CreateSessionResponse> {
 
   expect(response.statusCode).toBe(200);
   return response.json<CreateSessionResponse>();
+}
+
+interface SseEvent {
+  event: string;
+  data: unknown;
+}
+
+/** Parses a buffered SSE body into ordered events. */
+function parseSseEvents(body: string): SseEvent[] {
+  const events: SseEvent[] = [];
+
+  for (const block of body.split("\n\n")) {
+    let event: string | null = null;
+    const dataLines: string[] = [];
+
+    for (const line of block.split("\n")) {
+      if (line.startsWith("event:")) {
+        event = line.slice("event:".length).trim();
+      } else if (line.startsWith("data:")) {
+        dataLines.push(line.slice("data:".length).trim());
+      }
+    }
+
+    if (event && dataLines.length > 0) {
+      events.push({ event, data: JSON.parse(dataLines.join("\n")) });
+    }
+  }
+
+  return events;
 }
 
 describe("authentication", () => {
