@@ -31,13 +31,6 @@ export class ModelConfigStore {
 
   constructor(database: AppDatabase) {
     this.database = database;
-    this.database.db.exec(`
-      CREATE TABLE IF NOT EXISTS model_config (
-        id TEXT PRIMARY KEY,
-        payload TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-    `);
   }
 
   get(): StoredModelConfig | null {

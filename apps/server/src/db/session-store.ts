@@ -14,15 +14,6 @@ export class SessionStore {
 
   constructor(database: AppDatabase) {
     this.database = database;
-    this.database.db.exec(`
-      CREATE TABLE IF NOT EXISTS reader_sessions (
-        id TEXT PRIMARY KEY,
-        story_id TEXT NOT NULL,
-        payload TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-    `);
   }
 
   save(session: StorySession): void {

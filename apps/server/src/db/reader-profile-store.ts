@@ -18,18 +18,6 @@ export class ReaderProfileStore {
 
   constructor(database: AppDatabase) {
     this.database = database;
-    this.database.db.exec(`
-      CREATE TABLE IF NOT EXISTS reader_profiles (
-        id TEXT PRIMARY KEY,
-        owner_id TEXT NOT NULL,
-        payload TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_reader_profiles_owner_id
-      ON reader_profiles(owner_id, updated_at DESC);
-    `);
   }
 
   create(input: CreateReaderProfileInput): ReaderProfile {

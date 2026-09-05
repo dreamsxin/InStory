@@ -21,32 +21,6 @@ export class StoryStore {
 
   constructor(database: AppDatabase) {
     this.database = database;
-    this.database.db.exec(`
-      CREATE TABLE IF NOT EXISTS stories (
-        id TEXT PRIMARY KEY,
-        payload TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS worlds (
-        story_id TEXT PRIMARY KEY,
-        payload TEXT NOT NULL,
-        FOREIGN KEY(story_id) REFERENCES stories(id)
-      );
-
-      CREATE TABLE IF NOT EXISTS characters (
-        id TEXT PRIMARY KEY,
-        story_id TEXT NOT NULL,
-        payload TEXT NOT NULL,
-        FOREIGN KEY(story_id) REFERENCES stories(id)
-      );
-
-      CREATE TABLE IF NOT EXISTS story_anchors (
-        id TEXT PRIMARY KEY,
-        story_id TEXT NOT NULL,
-        payload TEXT NOT NULL,
-        FOREIGN KEY(story_id) REFERENCES stories(id)
-      );
-    `);
   }
 
   seedIfEmpty(seed: StorySeedData): void {
