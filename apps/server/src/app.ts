@@ -26,7 +26,7 @@ import type {
 } from "@instory/shared";
 import type { StoryCatalog } from "./data/story-catalog.js";
 import type { ReaderProfileStore } from "./db/reader-profile-store.js";
-import type { SessionStore } from "./db/session-store.js";
+import type { SessionOverview, SessionStore } from "./db/session-store.js";
 import type { ModelRuntime } from "./model-runtime.js";
 
 const updateModelConfigSchema = z.object({
@@ -266,9 +266,15 @@ export async function buildApp(options: BuildAppOptions) {
     const seenStoryIds = new Set<string>();
     const sessions: ReaderSessionListItem[] = [];
 
-    for (const item of options.sessionStore.listRecent(Math.max(normalizedLimit * 4, 40))) {
-      const sessionItem = createReaderSessionListItem(item.id, options);
-      if (!sessionItem || seenStoryIds.has(sessionItem.storyId)) {
+    // listRecentOverviews already keeps the latest session per story; seenStoryIds
+    // guards the edge case of two sessions for one story sharing an updated_at.
+    for (const overview of options.sessionStore.listRecentOverviews(Math.max(normalizedLimit * 2, 40))) {
+      if (seenStoryIds.has(overview.storyId)) {
+        continue;
+      }
+
+      const sessionItem = createReaderSessionListItem(overview, options);
+      if (!sessionItem) {
         continue;
       }
 
@@ -438,7 +444,7 @@ export async function buildApp(options: BuildAppOptions) {
 
     session.turns.push(openingTurn);
     session.timeline.push(openingNode);
-    options.sessionStore.save(session);
+    options.sessionStore.create(session);
 
     const response: CreateSessionResponse = {
       session,
@@ -509,7 +515,12 @@ export async function buildApp(options: BuildAppOptions) {
       });
       session.timeline.push(timelineNode);
     }
-    options.sessionStore.save(session);
+    options.sessionStore.appendTurn(sessionId, {
+      turn,
+      state: nextState,
+      timelineNode,
+      updatedAt: now
+    });
 
     const response: CreateTurnResponse = {
       turn,
@@ -551,7 +562,7 @@ export async function buildApp(options: BuildAppOptions) {
       updatedAt: now
     };
 
-    options.sessionStore.save(branch);
+    options.sessionStore.create(branch);
 
     return {
       session: branch
@@ -593,7 +604,7 @@ export async function buildApp(options: BuildAppOptions) {
       updatedAt: now
     };
 
-    options.sessionStore.save(resetSession);
+    options.sessionStore.create(resetSession);
 
     return {
       session: resetSession
@@ -629,28 +640,25 @@ function createCastCharacters({
     }));
 }
 
-function createReaderSessionListItem(sessionId: string, options: BuildAppOptions): ReaderSessionListItem | null {
-  const session = options.sessionStore.findById(sessionId);
-  if (!session) {
-    return null;
-  }
-
-  const story = options.storyCatalog.findStory(session.storyId)?.story;
+function createReaderSessionListItem(
+  overview: SessionOverview,
+  options: BuildAppOptions
+): ReaderSessionListItem | null {
+  const story = options.storyCatalog.findStory(overview.storyId)?.story;
   if (!story) {
     return null;
   }
 
-  const latestTurn = session.turns.at(-1);
   return {
-    id: session.id,
+    id: overview.id,
     storyId: story.id,
     storyTitle: story.title,
     story,
-    readerRoleName: session.readerRole.name,
-    latestSummary: latestTurn?.narration ?? "刚刚进入故事。",
-    turnCount: session.turns.length,
-    createdAt: session.createdAt,
-    updatedAt: session.updatedAt
+    readerRoleName: overview.readerRoleName,
+    latestSummary: overview.latestNarration ?? "刚刚进入故事。",
+    turnCount: overview.turnCount,
+    createdAt: overview.createdAt,
+    updatedAt: overview.updatedAt
   };
 }
 

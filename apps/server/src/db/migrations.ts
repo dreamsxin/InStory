@@ -3,7 +3,13 @@ import type { DatabaseSync } from "node:sqlite";
 export interface Migration {
   id: number;
   name: string;
-  up: string;
+  /**
+   * Either a SQL script or, for migrations that have to reshape existing rows,
+   * a function that runs inside the migration transaction. Data migrations need
+   * the function form because the legacy rows keep their business fields inside a
+   * JSON payload column, which SQL alone cannot reliably destructure.
+   */
+  up: string | ((db: DatabaseSync) => void);
 }
 
 /**
@@ -87,8 +93,144 @@ export const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_story_anchors_story_id
       ON story_anchors(story_id);
     `
+  },
+  {
+    id: 3,
+    name: "normalize_session_turns_and_timeline",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS session_turns (
+          session_id TEXT NOT NULL,
+          id TEXT NOT NULL,
+          seq INTEGER NOT NULL,
+          input_type TEXT NOT NULL,
+          input TEXT NOT NULL,
+          narration TEXT NOT NULL,
+          dialogues TEXT NOT NULL,
+          choices TEXT NOT NULL,
+          state_snapshot TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (session_id, id),
+          FOREIGN KEY(session_id) REFERENCES reader_sessions(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_session_turns_session_seq
+        ON session_turns(session_id, seq);
+
+        CREATE TABLE IF NOT EXISTS session_timeline_nodes (
+          session_id TEXT NOT NULL,
+          id TEXT NOT NULL,
+          seq INTEGER NOT NULL,
+          turn_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          summary TEXT NOT NULL,
+          state_snapshot TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (session_id, id),
+          FOREIGN KEY(session_id) REFERENCES reader_sessions(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_session_timeline_nodes_session_seq
+        ON session_timeline_nodes(session_id, seq);
+      `);
+
+      // reader_role and state stay nullable because SQLite cannot add a NOT NULL
+      // column without a default; the store always writes both.
+      for (const column of [
+        "ALTER TABLE reader_sessions ADD COLUMN reader_role TEXT",
+        "ALTER TABLE reader_sessions ADD COLUMN state TEXT",
+        "ALTER TABLE reader_sessions ADD COLUMN turn_count INTEGER NOT NULL DEFAULT 0"
+      ]) {
+        db.exec(column);
+      }
+
+      backfillSessionsFromPayload(db);
+
+      db.exec("ALTER TABLE reader_sessions DROP COLUMN payload");
+    }
   }
 ];
+
+/**
+ * Moves turns and timeline nodes out of the legacy reader_sessions.payload blob
+ * into their own rows. Rows whose payload cannot be parsed are left with an empty
+ * history rather than aborting the whole migration, so a single corrupt session
+ * cannot block a deployment.
+ */
+function backfillSessionsFromPayload(db: DatabaseSync): void {
+  const rows = db.prepare("SELECT id, payload FROM reader_sessions").all() as Array<{
+    id: string;
+    payload: string;
+  }>;
+
+  const insertTurn = db.prepare(
+    `INSERT OR IGNORE INTO session_turns
+       (session_id, id, seq, input_type, input, narration, dialogues, choices, state_snapshot, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  const insertNode = db.prepare(
+    `INSERT OR IGNORE INTO session_timeline_nodes
+       (session_id, id, seq, turn_id, title, summary, state_snapshot, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  const updateSession = db.prepare(
+    "UPDATE reader_sessions SET reader_role = ?, state = ?, turn_count = ? WHERE id = ?"
+  );
+
+  for (const row of rows) {
+    let session: {
+      readerRole?: unknown;
+      state?: unknown;
+      turns?: Array<Record<string, unknown>>;
+      timeline?: Array<Record<string, unknown>>;
+    };
+
+    try {
+      session = JSON.parse(row.payload);
+    } catch {
+      updateSession.run(JSON.stringify({}), JSON.stringify({}), 0, row.id);
+      continue;
+    }
+
+    const turns = Array.isArray(session.turns) ? session.turns : [];
+    const timeline = Array.isArray(session.timeline) ? session.timeline : [];
+
+    turns.forEach((turn, index) => {
+      insertTurn.run(
+        row.id,
+        String(turn.id ?? `turn_${index}`),
+        index,
+        String(turn.inputType ?? "free_text"),
+        String(turn.input ?? ""),
+        String(turn.narration ?? ""),
+        JSON.stringify(turn.dialogues ?? []),
+        JSON.stringify(turn.choices ?? []),
+        JSON.stringify(turn.stateSnapshot ?? {}),
+        String(turn.createdAt ?? "")
+      );
+    });
+
+    timeline.forEach((node, index) => {
+      insertNode.run(
+        row.id,
+        String(node.id ?? `node_${index}`),
+        index,
+        String(node.turnId ?? ""),
+        String(node.title ?? ""),
+        String(node.summary ?? ""),
+        JSON.stringify(node.stateSnapshot ?? {}),
+        String(node.createdAt ?? "")
+      );
+    });
+
+    updateSession.run(
+      JSON.stringify(session.readerRole ?? {}),
+      JSON.stringify(session.state ?? {}),
+      turns.length,
+      row.id
+    );
+  }
+}
 
 export function appliedMigrationIds(db: DatabaseSync): number[] {
   const rows = db.prepare("SELECT id FROM schema_migrations ORDER BY id").all() as Array<{ id: number }>;
@@ -119,7 +261,11 @@ export function runMigrations(db: DatabaseSync, list: Migration[] = migrations):
   try {
     const now = new Date().toISOString();
     for (const migration of pending) {
-      db.exec(migration.up);
+      if (typeof migration.up === "string") {
+        db.exec(migration.up);
+      } else {
+        migration.up(db);
+      }
       db.prepare("INSERT INTO schema_migrations (id, name, applied_at) VALUES (?, ?, ?)").run(
         migration.id,
         migration.name,
