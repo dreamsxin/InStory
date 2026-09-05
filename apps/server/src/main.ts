@@ -7,6 +7,7 @@ import { ReaderProfileStore } from "./db/reader-profile-store.js";
 import { SessionStore } from "./db/session-store.js";
 import { UserStore } from "./db/user-store.js";
 import { readPricingFromEnv, UsageStore } from "./db/usage-store.js";
+import { ModerationStore } from "./db/moderation-store.js";
 import { createInitialModelConfig, ModelRuntime } from "./model-runtime.js";
 
 const isProduction = process.env.NODE_ENV === "production";
@@ -32,12 +33,14 @@ const readerProfileStore = new ReaderProfileStore(database);
 const storyCatalog = new StoryCatalog(database);
 const userStore = new UserStore(database);
 const usageStore = new UsageStore(database);
+const moderationStore = new ModerationStore(database);
 const app = await buildApp({
   sessionStore,
   readerProfileStore,
   storyCatalog,
   userStore,
   usageStore,
+  moderationStore,
   modelRuntime,
   adminToken,
   dailyTurnQuota: Number(process.env.DAILY_TURN_QUOTA || 20),

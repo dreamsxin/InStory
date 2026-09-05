@@ -244,6 +244,43 @@ export const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_generation_usage_date
       ON generation_usage(created_date);
     `
+  },
+  {
+    id: 7,
+    name: "add_moderation_events",
+    up: `
+      -- One row per moderation decision, including the ones that passed, so the
+      -- review queue and the audit trail are the same table.
+      CREATE TABLE IF NOT EXISTS moderation_events (
+        id TEXT PRIMARY KEY,
+        user_id TEXT,
+        session_id TEXT,
+        story_id TEXT,
+        turn_id TEXT,
+        surface TEXT NOT NULL,
+        action TEXT NOT NULL,
+        status TEXT NOT NULL,
+        categories TEXT NOT NULL,
+        excerpt TEXT NOT NULL,
+        detail TEXT,
+        reported_by TEXT,
+        created_at TEXT NOT NULL,
+        created_date TEXT NOT NULL,
+        resolved_at TEXT,
+        resolved_by TEXT,
+        resolution TEXT
+      );
+
+      -- The review queue reads open events newest first.
+      CREATE INDEX IF NOT EXISTS idx_moderation_events_status_created
+      ON moderation_events(status, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_moderation_events_date
+      ON moderation_events(created_date);
+
+      CREATE INDEX IF NOT EXISTS idx_moderation_events_user
+      ON moderation_events(user_id, created_at DESC);
+    `
   }
 ];
 

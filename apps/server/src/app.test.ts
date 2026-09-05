@@ -11,6 +11,7 @@ import { ReaderProfileStore } from "./db/reader-profile-store.js";
 import { SessionStore } from "./db/session-store.js";
 import { UserStore } from "./db/user-store.js";
 import { UsageStore } from "./db/usage-store.js";
+import { ModerationStore } from "./db/moderation-store.js";
 import { ModelRuntime } from "./model-runtime.js";
 
 type TestApp = Awaited<ReturnType<typeof buildApp>>;
@@ -30,6 +31,7 @@ beforeEach(async () => {
     storyCatalog: new StoryCatalog(database),
       userStore,
       usageStore: new UsageStore(database),
+      moderationStore: new ModerationStore(database),
       modelRuntime: new ModelRuntime(new ModelConfigStore(database), {
       provider: "mock",
       updatedAt: "2026-05-20T00:00:00.000Z"
@@ -396,7 +398,7 @@ describe("server API", () => {
       url: "/api/admin/moderation/events"
     });
     expect(moderation.statusCode).toBe(200);
-    expect(moderation.json()).toEqual({ events: [] });
+    expect(moderation.json()).toMatchObject({ events: [], counts: { open: 0 } });
   });
 
   it("protects admin routes when an admin token is configured", async () => {
@@ -413,6 +415,7 @@ describe("server API", () => {
       storyCatalog: new StoryCatalog(database),
       userStore,
       usageStore: new UsageStore(database),
+      moderationStore: new ModerationStore(database),
       modelRuntime: new ModelRuntime(new ModelConfigStore(database), {
         provider: "mock",
         updatedAt: "2026-05-20T00:00:00.000Z"
@@ -900,18 +903,21 @@ describe("generation quota and usage", () => {
   let quotaApp: TestApp;
   let quotaDatabase: AppDatabase;
   let quotaUsageStore: UsageStore;
+  let quotaModerationStore: ModerationStore;
   let quotaTempDir: string;
 
   beforeEach(async () => {
     quotaTempDir = mkdtempSync(join(tmpdir(), "instory-quota-"));
     quotaDatabase = new AppDatabase(join(quotaTempDir, "quota.sqlite"));
     quotaUsageStore = new UsageStore(quotaDatabase);
+    quotaModerationStore = new ModerationStore(quotaDatabase);
     quotaApp = await buildApp({
       sessionStore: new SessionStore(quotaDatabase),
       readerProfileStore: new ReaderProfileStore(quotaDatabase),
       storyCatalog: new StoryCatalog(quotaDatabase),
       userStore: new UserStore(quotaDatabase),
       usageStore: quotaUsageStore,
+      moderationStore: quotaModerationStore,
       modelRuntime: new ModelRuntime(new ModelConfigStore(quotaDatabase), {
         provider: "mock",
         updatedAt: "2026-05-20T00:00:00.000Z"
@@ -995,6 +1001,107 @@ describe("generation quota and usage", () => {
     expect(summary.byModel[0]?.provider).toBe("mock");
   });
 
+  it("refuses a blocked reader input without spending quota", async () => {
+    const sessionId = await startSession();
+
+    const blocked = await quotaApp.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/turns`,
+      payload: { inputType: "free_text", content: "我想写一段未成年人发生关系的剧情" }
+    });
+
+    expect(blocked.statusCode).toBe(422);
+    expect(blocked.json<{ moderated: boolean }>().moderated).toBe(true);
+
+    // Nothing was generated, so neither quota nor tokens were spent.
+    expect(quotaUsageStore.summarizeDay().generations).toBe(0);
+    const events = quotaModerationStore.list();
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ surface: "reader_input", action: "blocked", status: "resolved" });
+
+    // The turn was never appended.
+    const loaded = await quotaApp.inject({ method: "GET", url: `/api/sessions/${sessionId}` });
+    expect(loaded.json<{ session: StorySession }>().session.turns).toHaveLength(1);
+  });
+
+  it("blocks the streaming endpoint on the same input before opening the stream", async () => {
+    const sessionId = await startSession();
+
+    const blocked = await quotaApp.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/turns/stream`,
+      payload: { inputType: "free_text", content: "我想写一段未成年人发生关系的剧情" }
+    });
+
+    expect(blocked.statusCode).toBe(422);
+    expect(blocked.headers["content-type"]).toContain("application/json");
+  });
+
+  it("keeps a flagged input flowing but leaves an open review item", async () => {
+    const sessionId = await startSession();
+
+    const allowed = await quotaApp.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/turns`,
+      payload: { inputType: "free_text", content: "角色想知道自杀的方法" }
+    });
+
+    // Flagged content is reviewed, not refused.
+    expect(allowed.statusCode).toBe(200);
+    // The mock echoes the reader's words into the narration, so both surfaces flag;
+    // what matters is that the input flag is in the queue.
+    expect(quotaModerationStore.list({ status: "open" })).toEqual(
+      expect.arrayContaining([expect.objectContaining({ surface: "reader_input", action: "flagged" })])
+    );
+  });
+
+  it("accepts a reader report and lets an admin resolve it", async () => {
+    const sessionId = await startSession();
+    await advance(sessionId);
+
+    const missingReason = await quotaApp.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/report`,
+      payload: {}
+    });
+    expect(missingReason.statusCode).toBe(400);
+
+    const reported = await quotaApp.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/report`,
+      payload: { reason: "这段描写让我不适" }
+    });
+    expect(reported.statusCode).toBe(201);
+    const eventId = reported.json<{ event: { id: string; status: string } }>().event.id;
+
+    const queue = await quotaApp.inject({
+      method: "GET",
+      url: "/api/admin/moderation/events?status=open",
+      headers: { authorization: "Bearer secret" }
+    });
+    expect(queue.json<{ events: Array<{ id: string }>; counts: { open: number } }>().events[0]?.id).toBe(eventId);
+    expect(queue.json<{ counts: { open: number } }>().counts.open).toBe(1);
+
+    const resolved = await quotaApp.inject({
+      method: "POST",
+      url: `/api/admin/moderation/events/${eventId}/resolve`,
+      headers: { authorization: "Bearer secret" },
+      payload: { status: "dismissed", resolution: "未违规" }
+    });
+    expect(resolved.json<{ event: { status: string; resolution: string } }>().event).toMatchObject({
+      status: "dismissed",
+      resolution: "未违规"
+    });
+
+    const missing = await quotaApp.inject({
+      method: "POST",
+      url: "/api/admin/moderation/events/mod_missing/resolve",
+      headers: { authorization: "Bearer secret" },
+      payload: {}
+    });
+    expect(missing.statusCode).toBe(404);
+  });
+
   it("exposes today's spend and derived cost to admins", async () => {
     const sessionId = await startSession();
     await advance(sessionId);
@@ -1033,6 +1140,7 @@ describe("authentication", () => {
       storyCatalog: new StoryCatalog(authDatabase),
       userStore: new UserStore(authDatabase),
       usageStore: new UsageStore(authDatabase),
+      moderationStore: new ModerationStore(authDatabase),
       modelRuntime: new ModelRuntime(new ModelConfigStore(authDatabase), {
         provider: "mock",
         updatedAt: "2026-05-20T00:00:00.000Z"
@@ -1291,6 +1399,7 @@ describe("authentication", () => {
       storyCatalog: new StoryCatalog(authDatabase),
       userStore: adminUserStore,
       usageStore: new UsageStore(authDatabase),
+      moderationStore: new ModerationStore(authDatabase),
       modelRuntime: new ModelRuntime(new ModelConfigStore(authDatabase), {
         provider: "mock",
         updatedAt: "2026-05-20T00:00:00.000Z"

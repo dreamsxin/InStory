@@ -35,6 +35,13 @@ import type { ReaderProfileStore } from "./db/reader-profile-store.js";
 import type { SessionOverview, SessionStore } from "./db/session-store.js";
 import { LEGACY_USER_ID, SESSION_TTL_MS, type UserRecord, type UserStore } from "./db/user-store.js";
 import { estimateCost, type TokenPricing, type UsageStore } from "./db/usage-store.js";
+import type { ModerationStatus, ModerationStore } from "./db/moderation-store.js";
+import {
+  buildExcerpt,
+  RuleBasedModerationChecker,
+  type ModerationChecker,
+  type ModerationSurface
+} from "./moderation/checker.js";
 import type { ModelRuntime } from "./model-runtime.js";
 
 const SESSION_COOKIE_NAME = "instory_session";
@@ -259,6 +266,9 @@ export interface BuildAppOptions {
   storyCatalog: StoryCatalog;
   userStore: UserStore;
   usageStore: UsageStore;
+  moderationStore: ModerationStore;
+  /** Defaults to the rule-based checker; swap for a real service in production. */
+  moderationChecker?: ModerationChecker;
   modelRuntime: ModelRuntime;
   adminToken?: string;
   /** Successful generations allowed per reader per UTC day. Defaults to 20. */
@@ -340,6 +350,37 @@ export async function buildApp(options: BuildAppOptions) {
   });
 
   const secureCookies = process.env.NODE_ENV === "production";
+  const moderationChecker = options.moderationChecker ?? new RuleBasedModerationChecker();
+
+  /**
+   * Runs one moderation check and records anything that is not clean. Returns the
+   * verdict so the caller can decide what to do: reader input is refused with a
+   * reason, while a bad generation must simply never be persisted.
+   */
+  async function screen(params: {
+    surface: ModerationSurface;
+    text: string;
+    userId?: string | null;
+    sessionId?: string | null;
+    storyId?: string | null;
+  }) {
+    const verdict = await moderationChecker.check({ surface: params.surface, text: params.text });
+
+    if (verdict.action !== "allowed") {
+      options.moderationStore.record({
+        userId: params.userId ?? null,
+        sessionId: params.sessionId ?? null,
+        storyId: params.storyId ?? null,
+        surface: params.surface,
+        action: verdict.action,
+        categories: verdict.categories,
+        excerpt: buildExcerpt(params.text),
+        detail: verdict.detail
+      });
+    }
+
+    return verdict;
+  }
 
   app.post("/api/auth/register", async (request, reply) => {
     const parsed = registerRequestSchema.safeParse(request.body);
@@ -482,9 +523,35 @@ export async function buildApp(options: BuildAppOptions) {
     return { session };
   });
 
-  app.get("/api/admin/moderation/events", async () => ({
-    events: []
-  }));
+  app.get("/api/admin/moderation/events", async (request) => {
+    const query = request.query as { status?: string; limit?: string };
+    const status = ["open", "resolved", "dismissed"].includes(query.status ?? "")
+      ? (query.status as ModerationStatus)
+      : undefined;
+
+    return {
+      events: options.moderationStore.list({ status, limit: Number(query.limit ?? 50) }),
+      counts: options.moderationStore.counts()
+    };
+  });
+
+  app.post("/api/admin/moderation/events/:eventId/resolve", async (request, reply) => {
+    const { eventId } = request.params as { eventId: string };
+    const body = (request.body ?? {}) as { status?: string; resolution?: string };
+    const status = body.status === "dismissed" ? "dismissed" : "resolved";
+
+    const event = options.moderationStore.resolve(eventId, {
+      status,
+      resolvedBy: request.authUser?.id ?? "admin-token",
+      resolution: body.resolution ?? null
+    });
+
+    if (!event) {
+      return reply.code(404).send({ error: "Moderation event not found" });
+    }
+
+    return { event };
+  });
 
   /**
    * Today's generation spend. Cost is null when no per-token price is configured,
@@ -767,6 +834,45 @@ export async function buildApp(options: BuildAppOptions) {
     return { session };
   });
 
+  /**
+   * Reader-initiated report. Ownership is checked first so a report cannot be used to
+   * confirm that someone else's session id exists.
+   */
+  app.post("/api/sessions/:sessionId/report", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string };
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
+    }
+
+    const session = options.sessionStore.findById(sessionId, request.authUser.id);
+    if (!session) {
+      return reply.code(404).send({ error: "Session not found" });
+    }
+
+    const body = (request.body ?? {}) as { turnId?: string; reason?: string };
+    const reason = String(body.reason ?? "").trim();
+    if (!reason) {
+      return reply.code(400).send({ error: "请填写举报原因。" });
+    }
+
+    const reportedTurn = body.turnId ? session.turns.find((turn) => turn.id === body.turnId) : session.turns.at(-1);
+
+    const event = options.moderationStore.record({
+      userId: request.authUser.id,
+      sessionId,
+      storyId: session.storyId,
+      turnId: reportedTurn?.id ?? null,
+      surface: "report",
+      action: "flagged",
+      categories: [],
+      excerpt: buildExcerpt(reportedTurn?.narration ?? reason),
+      detail: buildExcerpt(reason, 200),
+      reportedBy: request.authUser.id
+    });
+
+    return reply.code(201).send({ event });
+  });
+
   app.post("/api/sessions/:sessionId/turns", async (request, reply) => {
     const { sessionId } = request.params as { sessionId: string };
     if (!request.authUser) {
@@ -785,6 +891,18 @@ export async function buildApp(options: BuildAppOptions) {
     }
 
     const dailyTurnQuota = options.dailyTurnQuota ?? 20;
+
+    // Screened before the quota check, so a refused message costs the reader nothing.
+    const inputVerdict = await screen({
+      surface: "reader_input",
+      text: parsed.data.content,
+      userId: request.authUser.id,
+      sessionId,
+      storyId: session.storyId
+    });
+    if (inputVerdict.action === "blocked") {
+      return reply.code(422).send({ error: inputVerdict.detail ?? "这段输入无法提交。", moderated: true });
+    }
 
     const quotaBefore = resolveQuota(options.usageStore, request.authUser.id, dailyTurnQuota);
     if (quotaBefore.remainingTurnsToday <= 0) {
@@ -831,6 +949,19 @@ export async function buildApp(options: BuildAppOptions) {
       latencyMs: Date.now() - startedAt
     });
 
+    // A bad generation is the system's own output, so it is discarded rather than
+    // shown with a warning. The turn is not persisted and the reader can retry.
+    const outputVerdict = await screen({
+      surface: "model_output",
+      text: generation.result.narration,
+      userId: request.authUser.id,
+      sessionId,
+      storyId: session.storyId
+    });
+    if (outputVerdict.action === "blocked") {
+      return reply.code(422).send({ error: "这一段生成内容未通过审核，请重新推进。", moderated: true });
+    }
+
     return commitTurn({
       session,
       sessionId,
@@ -872,6 +1003,18 @@ export async function buildApp(options: BuildAppOptions) {
     }
 
     const dailyTurnQuota = options.dailyTurnQuota ?? 20;
+
+    const inputVerdict = await screen({
+      surface: "reader_input",
+      text: parsed.data.content,
+      userId: request.authUser.id,
+      sessionId,
+      storyId: session.storyId
+    });
+    if (inputVerdict.action === "blocked") {
+      return reply.code(422).send({ error: inputVerdict.detail ?? "这段输入无法提交。", moderated: true });
+    }
+
     const quotaBefore = resolveQuota(options.usageStore, request.authUser.id, dailyTurnQuota);
     if (quotaBefore.remainingTurnsToday <= 0) {
       // Refused before opening the stream, so the client gets a normal JSON error.
@@ -925,6 +1068,25 @@ export async function buildApp(options: BuildAppOptions) {
           usage: event.usage,
           latencyMs: Date.now() - startedAt
         });
+
+        // Known limitation of streaming: the deltas have already reached the reader
+        // by the time the full narration can be judged. Blocking here still keeps it
+        // out of the transcript and the review queue records it, but a reviewer
+        // should assume the reader saw it. Screening incrementally would be needed to
+        // prevent exposure, which the rule-based checker cannot do reliably on
+        // partial text.
+        const outputVerdict = await screen({
+          surface: "model_output",
+          text: event.result.narration,
+          userId: authUserId,
+          sessionId,
+          storyId: session.storyId
+        });
+        if (outputVerdict.action === "blocked") {
+          send("error", { error: "这一段生成内容未通过审核，请重新推进。", moderated: true });
+          completed = true;
+          break;
+        }
 
         const response = commitTurn({
           session,
