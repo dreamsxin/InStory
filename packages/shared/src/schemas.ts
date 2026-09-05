@@ -2,6 +2,19 @@ import { z } from "zod";
 
 export const visibilitySchema = z.enum(["private", "public"]);
 
+export const registerRequestSchema = z.object({
+  email: z.string().email().max(200),
+  displayName: z.string().min(1).max(40),
+  // Long enough to matter, capped so a huge input cannot be used to burn CPU in scrypt.
+  password: z.string().min(8).max(200)
+});
+
+export const loginRequestSchema = z.object({
+  email: z.string().email().max(200),
+  password: z.string().min(1).max(200)
+});
+
+
 export const createSessionRequestSchema = z.object({
   entryMode: z.enum(["existing_character", "custom_role", "blind"]),
   characterId: z.string().nullish(),

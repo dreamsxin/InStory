@@ -1,4 +1,20 @@
+export type UserRole = "reader" | "admin";
+
+/** The authenticated account, as exposed to clients. Never carries credentials. */
+export interface AuthUser {
+  id: string;
+  email: string;
+  displayName: string;
+  role: UserRole;
+}
+
+export interface AuthSessionResponse {
+  user: AuthUser;
+  expiresAt: string;
+}
+
 export type EntryMode = "existing_character" | "custom_role" | "blind";
+
 
 export type TurnInputType = "free_text" | "choice" | "read_continue";
 

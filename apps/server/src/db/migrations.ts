@@ -148,6 +148,70 @@ export const migrations: Migration[] = [
 
       db.exec("ALTER TABLE reader_sessions DROP COLUMN payload");
     }
+  },
+  {
+    id: 4,
+    name: "add_users_and_auth_sessions",
+    up: `
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL,
+        email_normalized TEXT NOT NULL UNIQUE,
+        display_name TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'reader',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      -- Only the SHA-256 of the opaque session token is stored, so a database leak
+      -- does not hand out usable sessions.
+      CREATE TABLE IF NOT EXISTS auth_sessions (
+        token_hash TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id
+      ON auth_sessions(user_id);
+
+      CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at
+      ON auth_sessions(expires_at);
+
+      -- Existing rows already carry owner_id = 'local-reader'. Seeding that id as a
+      -- real user turns the old placeholder into a proper account instead of
+      -- requiring a data backfill. The password hash is intentionally unusable, so
+      -- nobody can sign in as it.
+      INSERT OR IGNORE INTO users (id, email, email_normalized, display_name, password_hash, role, created_at, updated_at)
+      VALUES (
+        'local-reader',
+        'legacy@instory.local',
+        'legacy@instory.local',
+        '本地读者',
+        'disabled',
+        'reader',
+        '1970-01-01T00:00:00.000Z',
+        '1970-01-01T00:00:00.000Z'
+      );
+    `
+  },
+  {
+    id: 5,
+    name: "attach_reader_sessions_to_users",
+    up: `
+      -- Reading sessions had no owner at all, so any caller could list or open any
+      -- other reader's session. The default backfills existing rows onto the seeded
+      -- legacy user.
+      ALTER TABLE reader_sessions ADD COLUMN user_id TEXT NOT NULL DEFAULT 'local-reader';
+
+      CREATE INDEX IF NOT EXISTS idx_reader_sessions_user_updated_at
+      ON reader_sessions(user_id, updated_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_reader_sessions_user_story
+      ON reader_sessions(user_id, story_id, updated_at DESC);
+    `
   }
 ];
 
