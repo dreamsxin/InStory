@@ -5,6 +5,7 @@ import type { SessionTurn, StorySession, TurnQuota, WorldState } from "@instory/
 import {
   createTurn,
   QuotaExceededError,
+  RateLimitedError,
   resetSession,
   rewindSession,
   streamTurn,
@@ -68,6 +69,9 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
         if (
           streamError instanceof UnauthenticatedError ||
           streamError instanceof QuotaExceededError ||
+          // The plain endpoint shares the same budget, so retrying it would just
+          // spend another rejected request.
+          streamError instanceof RateLimitedError ||
           controller.signal.aborted
         ) {
           throw streamError;
@@ -94,6 +98,9 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
     } catch (err) {
       if (controller.signal.aborted) {
         setError("已停止这次生成。");
+      } else if (err instanceof RateLimitedError) {
+        // Recoverable on its own, so tell the reader how long rather than just failing.
+        setError(`${err.message}（约 ${err.retryAfterSeconds} 秒后可再试）`);
       } else {
         setError(err instanceof Error ? err.message : "提交失败");
       }

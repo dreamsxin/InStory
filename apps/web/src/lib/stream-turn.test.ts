@@ -146,6 +146,28 @@ describe("streamTurn", () => {
     await expect(attempt).rejects.toThrow("今日推进次数已用完");
   });
 
+  it("treats a throttled burst as recoverable rather than an exhausted quota", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: "推进太快了，稍等一会儿再继续。", retryAfterSeconds: 12 }), {
+        status: 429,
+        headers: { "content-type": "application/json" }
+      })
+    );
+
+    const { streamTurn, QuotaExceededError, RateLimitedError } = await import("./api.js");
+
+    const attempt = streamTurn(
+      { sessionId: "sess_1", content: "继续阅读", inputType: "read_continue" },
+      () => {}
+    );
+
+    await expect(attempt).rejects.toBeInstanceOf(RateLimitedError);
+    // The distinction matters: one clears in seconds, the other not until tomorrow.
+    await expect(attempt).rejects.not.toBeInstanceOf(QuotaExceededError);
+    await expect(attempt).rejects.toMatchObject({ retryAfterSeconds: 12 });
+  });
+
+
   it("passes the abort signal through so a generation can be stopped", async () => {
     respondWithChunks([sseEvent("complete", completePayload)]);
     const controller = new AbortController();

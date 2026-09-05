@@ -1445,3 +1445,152 @@ describe("authentication", () => {
     ).toBe(401);
   });
 });
+
+describe("abuse limits", () => {
+  let limitApp: TestApp;
+  let limitDatabase: AppDatabase;
+  let limitTempDir: string;
+
+  /** Limits are set tight so a test can reach them without hundreds of requests. */
+  async function buildLimitApp(abuseLimits: Parameters<typeof buildApp>[0]["abuseLimits"]) {
+    limitTempDir = mkdtempSync(join(tmpdir(), "instory-limit-"));
+    limitDatabase = new AppDatabase(join(limitTempDir, "limit.sqlite"));
+    limitApp = await buildApp({
+      sessionStore: new SessionStore(limitDatabase),
+      readerProfileStore: new ReaderProfileStore(limitDatabase),
+      storyCatalog: new StoryCatalog(limitDatabase),
+      userStore: new UserStore(limitDatabase),
+      usageStore: new UsageStore(limitDatabase),
+      moderationStore: new ModerationStore(limitDatabase),
+      modelRuntime: new ModelRuntime(new ModelConfigStore(limitDatabase), {
+        provider: "mock",
+        updatedAt: "2026-05-20T00:00:00.000Z"
+      }),
+      abuseLimits,
+      allowLegacyAnonymousUser: true,
+      logger: false
+    });
+  }
+
+  afterEach(async () => {
+    await limitApp?.close();
+    limitDatabase?.close();
+    rmSync(limitTempDir, { recursive: true, force: true });
+  });
+
+  it("stops sign-in attempts from one address once the burst limit is reached", async () => {
+    await buildLimitApp({ authAttempts: { limit: 2, windowMs: 60_000 } });
+
+    const attempt = async () =>
+      limitApp.inject({
+        method: "POST",
+        url: "/api/auth/login",
+        payload: { email: "nobody@example.com", password: "pw-12345678" }
+      });
+
+    expect((await attempt()).statusCode).toBe(401);
+    expect((await attempt()).statusCode).toBe(401);
+
+    const blocked = await attempt();
+    expect(blocked.statusCode).toBe(429);
+    expect(Number(blocked.headers["retry-after"])).toBeGreaterThan(0);
+    expect(blocked.json<{ retryAfterSeconds: number }>().retryAfterSeconds).toBeGreaterThan(0);
+  });
+
+  it("locks a single account after repeated failures without burning the address budget", async () => {
+    // A generous address budget isolates the per-account rule.
+    await buildLimitApp({
+      authAttempts: { limit: 100, windowMs: 60_000 },
+      loginFailuresPerAccount: { limit: 2, windowMs: 900_000 }
+    });
+
+    const registered = await limitApp.inject({
+      method: "POST",
+      url: "/api/auth/register",
+      payload: { email: "target@example.com", displayName: "目标", password: "pw-12345678" }
+    });
+    expect(registered.statusCode).toBe(201);
+
+    const guess = async (password: string) =>
+      limitApp.inject({
+        method: "POST",
+        url: "/api/auth/login",
+        payload: { email: "target@example.com", password }
+      });
+
+    expect((await guess("wrong-guess-1")).statusCode).toBe(401);
+    expect((await guess("wrong-guess-2")).statusCode).toBe(401);
+    // Locked out even with the right password, which is the point of the rule.
+    expect((await guess("pw-12345678")).statusCode).toBe(429);
+
+    // Another account is unaffected, so one victim cannot deny service to everyone.
+    const other = await limitApp.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "someone-else@example.com", password: "pw-12345678" }
+    });
+    expect(other.statusCode).toBe(401);
+  });
+
+  it("clears an account's failure tally after a successful sign-in", async () => {
+    await buildLimitApp({
+      authAttempts: { limit: 100, windowMs: 60_000 },
+      loginFailuresPerAccount: { limit: 3, windowMs: 900_000 }
+    });
+
+    await limitApp.inject({
+      method: "POST",
+      url: "/api/auth/register",
+      payload: { email: "typo@example.com", displayName: "手滑", password: "pw-12345678" }
+    });
+
+    const login = async (password: string) =>
+      limitApp.inject({
+        method: "POST",
+        url: "/api/auth/login",
+        payload: { email: "typo@example.com", password }
+      });
+
+    expect((await login("wrong")).statusCode).toBe(401);
+    expect((await login("wrong")).statusCode).toBe(401);
+    expect((await login("pw-12345678")).statusCode).toBe(200);
+
+    // Two more mistakes would have tripped the limit had the success not reset it.
+    expect((await login("wrong")).statusCode).toBe(401);
+    expect((await login("wrong")).statusCode).toBe(401);
+    expect((await login("pw-12345678")).statusCode).toBe(200);
+  });
+
+  it("caps how fast one reader can drive the model", async () => {
+    await buildLimitApp({ generationBurst: { limit: 1, windowMs: 60_000 } });
+
+    const created = await limitApp.inject({
+      method: "POST",
+      url: "/api/stories/rain-mansion/sessions",
+      payload: { entryMode: "existing_character", characterId: "lu_qinghe" }
+    });
+    const sessionId = created.json<CreateSessionResponse>().session.id;
+
+    const advance = async () =>
+      limitApp.inject({
+        method: "POST",
+        url: `/api/sessions/${sessionId}/turns`,
+        payload: { inputType: "read_continue", content: "继续阅读" }
+      });
+
+    expect((await advance()).statusCode).toBe(200);
+
+    const throttled = await advance();
+    expect(throttled.statusCode).toBe(429);
+    expect(throttled.json<{ error: string }>().error).toContain("推进太快");
+
+    // The streaming endpoint shares the budget, so it cannot be used to sidestep it.
+    const streamed = await limitApp.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/turns/stream`,
+      payload: { inputType: "read_continue", content: "继续阅读" }
+    });
+    expect(streamed.statusCode).toBe(429);
+  });
+});
+

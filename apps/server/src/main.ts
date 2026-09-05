@@ -26,6 +26,32 @@ if (isProduction) {
 }
 
 const defaultDatabasePath = join(process.env.INIT_CWD ?? process.cwd(), "data", "instory.sqlite");
+
+/**
+ * Per-address rate limits are only meaningful if the address is real. Behind a
+ * proxy every request arrives from the proxy, so the limiter would either lock all
+ * readers out together or (worse) let one reader exhaust everyone's budget. Set
+ * TRUST_PROXY to the number of proxy hops, or to a trusted address/CIDR list.
+ * Leaving it unset is the safe default: X-Forwarded-For is client-controlled.
+ */
+function readTrustProxy(value: string | undefined): boolean | number | string[] {
+  if (!value) {
+    return false;
+  }
+
+  const hops = Number(value);
+  if (Number.isInteger(hops) && hops > 0) {
+    return hops;
+  }
+
+  const addresses = value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  return addresses.length > 0 ? addresses : false;
+}
+
 const database = new AppDatabase(process.env.SQLITE_DATABASE_PATH ?? defaultDatabasePath);
 const modelRuntime = new ModelRuntime(new ModelConfigStore(database), createInitialModelConfig(process.env));
 const sessionStore = new SessionStore(database);
@@ -45,6 +71,7 @@ const app = await buildApp({
   adminToken,
   dailyTurnQuota: Number(process.env.DAILY_TURN_QUOTA || 20),
   pricing: readPricingFromEnv(process.env),
+  trustProxy: readTrustProxy(process.env.TRUST_PROXY),
   // Sign-in is not wired into the web client yet, so local development still falls
   // back to the seeded legacy reader. Production always requires a real session.
   allowLegacyAnonymousUser: !isProduction

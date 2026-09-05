@@ -11,7 +11,15 @@ import type {
   UpdateStoryRequest
 } from "@instory/shared";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000";
+/**
+ * Where the API answers, as seen from the web server. Only server-side code uses it
+ * now that browser requests go through the same-origin rewrite, so it is read from a
+ * plain (non NEXT_PUBLIC_*) variable first: those are inlined at build time, which
+ * makes them useless for a container that learns the API address at run time.
+ * API_PROXY_TARGET is the same value next.config.ts forwards to.
+ */
+const API_BASE =
+  process.env.API_PROXY_TARGET ?? process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000";
 
 /**
  * Server-only. Never fall back to a NEXT_PUBLIC_* variable here: Next.js inlines
@@ -362,6 +370,10 @@ export async function createTurn(params: {
     throw new UnauthenticatedError();
   }
 
+  if (response.status === 429) {
+    throw await readThrottleError(response);
+  }
+
   if (!response.ok) {
     const detail = await response.text();
     throw new Error(detail ? `推进故事失败：${detail}` : "推进故事失败");
@@ -385,6 +397,36 @@ export class QuotaExceededError extends Error {
     this.name = "QuotaExceededError";
   }
 }
+
+/**
+ * Thrown when the API throttled a burst. Unlike QuotaExceededError this clears on
+ * its own, so callers should invite a retry rather than send the reader away.
+ */
+export class RateLimitedError extends Error {
+  readonly retryAfterSeconds: number;
+
+  constructor(message = "请求过于频繁，请稍后再试。", retryAfterSeconds = 1) {
+    super(message);
+    this.name = "RateLimitedError";
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+/**
+ * Both the daily quota and the burst limiter answer 429. Only the burst limiter
+ * reports retryAfterSeconds, which is what tells the two apart.
+ */
+async function readThrottleError(response: Response): Promise<QuotaExceededError | RateLimitedError> {
+  const body = await readApiBody(response);
+  const message = typeof body?.error === "string" ? body.error : undefined;
+
+  if (typeof body?.retryAfterSeconds === "number") {
+    return new RateLimitedError(message, body.retryAfterSeconds);
+  }
+
+  return new QuotaExceededError(message);
+}
+
 
 /**
  * Advances a turn while reporting narration as it is written. Resolves with the same
@@ -420,7 +462,7 @@ export async function streamTurn(
   }
 
   if (response.status === 429) {
-    throw new QuotaExceededError((await readApiError(response)) ?? undefined);
+    throw await readThrottleError(response);
   }
 
   if (!response.ok || !response.body) {
@@ -589,13 +631,20 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 }
 
 async function readApiError(response: Response): Promise<string | null> {
+  const body = await readApiBody(response);
+  return typeof body?.error === "string" ? body.error : null;
+}
+
+/** Parses a JSON error body, tolerating non-JSON and malformed responses. */
+async function readApiBody(
+  response: Response
+): Promise<{ error?: unknown; retryAfterSeconds?: unknown } | null> {
   try {
     const contentType = response.headers.get("content-type") ?? "";
     if (!contentType.includes("application/json")) {
       return null;
     }
-    const data = (await response.json()) as { error?: string };
-    return data.error ?? null;
+    return (await response.json()) as { error?: unknown; retryAfterSeconds?: unknown };
   } catch {
     return null;
   }

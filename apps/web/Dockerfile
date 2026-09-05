@@ -16,7 +16,9 @@ COPY tsconfig.base.json ./
 COPY packages packages
 COPY apps/web apps/web
 
-# NEXT_PUBLIC_* values are inlined at build time, so the API base must be known here.
+# NEXT_PUBLIC_* values are inlined at build time. Nothing in the browser bundle needs
+# the API base any more (requests go through the same-origin /api rewrite), so this is
+# only a fallback for server-side calls; prefer API_PROXY_TARGET at run time.
 ARG NEXT_PUBLIC_API_BASE=http://localhost:4000
 ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE
 ENV NEXT_TELEMETRY_DISABLED=1

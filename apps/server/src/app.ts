@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import cors from "@fastify/cors";
 import Fastify from "fastify";
+import type { FastifyReply } from "fastify";
 import { z } from "zod";
 import {
   createReaderProfileRequestSchema,
@@ -43,8 +44,16 @@ import {
   type ModerationSurface
 } from "./moderation/checker.js";
 import type { ModelRuntime } from "./model-runtime.js";
+import {
+  DEFAULT_ABUSE_LIMITS,
+  SlidingWindowRateLimiter,
+  type AbuseLimitSettings,
+  type RateLimitDecision
+} from "./security/rate-limiter.js";
 
 const SESSION_COOKIE_NAME = "instory_session";
+
+const GENERATION_BURST_MESSAGE = "推进太快了，稍等一会儿再继续。";
 
 const updateModelConfigSchema = z.object({
   provider: z.enum(["mock", "openai-compatible"]),
@@ -110,6 +119,25 @@ function buildSessionCookie(token: string, maxAgeSeconds: number, secure: boolea
 
   return attributes.join("; ");
 }
+
+/**
+ * Sends 429 with a Retry-After header when a limiter said no. Returns true if the
+ * reply has been sent, so callers can `return reply` and stop.
+ */
+function rejectIfLimited(
+  reply: FastifyReply,
+  decision: RateLimitDecision,
+  message = "请求过于频繁，请稍后再试。"
+): boolean {
+  if (decision.allowed) {
+    return false;
+  }
+
+  reply.header("retry-after", String(decision.retryAfterSeconds));
+  reply.code(429).send({ error: message, retryAfterSeconds: decision.retryAfterSeconds });
+  return true;
+}
+
 
 interface OpeningScene {
   state: WorldState;
@@ -282,6 +310,15 @@ export interface BuildAppOptions {
    * session.
    */
   allowLegacyAnonymousUser?: boolean;
+  /** Overrides individual abuse limits; anything omitted keeps its default. */
+  abuseLimits?: Partial<AbuseLimitSettings>;
+  /**
+   * How many reverse proxies sit in front of the API, or a trusted address/CIDR.
+   * Required for per-address limits to mean anything behind a proxy, because
+   * otherwise every request appears to come from the proxy. Must stay off when
+   * nothing trusted is in front, since a client can forge X-Forwarded-For.
+   */
+  trustProxy?: boolean | number | string | string[];
   logger?: boolean;
 }
 
@@ -293,8 +330,15 @@ declare module "fastify" {
 
 export async function buildApp(options: BuildAppOptions) {
   const app = Fastify({
-    logger: options.logger ?? true
+    logger: options.logger ?? true,
+    trustProxy: options.trustProxy ?? false
   });
+
+  const abuseLimits: AbuseLimitSettings = { ...DEFAULT_ABUSE_LIMITS, ...options.abuseLimits };
+  const authAttemptLimiter = new SlidingWindowRateLimiter(abuseLimits.authAttempts);
+  const loginFailureLimiter = new SlidingWindowRateLimiter(abuseLimits.loginFailuresPerAccount);
+  const generationLimiter = new SlidingWindowRateLimiter(abuseLimits.generationBurst);
+
 
   await app.register(cors, {
     origin: true,
@@ -383,6 +427,10 @@ export async function buildApp(options: BuildAppOptions) {
   }
 
   app.post("/api/auth/register", async (request, reply) => {
+    if (rejectIfLimited(reply, authAttemptLimiter.consume(`register:${request.ip}`))) {
+      return reply;
+    }
+
     const parsed = registerRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
@@ -404,9 +452,21 @@ export async function buildApp(options: BuildAppOptions) {
   });
 
   app.post("/api/auth/login", async (request, reply) => {
+    if (rejectIfLimited(reply, authAttemptLimiter.consume(`login:${request.ip}`))) {
+      return reply;
+    }
+
     const parsed = loginRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
+    }
+
+    // Keyed by account rather than address, so stuffing the same account from a
+    // botnet still runs into the same wall.
+    const accountKey = `login:${parsed.data.email.trim().toLowerCase()}`;
+    const accountBudget = loginFailureLimiter.consume(accountKey);
+    if (rejectIfLimited(reply, accountBudget, "尝试次数过多，该账号已被暂时锁定，请稍后再试。")) {
+      return reply;
     }
 
     const user = options.userStore.verifyCredentials(parsed.data.email, parsed.data.password);
@@ -414,6 +474,9 @@ export async function buildApp(options: BuildAppOptions) {
       // Deliberately does not say which half was wrong.
       return reply.code(401).send({ error: "邮箱或密码不正确" });
     }
+
+    // Only failures should count, so a successful sign-in clears the account's tally.
+    loginFailureLimiter.reset(accountKey);
 
     const session = options.userStore.issueSession(user.id);
     reply.header("set-cookie", buildSessionCookie(session.token, SESSION_TTL_MS / 1000, secureCookies));
@@ -909,6 +972,11 @@ export async function buildApp(options: BuildAppOptions) {
       return reply.code(429).send({ error: "今日推进次数已用完，请明天再来。", quota: quotaBefore });
     }
 
+    // Consumed last, so only requests that are really about to call the model pay for it.
+    if (rejectIfLimited(reply, generationLimiter.consume(`turn:${request.authUser.id}`), GENERATION_BURST_MESSAGE)) {
+      return reply;
+    }
+
     const storyDetail = options.storyCatalog.findStory(session.storyId) ?? undefined;
     const intent = parsed.data.inputType === "read_continue" ? "read_segment" : "reader_action";
     const modelConfig = options.modelRuntime.getPublicConfig();
@@ -1020,6 +1088,12 @@ export async function buildApp(options: BuildAppOptions) {
       // Refused before opening the stream, so the client gets a normal JSON error.
       return reply.code(429).send({ error: "今日推进次数已用完，请明天再来。", quota: quotaBefore });
     }
+
+    // Also refused before the stream opens, for the same reason.
+    if (rejectIfLimited(reply, generationLimiter.consume(`turn:${request.authUser.id}`), GENERATION_BURST_MESSAGE)) {
+      return reply;
+    }
+
 
     const storyDetail = options.storyCatalog.findStory(session.storyId) ?? undefined;
     const intent = (parsed.data.inputType === "read_continue" ? "read_segment" : "reader_action") as
