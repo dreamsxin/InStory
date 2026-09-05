@@ -1,7 +1,20 @@
+import { redirect } from "next/navigation";
+import { AccountBar } from "@/components/account-bar";
 import { HomeWorkspace } from "@/components/home-workspace";
-import { listMyStoryDetails, listReaderProfiles, listReaderSessions, listStories } from "@/lib/api";
+import {
+  getCurrentUser,
+  listMyStoryDetails,
+  listReaderProfiles,
+  listReaderSessions,
+  listStories
+} from "@/lib/api";
 
 export default async function HomePage() {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
   const [stories, profiles, myStoryDetails, sessions] = await Promise.all([
     listStories(),
     listReaderProfiles(),
@@ -9,5 +22,10 @@ export default async function HomePage() {
     listReaderSessions()
   ]);
 
-  return <HomeWorkspace myStoryDetails={myStoryDetails} profiles={profiles} sessions={sessions} stories={stories} />;
+  return (
+    <>
+      <AccountBar user={user} />
+      <HomeWorkspace myStoryDetails={myStoryDetails} profiles={profiles} sessions={sessions} stories={stories} />
+    </>
+  );
 }

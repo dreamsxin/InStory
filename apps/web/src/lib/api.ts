@@ -1,4 +1,5 @@
 import type {
+  AuthUser,
   CreateStoryRequest,
   CreateSessionResponse,
   CreateTurnResponse,
@@ -19,6 +20,50 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000";
  * server actions, so this value must stay on the server.
  */
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
+
+export const SESSION_COOKIE_NAME = "instory_session";
+
+/**
+ * Single entry point for reader-facing API calls. This module is imported from both
+ * client components and server components/actions, so credentials have to be
+ * attached differently in each environment:
+ *
+ * - In the browser, `credentials: "include"` lets it send the session cookie itself.
+ * - On the server, fetch inherits nothing, so the caller's cookie is read from the
+ *   incoming request and forwarded by hand. `next/headers` is imported lazily so it
+ *   never reaches the client bundle.
+ */
+export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  if (init.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  if (typeof window === "undefined") {
+    const { cookies } = await import("next/headers");
+    const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+    if (token) {
+      headers.set("cookie", `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`);
+    }
+
+    return fetch(`${API_BASE}${path}`, { cache: "no-store", ...init, headers });
+  }
+
+  return fetch(`${API_BASE}${path}`, {
+    cache: "no-store",
+    ...init,
+    headers,
+    credentials: "include"
+  });
+}
+
+/** Thrown when the API rejects a call because the caller is not signed in. */
+export class UnauthenticatedError extends Error {
+  constructor(message = "请先登录后再继续。") {
+    super(message);
+    this.name = "UnauthenticatedError";
+  }
+}
 
 export interface AdminStatus {
   service: string;
@@ -67,7 +112,7 @@ export interface AdminModelVerificationResult {
 }
 
 export async function listStories(): Promise<StorySummary[]> {
-  const response = await fetch(`${API_BASE}/api/stories`, { cache: "no-store" });
+  const response = await apiFetch("/api/stories");
   if (!response.ok) {
     throw new Error("加载故事列表失败");
   }
@@ -76,7 +121,10 @@ export async function listStories(): Promise<StorySummary[]> {
 }
 
 export async function listMyStories(): Promise<StorySummary[]> {
-  const response = await fetch(`${API_BASE}/api/me/stories`, { cache: "no-store" });
+  const response = await apiFetch("/api/me/stories");
+  if (response.status === 401) {
+    throw new UnauthenticatedError();
+  }
   if (!response.ok) {
     throw new Error("加载我的故事失败");
   }
@@ -90,17 +138,18 @@ export async function listMyStoryDetails(): Promise<StoryDetail[]> {
 }
 
 export async function createSession(storyId: string, readerProfileId?: string | null): Promise<CreateSessionResponse> {
-  const response = await fetch(`${API_BASE}/api/stories/${storyId}/sessions`, {
+  const response = await apiFetch(`/api/stories/${storyId}/sessions`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
     body: JSON.stringify({
       entryMode: readerProfileId ? "custom_role" : "existing_character",
       characterId: readerProfileId ? null : "lu_qinghe",
       readerProfileId: readerProfileId ?? null
     })
   });
+
+  if (response.status === 401) {
+    throw new UnauthenticatedError();
+  }
 
   if (!response.ok) {
     const detail = await response.text();
@@ -111,7 +160,10 @@ export async function createSession(storyId: string, readerProfileId?: string | 
 }
 
 export async function listReaderProfiles(): Promise<ReaderProfile[]> {
-  const response = await fetch(`${API_BASE}/api/reader/profiles`, { cache: "no-store" });
+  const response = await apiFetch("/api/reader/profiles");
+  if (response.status === 401) {
+    throw new UnauthenticatedError();
+  }
   if (!response.ok) {
     throw new Error("加载我的角色失败");
   }
@@ -120,7 +172,10 @@ export async function listReaderProfiles(): Promise<ReaderProfile[]> {
 }
 
 export async function listReaderSessions(limit = 20): Promise<ReaderSessionListItem[]> {
-  const response = await fetch(`${API_BASE}/api/me/sessions?limit=${limit}`, { cache: "no-store" });
+  const response = await apiFetch(`/api/me/sessions?limit=${limit}`);
+  if (response.status === 401) {
+    throw new UnauthenticatedError();
+  }
   if (!response.ok) {
     throw new Error("加载继续阅读列表失败");
   }
@@ -136,13 +191,14 @@ export async function createReaderProfile(input: {
   avatarUrl?: string | null;
   description: string;
 }): Promise<ReaderProfile> {
-  const response = await fetch(`${API_BASE}/api/reader/profiles`, {
+  const response = await apiFetch("/api/reader/profiles", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
     body: JSON.stringify(input)
   });
+
+  if (response.status === 401) {
+    throw new UnauthenticatedError();
+  }
 
   if (!response.ok) {
     throw new Error("创建我的角色失败");
@@ -163,13 +219,14 @@ export async function updateReaderProfile(
     description: string;
   }
 ): Promise<ReaderProfile> {
-  const response = await fetch(`${API_BASE}/api/reader/profiles/${profileId}`, {
+  const response = await apiFetch(`/api/reader/profiles/${profileId}`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json"
-    },
     body: JSON.stringify(input)
   });
+
+  if (response.status === 401) {
+    throw new UnauthenticatedError();
+  }
 
   if (!response.ok) {
     throw new Error("更新我的角色失败");
@@ -180,9 +237,13 @@ export async function updateReaderProfile(
 }
 
 export async function deleteReaderProfile(profileId: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/api/reader/profiles/${profileId}`, {
+  const response = await apiFetch(`/api/reader/profiles/${profileId}`, {
     method: "DELETE"
   });
+
+  if (response.status === 401) {
+    throw new UnauthenticatedError();
+  }
 
   if (!response.ok) {
     throw new Error("删除我的角色失败");
@@ -190,13 +251,14 @@ export async function deleteReaderProfile(profileId: string): Promise<void> {
 }
 
 export async function createStory(input: CreateStoryRequest): Promise<StoryDetail> {
-  const response = await fetch(`${API_BASE}/api/stories`, {
+  const response = await apiFetch("/api/stories", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
     body: JSON.stringify(input)
   });
+
+  if (response.status === 401) {
+    throw new UnauthenticatedError();
+  }
 
   if (!response.ok) {
     throw new Error("创建故事失败");
@@ -207,13 +269,14 @@ export async function createStory(input: CreateStoryRequest): Promise<StoryDetai
 }
 
 export async function updateMyStory(storyId: string, input: UpdateStoryRequest): Promise<StoryDetail> {
-  const response = await fetch(`${API_BASE}/api/me/stories/${storyId}`, {
+  const response = await apiFetch(`/api/me/stories/${storyId}`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json"
-    },
     body: JSON.stringify(input)
   });
+
+  if (response.status === 401) {
+    throw new UnauthenticatedError();
+  }
 
   if (!response.ok) {
     throw new Error("更新我的故事失败");
@@ -224,9 +287,13 @@ export async function updateMyStory(storyId: string, input: UpdateStoryRequest):
 }
 
 export async function deleteMyStory(storyId: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/api/me/stories/${storyId}`, {
+  const response = await apiFetch(`/api/me/stories/${storyId}`, {
     method: "DELETE"
   });
+
+  if (response.status === 401) {
+    throw new UnauthenticatedError();
+  }
 
   if (!response.ok) {
     throw new Error("删除我的故事失败");
@@ -234,7 +301,7 @@ export async function deleteMyStory(storyId: string): Promise<void> {
 }
 
 export async function getStoryDetail(storyId: string): Promise<StoryDetail> {
-  const response = await fetch(`${API_BASE}/api/stories/${storyId}`, { cache: "no-store" });
+  const response = await apiFetch(`/api/stories/${storyId}`);
   if (!response.ok) {
     throw new Error("加载故事详情失败");
   }
@@ -242,7 +309,10 @@ export async function getStoryDetail(storyId: string): Promise<StoryDetail> {
 }
 
 export async function getSession(sessionId: string): Promise<StorySession> {
-  const response = await fetch(`${API_BASE}/api/sessions/${sessionId}`, { cache: "no-store" });
+  const response = await apiFetch(`/api/sessions/${sessionId}`);
+  if (response.status === 401) {
+    throw new UnauthenticatedError();
+  }
   if (!response.ok) {
     throw new Error("加载故事会话失败");
   }
@@ -256,17 +326,18 @@ export async function createTurn(params: {
   inputType: "free_text" | "choice" | "read_continue";
   choiceId?: string | null;
 }): Promise<CreateTurnResponse> {
-  const response = await fetch(`${API_BASE}/api/sessions/${params.sessionId}/turns`, {
+  const response = await apiFetch(`/api/sessions/${params.sessionId}/turns`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
     body: JSON.stringify({
       inputType: params.inputType,
       content: params.content,
       choiceId: params.choiceId ?? null
     })
   });
+
+  if (response.status === 401) {
+    throw new UnauthenticatedError();
+  }
 
   if (!response.ok) {
     const detail = await response.text();
@@ -277,15 +348,16 @@ export async function createTurn(params: {
 }
 
 export async function rewindSession(sessionId: string, timelineNodeId: string): Promise<StorySession> {
-  const response = await fetch(`${API_BASE}/api/sessions/${sessionId}/rewind`, {
+  const response = await apiFetch(`/api/sessions/${sessionId}/rewind`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
     body: JSON.stringify({
       timelineNodeId
     })
   });
+
+  if (response.status === 401) {
+    throw new UnauthenticatedError();
+  }
 
   if (!response.ok) {
     throw new Error("回退故事进度失败");
@@ -296,9 +368,13 @@ export async function rewindSession(sessionId: string, timelineNodeId: string): 
 }
 
 export async function resetSession(sessionId: string): Promise<StorySession> {
-  const response = await fetch(`${API_BASE}/api/sessions/${sessionId}/reset`, {
+  const response = await apiFetch(`/api/sessions/${sessionId}/reset`, {
     method: "POST"
   });
+
+  if (response.status === 401) {
+    throw new UnauthenticatedError();
+  }
 
   if (!response.ok) {
     throw new Error("重置故事会话失败");
@@ -306,6 +382,75 @@ export async function resetSession(sessionId: string): Promise<StorySession> {
 
   const data = (await response.json()) as { session: StorySession };
   return data.session;
+}
+
+export interface AuthSessionPayload {
+  user: AuthUser;
+  token: string;
+  expiresAt: string;
+}
+
+/**
+ * The API also sets its own cookie, but that cookie belongs to the API origin and
+ * never reaches the browser when the call is made from a server action. The token is
+ * returned so the caller can set a cookie on the web origin instead.
+ */
+export async function registerAccount(input: {
+  email: string;
+  displayName: string;
+  password: string;
+}): Promise<AuthSessionPayload> {
+  const response = await apiFetch("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+
+  if (!response.ok) {
+    throw new Error((await readApiError(response)) ?? "注册失败，请稍后重试。");
+  }
+
+  return (await response.json()) as AuthSessionPayload;
+}
+
+export async function loginAccount(input: { email: string; password: string }): Promise<AuthSessionPayload> {
+  const response = await apiFetch("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+
+  if (!response.ok) {
+    throw new Error((await readApiError(response)) ?? "登录失败，请稍后重试。");
+  }
+
+  return (await response.json()) as AuthSessionPayload;
+}
+
+export async function logoutAccount(): Promise<void> {
+  await apiFetch("/api/auth/logout", { method: "POST" });
+}
+
+/** Returns null instead of throwing when nobody is signed in. */
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  const response = await apiFetch("/api/auth/me");
+  if (!response.ok) {
+    return null;
+  }
+
+  const data = (await response.json()) as { user: AuthUser };
+  return data.user;
+}
+
+async function readApiError(response: Response): Promise<string | null> {
+  try {
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.includes("application/json")) {
+      return null;
+    }
+    const data = (await response.json()) as { error?: string };
+    return data.error ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function getAdminStatus(): Promise<AdminStatus> {
