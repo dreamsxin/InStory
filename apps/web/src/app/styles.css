@@ -299,8 +299,7 @@ a {
 
 .story-card,
 .panel,
-.turn,
-.composer {
+.turn {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -357,12 +356,6 @@ a {
 .panel h2,
 .panel h3 {
   margin: 0;
-}
-
-.composer textarea:focus {
-  border-color: rgba(139, 47, 47, 0.5);
-  box-shadow: 0 0 0 3px rgba(139, 47, 47, 0.12);
-  outline: none;
 }
 
 .profile-panel {
@@ -670,7 +663,6 @@ a {
 }
 
 .reader-topbar,
-.reader-composer,
 .reader-sidebar {
   transition: opacity 160ms ease, transform 160ms ease, max-height 160ms ease;
 }
@@ -681,8 +673,7 @@ a {
   transform: translateY(-8px);
 }
 
-.reader-topbar.reader-chrome-hidden,
-.reader-composer.reader-chrome-hidden {
+.reader-topbar.reader-chrome-hidden {
   display: none;
 }
 
@@ -702,11 +693,33 @@ a {
   padding-bottom: 6px;
 }
 
-.reader-tool-dock {
+/**
+ * One fixed column on the right holding the context panel above the tool dock.
+ * Keeping them in the same flex context is what guarantees they cannot overlap:
+ * as separate fixed elements the dock grew taller than its gap and covered the
+ * panel's own buttons. The rail itself must not swallow clicks meant for the text.
+ */
+.reader-side-rail {
   position: fixed;
   right: 18px;
+  top: 18px;
   bottom: 18px;
-  z-index: 26;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-end;
+  gap: 10px;
+  width: min(360px, calc(100vw - 36px));
+  pointer-events: none;
+}
+
+.reader-side-rail > * {
+  pointer-events: auto;
+}
+
+.reader-tool-dock {
+  flex: 0 0 auto;
   display: grid;
   gap: 8px;
   border: 1px solid var(--line);
@@ -718,12 +731,9 @@ a {
 }
 
 .reader-context-panel {
-  position: fixed;
-  right: 18px;
-  top: 18px;
-  bottom: 86px;
-  z-index: 25;
-  width: min(360px, calc(100vw - 36px));
+  flex: 0 1 auto;
+  min-height: 0;
+  width: 100%;
   overflow-y: auto;
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -804,79 +814,212 @@ a {
   margin-top: 12px;
 }
 
-.choices {
+/* Inside the fixed context panel the card chrome is redundant: it draws a second
+   bordered, shadowed box inside a panel that already has all three. */
+.reader-context-panel .panel {
+  margin-bottom: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.action-panel {
+  display: grid;
+  gap: 22px;
+}
+
+.action-panel-intro {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.action-section {
   display: grid;
   gap: 10px;
-  margin-top: 16px;
+}
+
+.action-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.action-section-head h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.action-section-note {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.action-section-note.is-near-limit {
+  color: var(--accent);
 }
 
 .action-preset-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 14px;
+  gap: 8px;
 }
 
 .action-preset {
-  width: 100%;
-  min-height: 76px;
-  align-items: flex-start;
-  justify-content: center;
-  flex-direction: column;
-  gap: 4px;
-  text-align: left;
-  white-space: normal;
-}
-
-.action-preset span {
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.35;
-}
-
-.secondary-choices {
-  margin-top: 10px;
-}
-
-.choice {
-  width: 100%;
-  text-align: left;
-  background: #faf7f0;
-  justify-content: flex-start;
-  min-height: auto;
-  white-space: normal;
-}
-
-.composer {
-  max-width: 820px;
-  padding: 16px;
-  margin-top: 16px;
   display: grid;
-  gap: 12px;
+  gap: 4px;
+  padding: 12px 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  text-align: left;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
 }
 
-.composer textarea {
+.action-preset:hover:not(:disabled) {
+  border-color: color-mix(in oklab, var(--accent) 40%, var(--line));
+  background: color-mix(in oklab, var(--accent) 4%, var(--panel));
+  transform: translateY(-1px);
+}
+
+.action-preset:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.action-preset-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.action-preset-hint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.action-choice-list {
+  display: grid;
+  gap: 8px;
+}
+
+.action-choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  text-align: left;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.action-choice:hover:not(:disabled) {
+  border-color: color-mix(in oklab, var(--accent) 40%, var(--line));
+  background: color-mix(in oklab, var(--accent) 4%, var(--panel));
+}
+
+.action-choice-text {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Risk was previously printed as the raw enum, so a reader saw "(medium)". */
+.risk-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.risk-badge-low {
+  background: color-mix(in oklab, var(--green) 14%, transparent);
+  color: var(--green);
+}
+
+.risk-badge-medium {
+  background: color-mix(in oklab, var(--blue) 14%, transparent);
+  color: var(--blue);
+}
+
+.risk-badge-high {
+  background: color-mix(in oklab, var(--accent) 14%, transparent);
+  color: var(--accent-strong);
+}
+
+.action-form {
+  display: grid;
+  gap: 10px;
+}
+
+.action-textarea {
   width: 100%;
-  min-height: 72px;
+  min-height: 96px;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  line-height: 1.6;
   resize: vertical;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 
-.action-panel .reader-composer {
-  position: static;
-  max-width: none;
-  margin-top: 12px;
-  padding: 0;
-  border: 0;
-  box-shadow: none;
+.action-textarea::placeholder {
+  color: color-mix(in oklab, var(--muted) 70%, transparent);
 }
 
-.reader-action-field {
-  width: 100%;
+.action-textarea:focus {
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 14%, transparent);
+  outline: none;
 }
 
-.reader-action-textarea {
-  width: 100%;
-  min-height: 72px;
+.action-form-error {
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid color-mix(in oklab, var(--accent-strong) 45%, transparent);
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--accent-strong) 10%, transparent);
+  color: var(--accent-strong);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.action-form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.action-form-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.action-preset:focus-visible,
+.action-choice:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--accent) 70%, transparent);
+  outline-offset: 2px;
+}
+
+.action-preset:disabled,
+.action-choice:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .instory-select {
@@ -1454,20 +1597,31 @@ a {
     padding: 14px;
   }
 
+  /* The rail's stacked column is a desktop shape. On phones the panel and the dock
+     go back to being pinned separately, where the dock is a short 3-up row that
+     cannot reach the panel above it. */
+  .reader-side-rail {
+    display: contents;
+  }
+
   .reader-context-panel {
+    position: fixed;
     left: 12px;
     right: 12px;
     top: auto;
     bottom: max(82px, calc(env(safe-area-inset-bottom) + 72px));
+    z-index: 25;
     width: auto;
     max-height: 50dvh;
     padding: 12px;
   }
 
   .reader-tool-dock {
+    position: fixed;
     left: 12px;
     right: 12px;
     bottom: max(12px, env(safe-area-inset-bottom));
+    z-index: 26;
     width: auto;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
@@ -1482,37 +1636,6 @@ a {
     width: 100%;
     justify-content: center;
     white-space: normal;
-  }
-
-  .reader-composer {
-    position: fixed;
-    left: 12px;
-    right: 12px;
-    bottom: max(12px, env(safe-area-inset-bottom));
-    z-index: 12;
-    max-width: none;
-    margin: 0;
-    padding: 12px;
-  }
-
-  .action-panel .reader-composer {
-    position: static;
-    left: auto;
-    right: auto;
-    bottom: auto;
-    max-width: none;
-    margin-top: 12px;
-    padding: 0;
-  }
-
-  .reader-composer textarea {
-    min-height: 58px;
-    max-height: 120px;
-  }
-
-  .choices {
-    flex: 0 0 auto;
-    margin-top: 10px;
   }
 
   .reading-intervention-bar {
@@ -1543,7 +1666,6 @@ a {
     white-space: normal;
   }
 
-  .reader-chrome-hidden.reader-composer,
   .reader-chrome-hidden.reader-topbar {
     max-height: 0;
     margin: 0;
@@ -1702,42 +1824,34 @@ a {
     line-height: 1.74;
   }
 
-  .choices {
-    flex: 0 0 auto;
-    grid-template-columns: 1fr;
-    gap: 8px;
-    margin-top: 8px;
-  }
-
   .action-preset-grid {
     grid-template-columns: 1fr;
     gap: 8px;
   }
 
-  .action-preset {
-    min-height: 62px;
-  }
-
-  .choice {
-    max-height: 64px;
-    overflow: hidden;
-    padding: 9px 10px;
-    font-size: 13px;
+  /* Same reasoning as the phone block: the rail steps aside and the two elements
+     pin themselves, the dock along the bottom and the panel up the right edge. */
+  .reader-side-rail {
+    display: contents;
   }
 
   .reader-tool-dock {
+    position: fixed;
     top: auto;
     left: max(10px, env(safe-area-inset-left));
     right: max(10px, env(safe-area-inset-right));
     bottom: max(8px, env(safe-area-inset-bottom));
+    z-index: 26;
     width: auto;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .reader-context-panel {
+    position: fixed;
     top: max(8px, env(safe-area-inset-top));
     right: max(10px, env(safe-area-inset-right));
     bottom: max(62px, calc(env(safe-area-inset-bottom) + 62px));
+    z-index: 25;
     width: min(320px, 34vw);
     max-height: none;
   }
@@ -1772,27 +1886,7 @@ a {
     padding: 12px;
   }
 
-  .reader-composer {
-    position: static;
-    flex: 0 0 auto;
-    max-width: 720px;
-    margin-top: 8px;
-    padding: 10px;
-  }
-
-  .action-panel .reader-composer {
-    max-width: none;
-    margin-top: 12px;
-    padding: 0;
-  }
-
-  .reader-composer textarea {
-    min-height: 44px;
-    max-height: 72px;
-  }
-
-  .reader-chrome-hidden.reader-topbar,
-  .reader-chrome-hidden.reader-composer {
+  .reader-chrome-hidden.reader-topbar {
     max-height: 0;
     margin: 0;
     overflow: hidden;

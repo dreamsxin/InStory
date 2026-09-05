@@ -1,7 +1,7 @@
 "use client";
 
-import { Button, Card, Chip, Label, TextArea, TextField } from "@heroui/react";
-import type { SessionTurn, StorySession, TurnQuota, WorldState } from "@instory/shared";
+import { Button, Card, Chip } from "@heroui/react";
+import type { RiskLevel, SessionTurn, StorySession, TurnQuota, WorldState } from "@instory/shared";
 import {
   createTurn,
   getOlderTurns,
@@ -226,9 +226,9 @@ export function ReaderClient({
           </div>
         </div>
 
-        {/* The action panel shows its own copy of this, but a failure from 继续阅读
-            has no panel open, and silently doing nothing is worse than a message. */}
-        {error ? (
+        {/* The action panel shows its own copy, so this only covers the case where a
+            failure from 继续阅读 would otherwise leave the reader with no explanation. */}
+        {error && activePanel !== "action" ? (
           <p className="reader-error error" role="alert">
             {error}
           </p>
@@ -255,56 +255,61 @@ export function ReaderClient({
         ) : null}
       </section>
 
-      <nav className="reader-tool-dock w-full sm:w-auto" aria-label="阅读工具">
-        <Button className="w-full min-w-0 sm:w-auto" size="sm" variant={activePanel === "status" ? "secondary" : "outline"} onPress={() => setActivePanel((panel) => (panel === "status" ? null : "status"))}>
-          状态
-        </Button>
-        <Button className="w-full min-w-0 sm:w-auto" size="sm" variant={activePanel === "memory" ? "secondary" : "outline"} onPress={() => setActivePanel((panel) => (panel === "memory" ? null : "memory"))}>
-          记忆
-        </Button>
-        <Button className="w-full min-w-0 sm:w-auto" size="sm" variant={activePanel === "action" ? "secondary" : "outline"} onPress={() => setActivePanel((panel) => (panel === "action" ? null : "action"))}>
-          行动
-        </Button>
-        <Button
-          aria-pressed={!chromeVisible}
-          className="w-full min-w-0 sm:w-auto"
-          size="sm"
-          variant={chromeVisible ? "outline" : "secondary"}
-          onPress={() => setChromeVisible((visible) => !visible)}
-        >
-          {chromeVisible ? "沉浸阅读" : "显示信息栏"}
-        </Button>
-      </nav>
+      {/* Panel and dock share one fixed column so they can never cover each other.
+          They used to be independently fixed to the bottom right, and the dock's
+          higher z-index made the panel's own submit button unclickable. */}
+      <div className="reader-side-rail">
+        {activePanel ? (
+          <aside className="reader-context-panel w-full sm:w-[360px]" aria-label="阅读辅助面板">
+            <div className="reader-context-panel-header">
+              <strong>{panelTitle(activePanel)}</strong>
+              <Button size="sm" variant="ghost" onPress={() => setActivePanel(null)}>关闭</Button>
+            </div>
+            {activePanel === "status" ? <StatePanel state={session.state} /> : null}
+            {activePanel === "memory" ? (
+              <TimelinePanel
+                loading={loading}
+                session={session}
+                onReset={() => void resetCurrentSession()}
+                onRewind={(timelineNodeId) => void rewindToNode(timelineNodeId)}
+              />
+            ) : null}
+            {activePanel === "action" && latestTurn ? (
+              <ActionPanel
+                error={error}
+                latestTurn={latestTurn}
+                loading={loading}
+                text={text}
+                onChoice={(choiceText, choiceId) => void submit(choiceText, "choice", choiceId)}
+                onPresetAction={(content) => void submit(content, "free_text")}
+                onSubmitText={() => void submit(text, "free_text")}
+                onTextChange={setText}
+              />
+            ) : null}
+          </aside>
+        ) : null}
 
-      {activePanel ? (
-        <aside className="reader-context-panel w-full sm:w-[360px]" aria-label="阅读辅助面板">
-          <div className="reader-context-panel-header">
-            <strong>{panelTitle(activePanel)}</strong>
-            <Button size="sm" variant="ghost" onPress={() => setActivePanel(null)}>关闭</Button>
-          </div>
-          {activePanel === "status" ? <StatePanel state={session.state} /> : null}
-          {activePanel === "memory" ? (
-            <TimelinePanel
-              loading={loading}
-              session={session}
-              onReset={() => void resetCurrentSession()}
-              onRewind={(timelineNodeId) => void rewindToNode(timelineNodeId)}
-            />
-          ) : null}
-          {activePanel === "action" && latestTurn ? (
-            <ActionPanel
-              error={error}
-              latestTurn={latestTurn}
-              loading={loading}
-              text={text}
-              onChoice={(choiceText, choiceId) => void submit(choiceText, "choice", choiceId)}
-              onPresetAction={(content) => void submit(content, "free_text")}
-              onSubmitText={() => void submit(text, "free_text")}
-              onTextChange={setText}
-            />
-          ) : null}
-        </aside>
-      ) : null}
+        <nav className="reader-tool-dock w-full sm:w-auto" aria-label="阅读工具">
+          <Button className="w-full min-w-0 sm:w-auto" size="sm" variant={activePanel === "status" ? "secondary" : "outline"} onPress={() => setActivePanel((panel) => (panel === "status" ? null : "status"))}>
+            状态
+          </Button>
+          <Button className="w-full min-w-0 sm:w-auto" size="sm" variant={activePanel === "memory" ? "secondary" : "outline"} onPress={() => setActivePanel((panel) => (panel === "memory" ? null : "memory"))}>
+            记忆
+          </Button>
+          <Button className="w-full min-w-0 sm:w-auto" size="sm" variant={activePanel === "action" ? "secondary" : "outline"} onPress={() => setActivePanel((panel) => (panel === "action" ? null : "action"))}>
+            行动
+          </Button>
+          <Button
+            aria-pressed={!chromeVisible}
+            className="w-full min-w-0 sm:w-auto"
+            size="sm"
+            variant={chromeVisible ? "outline" : "secondary"}
+            onPress={() => setChromeVisible((visible) => !visible)}
+          >
+            {chromeVisible ? "沉浸阅读" : "显示信息栏"}
+          </Button>
+        </nav>
+      </div>
     </main>
   );
 
@@ -456,6 +461,15 @@ function TimelinePanel({
   );
 }
 
+/** Matches createTurnRequestSchema on the server, so the counter tells the truth. */
+const MAX_ACTION_LENGTH = 2000;
+
+const RISK_LABELS: Record<RiskLevel, string> = {
+  low: "稳妥",
+  medium: "有风险",
+  high: "危险"
+};
+
 function ActionPanel({
   error,
   latestTurn,
@@ -475,67 +489,103 @@ function ActionPanel({
   onTextChange: (value: string) => void;
   text: string;
 }) {
+  const canSubmit = !loading && text.trim().length > 0;
+
   return (
-    <Card className="panel action-panel">
-      <Card.Content>
-        <h2>入戏行动</h2>
+    <div className="action-panel">
+      <p className="action-panel-intro">选一个快捷动作，或者自己写下想说的话、想做的事。</p>
+
+      <section className="action-section">
+        <div className="action-section-head">
+          <h3>快捷动作</h3>
+        </div>
         <div className="action-preset-grid" aria-label="固定入戏行动">
           {ACTION_PRESETS.map((action) => (
-            <Button
+            <button
               className="action-preset"
-              isDisabled={loading}
+              disabled={loading}
               key={action.id}
               type="button"
-              variant="outline"
-              onPress={() => onPresetAction(action.prompt)}
+              onClick={() => onPresetAction(action.prompt)}
             >
-              <strong>{action.label}</strong>
-              <span>{action.hint}</span>
-            </Button>
+              <span className="action-preset-label">{action.label}</span>
+              <span className="action-preset-hint">{action.hint}</span>
+            </button>
           ))}
         </div>
-        <h3>本幕建议</h3>
-        <div className="choices secondary-choices">
-          {latestTurn.choices.map((choice) => (
-            <Button
-              className="choice"
-              isDisabled={loading}
-              key={choice.id}
-              type="button"
-              variant="outline"
-              onPress={() => onChoice(choice.text, choice.id)}
-            >
-              {choice.text} <span className="muted">({choice.risk})</span>
-            </Button>
-          ))}
-        </div>
+      </section>
+
+      {latestTurn.choices.length > 0 ? (
+        <section className="action-section">
+          <div className="action-section-head">
+            <h3>本幕建议</h3>
+            <span className="action-section-note">来自上一段叙事</span>
+          </div>
+          <div className="action-choice-list">
+            {latestTurn.choices.map((choice) => (
+              <button
+                className="action-choice"
+                disabled={loading}
+                key={choice.id}
+                type="button"
+                onClick={() => onChoice(choice.text, choice.id)}
+              >
+                <span className="action-choice-text">{choice.text}</span>
+                <span className={`risk-badge risk-badge-${choice.risk}`}>{RISK_LABELS[choice.risk]}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="action-section">
         <form
-          className="composer reader-composer"
+          className="action-form"
           onSubmit={(event) => {
             event.preventDefault();
             onSubmitText();
           }}
         >
-          <TextField className="reader-action-field" isDisabled={loading}>
-            <Label>自由行动</Label>
-            <TextArea
-              className="reader-action-textarea"
-              name="action"
-              value={text}
-              onChange={(event) => onTextChange(event.target.value)}
-              placeholder="输入你想说的话，或想做的动作..."
-              rows={3}
-            />
-          </TextField>
-          {error ? <p className="error">{error}</p> : null}
-          <Button type="submit" isDisabled={loading || !text.trim()}>
-            {loading ? "生成中..." : "提交行动"}
-          </Button>
+          <div className="action-section-head">
+            <h3>自由行动</h3>
+            <span className={`action-section-note${text.length > MAX_ACTION_LENGTH - 100 ? " is-near-limit" : ""}`}>
+              {text.length}/{MAX_ACTION_LENGTH}
+            </span>
+          </div>
+          <textarea
+            className="action-textarea"
+            disabled={loading}
+            maxLength={MAX_ACTION_LENGTH}
+            name="action"
+            placeholder="例如：我压低声音问陆清河，昨夜谁最后见过父亲。"
+            rows={4}
+            value={text}
+            onChange={(event) => onTextChange(event.target.value)}
+            onKeyDown={(event) => {
+              // Long-form input needs Enter for newlines, so submit takes a modifier.
+              if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && canSubmit) {
+                event.preventDefault();
+                onSubmitText();
+              }
+            }}
+          />
+          {error ? (
+            <p className="action-form-error" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <div className="action-form-footer">
+            <span className="action-form-hint">Ctrl / ⌘ + Enter 提交</span>
+            <Button isDisabled={!canSubmit} type="submit">
+              {loading ? "生成中..." : "提交行动"}
+            </Button>
+          </div>
         </form>
-      </Card.Content>
-    </Card>
+      </section>
+    </div>
   );
 }
+
 
 const ACTION_PRESETS = [
   {

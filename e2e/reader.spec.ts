@@ -89,6 +89,41 @@ test.describe("reader", () => {
     await expect(page.locator(".quota-chip")).toBeVisible();
   });
 
+  test("lays the action panel out as one titled sheet and submits free text", async ({
+    page,
+    request
+  }) => {
+    const { token } = await signInViaApi(page, request, "e2e-action@example.com", "E2E 行动");
+    const sessionId = await startSession(request, token);
+
+    await page.goto(`/story/${sessionId}`);
+    await page.getByRole("button", { name: "入戏行动" }).first().click();
+
+    const panel = page.locator(".reader-context-panel");
+    await expect(panel).toBeVisible();
+
+    // The panel used to print its own <h2>入戏行动</h2> under the header's title.
+    await expect(panel.getByText("入戏行动", { exact: true })).toHaveCount(1);
+
+    await expect(panel.locator(".action-preset")).toHaveCount(4);
+    await expect(panel.locator(".action-preset").first()).toContainText("观察");
+
+    // Risk used to render as the raw enum, so a reader saw "(medium)".
+    const badges = panel.locator(".risk-badge");
+    await expect(badges.first()).toBeVisible();
+    await expect(badges.first()).not.toContainText("medium");
+
+    const counter = panel.locator(".action-section-note").last();
+    await expect(counter).toHaveText("0/2000");
+
+    const textarea = panel.locator(".action-textarea");
+    await textarea.fill("我压低声音问陆清河，昨夜谁最后见过父亲。");
+    await expect(counter).toHaveText("20/2000");
+
+    await panel.getByRole("button", { name: "提交行动" }).click();
+    await expect(page.locator(".turn")).toHaveCount(2);
+  });
+
   test("names the story it is actually playing, and can hide the bar", async ({ page, request }) => {
     const { token } = await signInViaApi(page, request, "e2e-title@example.com", "E2E 标题");
     const sessionId = await startSession(request, token);
