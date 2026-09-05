@@ -5,6 +5,7 @@ import { AppDatabase } from "./db/app-database.js";
 import { ModelConfigStore } from "./db/model-config-store.js";
 import { ReaderProfileStore } from "./db/reader-profile-store.js";
 import { SessionStore } from "./db/session-store.js";
+import { UserStore } from "./db/user-store.js";
 import { createInitialModelConfig, ModelRuntime } from "./model-runtime.js";
 
 const isProduction = process.env.NODE_ENV === "production";
@@ -28,12 +29,17 @@ const modelRuntime = new ModelRuntime(new ModelConfigStore(database), createInit
 const sessionStore = new SessionStore(database);
 const readerProfileStore = new ReaderProfileStore(database);
 const storyCatalog = new StoryCatalog(database);
+const userStore = new UserStore(database);
 const app = await buildApp({
   sessionStore,
   readerProfileStore,
   storyCatalog,
+  userStore,
   modelRuntime,
-  adminToken
+  adminToken,
+  // Sign-in is not wired into the web client yet, so local development still falls
+  // back to the seeded legacy reader. Production always requires a real session.
+  allowLegacyAnonymousUser: !isProduction
 });
 
 if (database.appliedMigrations.length > 0) {

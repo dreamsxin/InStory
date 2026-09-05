@@ -37,15 +37,16 @@ export class SessionStore {
   }
 
   /** Inserts a session together with its initial turns and timeline nodes. */
-  create(session: StorySession): void {
+  create(session: StorySession, userId: string): void {
     this.database.db.exec("BEGIN");
     try {
       this.database.db
         .prepare(
-          `INSERT INTO reader_sessions (id, story_id, reader_role, state, turn_count, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO reader_sessions (id, story_id, user_id, reader_role, state, turn_count, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
              story_id = excluded.story_id,
+             user_id = excluded.user_id,
              reader_role = excluded.reader_role,
              state = excluded.state,
              turn_count = excluded.turn_count,
@@ -54,6 +55,7 @@ export class SessionStore {
         .run(
           session.id,
           session.storyId,
+          userId,
           JSON.stringify(session.readerRole),
           JSON.stringify(session.state),
           session.turns.length,
@@ -93,17 +95,22 @@ export class SessionStore {
     }
   }
 
-  findById(id: string): StorySession | null {
+  /**
+   * Reads a session. Pass ownerId to require the session to belong to that user;
+   * omitting it is only appropriate for admin-facing reads.
+   */
+  findById(id: string, ownerId?: string): StorySession | null {
     const row = this.database.db
       .prepare(
-        `SELECT id, story_id AS storyId, reader_role AS readerRole, state, created_at AS createdAt,
-                updated_at AS updatedAt
+        `SELECT id, story_id AS storyId, user_id AS userId, reader_role AS readerRole, state,
+                created_at AS createdAt, updated_at AS updatedAt
          FROM reader_sessions WHERE id = ?`
       )
       .get(id) as
       | {
           id: string;
           storyId: string;
+          userId: string;
           readerRole: string | null;
           state: string | null;
           createdAt: string;
@@ -112,6 +119,10 @@ export class SessionStore {
       | undefined;
 
     if (!row) {
+      return null;
+    }
+
+    if (ownerId !== undefined && row.userId !== ownerId) {
       return null;
     }
 
@@ -145,11 +156,10 @@ export class SessionStore {
   }
 
   /**
-   * Returns the most recent session per story with just the fields the reader's
-   * "continue reading" list needs, so the caller does not have to load and parse
-   * every transcript to build the list.
+   * Returns the caller's most recent session per story with just the fields the
+   * "continue reading" list needs, so it never has to load and parse a transcript.
    */
-  listRecentOverviews(limit = 20): SessionOverview[] {
+  listRecentOverviews(ownerId: string, limit = 20): SessionOverview[] {
     const rows = this.database.db
       .prepare(
         `SELECT s.id, s.story_id AS storyId, s.created_at AS createdAt, s.updated_at AS updatedAt,
@@ -157,13 +167,15 @@ export class SessionStore {
                 (SELECT t.narration FROM session_turns t
                   WHERE t.session_id = s.id ORDER BY t.seq DESC LIMIT 1) AS latestNarration
          FROM reader_sessions s
-         WHERE s.updated_at = (
-           SELECT MAX(inner_s.updated_at) FROM reader_sessions inner_s WHERE inner_s.story_id = s.story_id
-         )
+         WHERE s.user_id = ?
+           AND s.updated_at = (
+             SELECT MAX(inner_s.updated_at) FROM reader_sessions inner_s
+             WHERE inner_s.story_id = s.story_id AND inner_s.user_id = s.user_id
+           )
          ORDER BY s.updated_at DESC
          LIMIT ?`
       )
-      .all(limit) as Array<{
+      .all(ownerId, limit) as Array<{
       id: string;
       storyId: string;
       createdAt: string;

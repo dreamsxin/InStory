@@ -7,11 +7,14 @@ import {
   createSessionRequestSchema,
   createStoryRequestSchema,
   createTurnRequestSchema,
+  loginRequestSchema,
+  registerRequestSchema,
   storySummarySchema,
   updateStoryRequestSchema
 } from "@instory/shared";
 import { applyStateDelta, createInitialState, createTimelineNode, shouldCreateTimelineNode } from "@instory/story-engine";
 import type {
+  AuthUser,
   CharacterProfile,
   CreateSessionResponse,
   CreateTurnResponse,
@@ -27,7 +30,10 @@ import type {
 import type { StoryCatalog } from "./data/story-catalog.js";
 import type { ReaderProfileStore } from "./db/reader-profile-store.js";
 import type { SessionOverview, SessionStore } from "./db/session-store.js";
+import { LEGACY_USER_ID, SESSION_TTL_MS, type UserRecord, type UserStore } from "./db/user-store.js";
 import type { ModelRuntime } from "./model-runtime.js";
+
+const SESSION_COOKIE_NAME = "instory_session";
 
 const updateModelConfigSchema = z.object({
   provider: z.enum(["mock", "openai-compatible"]),
@@ -38,7 +44,6 @@ const updateModelConfigSchema = z.object({
 });
 
 const updateStorySummarySchema = storySummarySchema.omit({ id: true, ownerId: true });
-const LOCAL_READER_ID = "local-reader";
 
 /** Constant-time bearer token comparison so failures do not leak the token byte by byte. */
 function matchesBearerToken(authorization: string, expectedToken: string): boolean {
@@ -46,6 +51,53 @@ function matchesBearerToken(authorization: string, expectedToken: string): boole
   const provided = Buffer.from(authorization);
 
   return expected.length === provided.length && timingSafeEqual(expected, provided);
+}
+
+/** Prefers an explicit bearer token, falling back to the browser session cookie. */
+function readSessionToken(authorization?: string, cookieHeader?: string): string | null {
+  if (authorization?.startsWith("Bearer ")) {
+    const token = authorization.slice("Bearer ".length).trim();
+    if (token) {
+      return token;
+    }
+  }
+
+  for (const part of cookieHeader?.split(";") ?? []) {
+    const separator = part.indexOf("=");
+    if (separator === -1) {
+      continue;
+    }
+    if (part.slice(0, separator).trim() === SESSION_COOKIE_NAME) {
+      return decodeURIComponent(part.slice(separator + 1).trim()) || null;
+    }
+  }
+
+  return null;
+}
+
+function toAuthUser(user: UserRecord): AuthUser {
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.displayName,
+    role: user.role
+  };
+}
+
+function buildSessionCookie(token: string, maxAgeSeconds: number, secure: boolean): string {
+  const attributes = [
+    `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    `Max-Age=${maxAgeSeconds}`
+  ];
+
+  if (secure) {
+    attributes.push("Secure");
+  }
+
+  return attributes.join("; ");
 }
 
 interface OpeningScene {
@@ -128,9 +180,23 @@ export interface BuildAppOptions {
   sessionStore: SessionStore;
   readerProfileStore: ReaderProfileStore;
   storyCatalog: StoryCatalog;
+  userStore: UserStore;
   modelRuntime: ModelRuntime;
   adminToken?: string;
+  /**
+   * When true, unauthenticated requests are treated as the seeded legacy user so
+   * the current web client keeps working while sign-in is being built. main.ts
+   * forces this off in production, where every owner-scoped route requires a real
+   * session.
+   */
+  allowLegacyAnonymousUser?: boolean;
   logger?: boolean;
+}
+
+declare module "fastify" {
+  interface FastifyRequest {
+    authUser?: UserRecord;
+  }
 }
 
 export async function buildApp(options: BuildAppOptions) {
@@ -139,7 +205,8 @@ export async function buildApp(options: BuildAppOptions) {
   });
 
   await app.register(cors, {
-    origin: true
+    origin: true,
+    credentials: true
   });
 
   app.addHook("onClose", async () => {
@@ -152,8 +219,31 @@ export async function buildApp(options: BuildAppOptions) {
     storage: "sqlite"
   }));
 
+  // Resolves the caller's identity before any route runs. A bearer token wins over
+  // the cookie so server-to-server callers can be explicit.
+  app.addHook("preHandler", async (request) => {
+    const token = readSessionToken(request.headers.authorization, request.headers.cookie);
+    if (token) {
+      const user = options.userStore.findUserBySessionToken(token);
+      if (user) {
+        request.authUser = user;
+        return;
+      }
+    }
+
+    if (options.allowLegacyAnonymousUser) {
+      request.authUser = options.userStore.findById(LEGACY_USER_ID) ?? undefined;
+    }
+  });
+
   app.addHook("preHandler", async (request, reply) => {
     if (!request.url.startsWith("/api/admin")) {
+      return;
+    }
+
+    // A signed-in admin account is sufficient; the shared token stays as a
+    // bootstrap path for the very first administrator.
+    if (request.authUser?.role === "admin") {
       return;
     }
 
@@ -165,6 +255,69 @@ export async function buildApp(options: BuildAppOptions) {
     if (!authorization || !matchesBearerToken(authorization, options.adminToken)) {
       return reply.code(401).send({ error: "Unauthorized" });
     }
+  });
+
+  const secureCookies = process.env.NODE_ENV === "production";
+
+  app.post("/api/auth/register", async (request, reply) => {
+    const parsed = registerRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
+    }
+
+    if (options.userStore.emailExists(parsed.data.email)) {
+      return reply.code(409).send({ error: "该邮箱已被注册" });
+    }
+
+    const user = options.userStore.create(parsed.data);
+    const session = options.userStore.issueSession(user.id);
+
+    reply.header("set-cookie", buildSessionCookie(session.token, SESSION_TTL_MS / 1000, secureCookies));
+    return reply.code(201).send({
+      user: toAuthUser(user),
+      token: session.token,
+      expiresAt: session.expiresAt
+    });
+  });
+
+  app.post("/api/auth/login", async (request, reply) => {
+    const parsed = loginRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
+    }
+
+    const user = options.userStore.verifyCredentials(parsed.data.email, parsed.data.password);
+    if (!user) {
+      // Deliberately does not say which half was wrong.
+      return reply.code(401).send({ error: "邮箱或密码不正确" });
+    }
+
+    const session = options.userStore.issueSession(user.id);
+    reply.header("set-cookie", buildSessionCookie(session.token, SESSION_TTL_MS / 1000, secureCookies));
+
+    return {
+      user: toAuthUser(user),
+      token: session.token,
+      expiresAt: session.expiresAt
+    };
+  });
+
+  app.post("/api/auth/logout", async (request, reply) => {
+    const token = readSessionToken(request.headers.authorization, request.headers.cookie);
+    if (token) {
+      options.userStore.revokeSession(token);
+    }
+
+    reply.header("set-cookie", buildSessionCookie("", 0, secureCookies));
+    return reply.code(204).send();
+  });
+
+  app.get("/api/auth/me", async (request, reply) => {
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "未登录" });
+    }
+
+    return { user: toAuthUser(request.authUser) };
   });
 
   app.get("/api/admin/status", async () => ({
@@ -255,11 +408,19 @@ export async function buildApp(options: BuildAppOptions) {
     stories: options.storyCatalog.listPublicStories()
   }));
 
-  app.get("/api/me/stories", async () => ({
-    stories: options.storyCatalog.listStoriesByOwner(LOCAL_READER_ID)
-  }));
+  app.get("/api/me/stories", async (request, reply) => {
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
+    }
 
-  app.get("/api/me/sessions", async (request) => {
+    return { stories: options.storyCatalog.listStoriesByOwner(request.authUser.id) };
+  });
+
+  app.get("/api/me/sessions", async (request, reply) => {
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
+    }
+
     const query = request.query as { limit?: string };
     const limit = Number(query.limit ?? 20);
     const normalizedLimit = Number.isFinite(limit) ? Math.max(1, limit) : 20;
@@ -268,7 +429,10 @@ export async function buildApp(options: BuildAppOptions) {
 
     // listRecentOverviews already keeps the latest session per story; seenStoryIds
     // guards the edge case of two sessions for one story sharing an updated_at.
-    for (const overview of options.sessionStore.listRecentOverviews(Math.max(normalizedLimit * 2, 40))) {
+    for (const overview of options.sessionStore.listRecentOverviews(
+      request.authUser.id,
+      Math.max(normalizedLimit * 2, 40)
+    )) {
       if (seenStoryIds.has(overview.storyId)) {
         continue;
       }
@@ -298,7 +462,11 @@ export async function buildApp(options: BuildAppOptions) {
       return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
     }
 
-    const story = options.storyCatalog.updateOwnedStory(storyId, LOCAL_READER_ID, parsed.data);
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
+    }
+
+    const story = options.storyCatalog.updateOwnedStory(storyId, request.authUser.id, parsed.data);
     if (!story) {
       return reply.code(404).send({ error: "Story not found" });
     }
@@ -308,7 +476,11 @@ export async function buildApp(options: BuildAppOptions) {
 
   app.delete("/api/me/stories/:storyId", async (request, reply) => {
     const { storyId } = request.params as { storyId: string };
-    const deleted = options.storyCatalog.deleteOwnedStory(storyId, LOCAL_READER_ID);
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
+    }
+
+    const deleted = options.storyCatalog.deleteOwnedStory(storyId, request.authUser.id);
     if (!deleted) {
       return reply.code(404).send({ error: "Story not found" });
     }
@@ -322,14 +494,20 @@ export async function buildApp(options: BuildAppOptions) {
       return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
     }
 
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
+    }
+
+    const ownerId = request.authUser.id;
+
     try {
       const castCharacters = createCastCharacters({
-        ownerId: LOCAL_READER_ID,
+        ownerId,
         storyId: parsed.data.id,
         profileIds: parsed.data.castProfileIds ?? [],
         readerProfileStore: options.readerProfileStore
       });
-      const story = options.storyCatalog.createStory(parsed.data, castCharacters, LOCAL_READER_ID);
+      const story = options.storyCatalog.createStory(parsed.data, castCharacters, ownerId);
       return reply.code(201).send({ story });
     } catch (error) {
       return reply.code(409).send({
@@ -349,9 +527,13 @@ export async function buildApp(options: BuildAppOptions) {
     return storyDetail;
   });
 
-  app.get("/api/reader/profiles", async () => ({
-    profiles: options.readerProfileStore.listByOwner(LOCAL_READER_ID)
-  }));
+  app.get("/api/reader/profiles", async (request, reply) => {
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
+    }
+
+    return { profiles: options.readerProfileStore.listByOwner(request.authUser.id) };
+  });
 
   app.post("/api/reader/profiles", async (request, reply) => {
     const parsed = createReaderProfileRequestSchema.safeParse(request.body);
@@ -359,8 +541,12 @@ export async function buildApp(options: BuildAppOptions) {
       return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
     }
 
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
+    }
+
     const profile = options.readerProfileStore.create({
-      ownerId: LOCAL_READER_ID,
+      ownerId: request.authUser.id,
       ...parsed.data
     });
 
@@ -374,7 +560,11 @@ export async function buildApp(options: BuildAppOptions) {
       return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
     }
 
-    const profile = options.readerProfileStore.update(profileId, LOCAL_READER_ID, parsed.data);
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
+    }
+
+    const profile = options.readerProfileStore.update(profileId, request.authUser.id, parsed.data);
     if (!profile) {
       return reply.code(404).send({ error: "Profile not found" });
     }
@@ -384,7 +574,11 @@ export async function buildApp(options: BuildAppOptions) {
 
   app.delete("/api/reader/profiles/:profileId", async (request, reply) => {
     const { profileId } = request.params as { profileId: string };
-    const deleted = options.readerProfileStore.delete(profileId, LOCAL_READER_ID);
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
+    }
+
+    const deleted = options.readerProfileStore.delete(profileId, request.authUser.id);
     if (!deleted) {
       return reply.code(404).send({ error: "Profile not found" });
     }
@@ -398,6 +592,10 @@ export async function buildApp(options: BuildAppOptions) {
 
     if (!storyDetail) {
       return reply.code(404).send({ error: "Story not found" });
+    }
+
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
     }
 
     const parsed = createSessionRequestSchema.safeParse(request.body);
@@ -444,7 +642,7 @@ export async function buildApp(options: BuildAppOptions) {
 
     session.turns.push(openingTurn);
     session.timeline.push(openingNode);
-    options.sessionStore.create(session);
+    options.sessionStore.create(session, request.authUser.id);
 
     const response: CreateSessionResponse = {
       session,
@@ -456,7 +654,13 @@ export async function buildApp(options: BuildAppOptions) {
 
   app.get("/api/sessions/:sessionId", async (request, reply) => {
     const { sessionId } = request.params as { sessionId: string };
-    const session = options.sessionStore.findById(sessionId);
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
+    }
+
+    // A session belonging to another reader is reported as missing rather than
+    // forbidden, so ids cannot be probed.
+    const session = options.sessionStore.findById(sessionId, request.authUser.id);
 
     if (!session) {
       return reply.code(404).send({ error: "Session not found" });
@@ -467,7 +671,11 @@ export async function buildApp(options: BuildAppOptions) {
 
   app.post("/api/sessions/:sessionId/turns", async (request, reply) => {
     const { sessionId } = request.params as { sessionId: string };
-    const session = options.sessionStore.findById(sessionId);
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
+    }
+
+    const session = options.sessionStore.findById(sessionId, request.authUser.id);
 
     if (!session) {
       return reply.code(404).send({ error: "Session not found" });
@@ -536,7 +744,11 @@ export async function buildApp(options: BuildAppOptions) {
 
   app.post("/api/sessions/:sessionId/rewind", async (request, reply) => {
     const { sessionId } = request.params as { sessionId: string };
-    const session = options.sessionStore.findById(sessionId);
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
+    }
+
+    const session = options.sessionStore.findById(sessionId, request.authUser.id);
     const body = request.body as { timelineNodeId?: string };
 
     if (!session) {
@@ -562,7 +774,7 @@ export async function buildApp(options: BuildAppOptions) {
       updatedAt: now
     };
 
-    options.sessionStore.create(branch);
+    options.sessionStore.create(branch, request.authUser.id);
 
     return {
       session: branch
@@ -571,7 +783,11 @@ export async function buildApp(options: BuildAppOptions) {
 
   app.post("/api/sessions/:sessionId/reset", async (request, reply) => {
     const { sessionId } = request.params as { sessionId: string };
-    const session = options.sessionStore.findById(sessionId);
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
+    }
+
+    const session = options.sessionStore.findById(sessionId, request.authUser.id);
 
     if (!session) {
       return reply.code(404).send({ error: "Session not found" });
@@ -604,7 +820,7 @@ export async function buildApp(options: BuildAppOptions) {
       updatedAt: now
     };
 
-    options.sessionStore.create(resetSession);
+    options.sessionStore.create(resetSession, request.authUser.id);
 
     return {
       session: resetSession

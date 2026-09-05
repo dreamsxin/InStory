@@ -9,25 +9,32 @@ import { AppDatabase } from "./db/app-database.js";
 import { ModelConfigStore } from "./db/model-config-store.js";
 import { ReaderProfileStore } from "./db/reader-profile-store.js";
 import { SessionStore } from "./db/session-store.js";
+import { UserStore } from "./db/user-store.js";
 import { ModelRuntime } from "./model-runtime.js";
 
 type TestApp = Awaited<ReturnType<typeof buildApp>>;
 
 let app: TestApp;
 let database: AppDatabase;
+let userStore: UserStore;
 let tempDir: string;
 
 beforeEach(async () => {
   tempDir = mkdtempSync(join(tmpdir(), "instory-api-"));
   database = new AppDatabase(join(tempDir, "api.sqlite"));
+  userStore = new UserStore(database);
   app = await buildApp({
     sessionStore: new SessionStore(database),
     readerProfileStore: new ReaderProfileStore(database),
     storyCatalog: new StoryCatalog(database),
+    userStore,
     modelRuntime: new ModelRuntime(new ModelConfigStore(database), {
       provider: "mock",
       updatedAt: "2026-05-20T00:00:00.000Z"
     }),
+    // The existing suite exercises the reader flows as the seeded legacy user;
+    // dedicated tests below cover the authenticated and unauthenticated paths.
+    allowLegacyAnonymousUser: true,
     logger: false
   });
 });
@@ -397,10 +404,12 @@ describe("server API", () => {
 
     tempDir = mkdtempSync(join(tmpdir(), "instory-api-"));
     database = new AppDatabase(join(tempDir, "api.sqlite"));
+    userStore = new UserStore(database);
     app = await buildApp({
       sessionStore: new SessionStore(database),
       readerProfileStore: new ReaderProfileStore(database),
       storyCatalog: new StoryCatalog(database),
+      userStore,
       modelRuntime: new ModelRuntime(new ModelConfigStore(database), {
         provider: "mock",
         updatedAt: "2026-05-20T00:00:00.000Z"
@@ -797,3 +806,319 @@ async function createSession(): Promise<CreateSessionResponse> {
   expect(response.statusCode).toBe(200);
   return response.json<CreateSessionResponse>();
 }
+
+describe("authentication", () => {
+  let authApp: TestApp;
+  let authDatabase: AppDatabase;
+  let authTempDir: string;
+
+  async function buildAuthApp(allowLegacyAnonymousUser: boolean): Promise<void> {
+    authTempDir = mkdtempSync(join(tmpdir(), "instory-auth-"));
+    authDatabase = new AppDatabase(join(authTempDir, "auth.sqlite"));
+    authApp = await buildApp({
+      sessionStore: new SessionStore(authDatabase),
+      readerProfileStore: new ReaderProfileStore(authDatabase),
+      storyCatalog: new StoryCatalog(authDatabase),
+      userStore: new UserStore(authDatabase),
+      modelRuntime: new ModelRuntime(new ModelConfigStore(authDatabase), {
+        provider: "mock",
+        updatedAt: "2026-05-20T00:00:00.000Z"
+      }),
+      allowLegacyAnonymousUser,
+      logger: false
+    });
+  }
+
+  async function register(email: string, displayName: string): Promise<string> {
+    const response = await authApp.inject({
+      method: "POST",
+      url: "/api/auth/register",
+      payload: { email, displayName, password: "pw-12345678" }
+    });
+
+    expect(response.statusCode).toBe(201);
+    return response.json<{ token: string }>().token;
+  }
+
+  afterEach(async () => {
+    await authApp.close();
+    authDatabase.close();
+    rmSync(authTempDir, { recursive: true, force: true });
+  });
+
+  it("registers, identifies and logs out a reader", async () => {
+    await buildAuthApp(false);
+
+    const registered = await authApp.inject({
+      method: "POST",
+      url: "/api/auth/register",
+      payload: { email: "Reader@Example.com", displayName: "林向晚", password: "pw-12345678" }
+    });
+
+    expect(registered.statusCode).toBe(201);
+    const body = registered.json<{ user: { id: string; role: string }; token: string }>();
+    expect(body.user.role).toBe("reader");
+    expect(registered.headers["set-cookie"]).toContain("instory_session=");
+    expect(registered.headers["set-cookie"]).toContain("HttpOnly");
+
+    const me = await authApp.inject({
+      method: "GET",
+      url: "/api/auth/me",
+      headers: { authorization: `Bearer ${body.token}` }
+    });
+    expect(me.json<{ user: { email: string } }>().user.email).toBe("Reader@Example.com");
+
+    // The cookie alone is enough, so the browser never needs the raw token.
+    const viaCookie = await authApp.inject({
+      method: "GET",
+      url: "/api/auth/me",
+      headers: { cookie: `instory_session=${body.token}` }
+    });
+    expect(viaCookie.statusCode).toBe(200);
+
+    const loggedOut = await authApp.inject({
+      method: "POST",
+      url: "/api/auth/logout",
+      headers: { authorization: `Bearer ${body.token}` }
+    });
+    expect(loggedOut.statusCode).toBe(204);
+
+    const afterLogout = await authApp.inject({
+      method: "GET",
+      url: "/api/auth/me",
+      headers: { authorization: `Bearer ${body.token}` }
+    });
+    expect(afterLogout.statusCode).toBe(401);
+  });
+
+  it("rejects a duplicate email and a wrong password", async () => {
+    await buildAuthApp(false);
+    await register("reader@example.com", "读者");
+
+    const duplicate = await authApp.inject({
+      method: "POST",
+      url: "/api/auth/register",
+      payload: { email: "READER@example.com", displayName: "冒名者", password: "pw-12345678" }
+    });
+    expect(duplicate.statusCode).toBe(409);
+
+    const wrongPassword = await authApp.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "reader@example.com", password: "not-the-password" }
+    });
+    expect(wrongPassword.statusCode).toBe(401);
+
+    const unknownAccount = await authApp.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "nobody@example.com", password: "pw-12345678" }
+    });
+    // Same status and message, so accounts cannot be enumerated.
+    expect(unknownAccount.statusCode).toBe(401);
+    expect(unknownAccount.json()).toEqual(wrongPassword.json());
+
+    const login = await authApp.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "reader@example.com", password: "pw-12345678" }
+    });
+    expect(login.statusCode).toBe(200);
+    expect(login.json<{ token: string }>().token).toBeTruthy();
+  });
+
+  it("requires a session for owner-scoped routes when anonymous access is off", async () => {
+    await buildAuthApp(false);
+
+    for (const url of ["/api/me/stories", "/api/me/sessions", "/api/reader/profiles"]) {
+      const response = await authApp.inject({ method: "GET", url });
+      expect(response.statusCode).toBe(401);
+    }
+
+    const createSessionResponse = await authApp.inject({
+      method: "POST",
+      url: "/api/stories/rain-mansion/sessions",
+      payload: { entryMode: "existing_character", characterId: "lu_qinghe" }
+    });
+    expect(createSessionResponse.statusCode).toBe(401);
+
+    // Public discovery stays open.
+    expect((await authApp.inject({ method: "GET", url: "/api/stories" })).statusCode).toBe(200);
+  });
+
+  it("falls back to the legacy reader only while anonymous access is on", async () => {
+    await buildAuthApp(true);
+
+    const response = await authApp.inject({ method: "GET", url: "/api/me/stories" });
+
+    expect(response.statusCode).toBe(200);
+  });
+
+  it("keeps one reader's stories, roles and sessions away from another", async () => {
+    await buildAuthApp(false);
+    const alice = await register("alice@example.com", "Alice");
+    const bob = await register("bob@example.com", "Bob");
+
+    const aliceProfile = await authApp.inject({
+      method: "POST",
+      url: "/api/reader/profiles",
+      headers: { authorization: `Bearer ${alice}` },
+      payload: {
+        name: "叶九",
+        gender: "女",
+        visibility: "private",
+        personality: "谨慎。",
+        avatarUrl: null,
+        description: "中间人。"
+      }
+    });
+    const aliceProfileId = aliceProfile.json<{ profile: { id: string } }>().profile.id;
+
+    await authApp.inject({
+      method: "POST",
+      url: "/api/stories",
+      headers: { authorization: `Bearer ${alice}` },
+      payload: {
+        id: "alice-story",
+        title: "爱丽丝的故事",
+        tagline: "只属于爱丽丝。",
+        genre: "悬疑",
+        coverUrl: null,
+        premise: "一段只有作者自己能看到的故事。",
+        openingLocationName: "起点",
+        openingLocationDescription: "一切从这里开始。",
+        worldRules: ["保持安静"],
+        castProfileIds: [aliceProfileId],
+        visibility: "private",
+        aiFreedom: "medium",
+        experienceMode: "coauthored",
+        defaultSegmentLength: "standard"
+      }
+    });
+
+    const aliceSession = await authApp.inject({
+      method: "POST",
+      url: "/api/stories/alice-story/sessions",
+      headers: { authorization: `Bearer ${alice}` },
+      payload: { entryMode: "custom_role", readerProfileId: aliceProfileId }
+    });
+    const aliceSessionId = aliceSession.json<CreateSessionResponse>().session.id;
+
+    // Bob sees none of it.
+    expect(
+      (
+        await authApp.inject({
+          method: "GET",
+          url: "/api/me/stories",
+          headers: { authorization: `Bearer ${bob}` }
+        })
+      ).json<{ stories: unknown[] }>().stories
+    ).toEqual([]);
+    expect(
+      (
+        await authApp.inject({
+          method: "GET",
+          url: "/api/reader/profiles",
+          headers: { authorization: `Bearer ${bob}` }
+        })
+      ).json<{ profiles: unknown[] }>().profiles
+    ).toEqual([]);
+    expect(
+      (
+        await authApp.inject({
+          method: "GET",
+          url: "/api/me/sessions",
+          headers: { authorization: `Bearer ${bob}` }
+        })
+      ).json<{ sessions: unknown[] }>().sessions
+    ).toEqual([]);
+
+    // Bob cannot read, advance or delete Alice's resources, and gets 404 rather
+    // than 403 so ids cannot be probed.
+    for (const request of [
+      { method: "GET" as const, url: `/api/sessions/${aliceSessionId}` },
+      { method: "POST" as const, url: `/api/sessions/${aliceSessionId}/reset`, payload: {} },
+      { method: "DELETE" as const, url: "/api/me/stories/alice-story" },
+      { method: "DELETE" as const, url: `/api/reader/profiles/${aliceProfileId}` }
+    ]) {
+      const response = await authApp.inject({
+        ...request,
+        headers: { authorization: `Bearer ${bob}` }
+      });
+      expect(response.statusCode).toBe(404);
+    }
+
+    const advance = await authApp.inject({
+      method: "POST",
+      url: `/api/sessions/${aliceSessionId}/turns`,
+      headers: { authorization: `Bearer ${bob}` },
+      payload: { inputType: "read_continue", content: "继续阅读" }
+    });
+    expect(advance.statusCode).toBe(404);
+
+    // Alice still has full access.
+    expect(
+      (
+        await authApp.inject({
+          method: "GET",
+          url: `/api/sessions/${aliceSessionId}`,
+          headers: { authorization: `Bearer ${alice}` }
+        })
+      ).statusCode
+    ).toBe(200);
+  });
+
+  it("lets an admin account through without the shared token", async () => {
+    authTempDir = mkdtempSync(join(tmpdir(), "instory-auth-"));
+    authDatabase = new AppDatabase(join(authTempDir, "auth.sqlite"));
+    const adminUserStore = new UserStore(authDatabase);
+    authApp = await buildApp({
+      sessionStore: new SessionStore(authDatabase),
+      readerProfileStore: new ReaderProfileStore(authDatabase),
+      storyCatalog: new StoryCatalog(authDatabase),
+      userStore: adminUserStore,
+      modelRuntime: new ModelRuntime(new ModelConfigStore(authDatabase), {
+        provider: "mock",
+        updatedAt: "2026-05-20T00:00:00.000Z"
+      }),
+      adminToken: "shared-secret",
+      allowLegacyAnonymousUser: false,
+      logger: false
+    });
+
+    const admin = adminUserStore.create({
+      email: "admin@example.com",
+      displayName: "管理员",
+      password: "pw-12345678",
+      role: "admin"
+    });
+    const adminToken = adminUserStore.issueSession(admin.id).token;
+
+    expect(
+      (
+        await authApp.inject({
+          method: "GET",
+          url: "/api/admin/status",
+          headers: { authorization: `Bearer ${adminToken}` }
+        })
+      ).statusCode
+    ).toBe(200);
+
+    const reader = adminUserStore.create({
+      email: "reader@example.com",
+      displayName: "读者",
+      password: "pw-12345678"
+    });
+    const readerToken = adminUserStore.issueSession(reader.id).token;
+
+    expect(
+      (
+        await authApp.inject({
+          method: "GET",
+          url: "/api/admin/status",
+          headers: { authorization: `Bearer ${readerToken}` }
+        })
+      ).statusCode
+    ).toBe(401);
+  });
+});

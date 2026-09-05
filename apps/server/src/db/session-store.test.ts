@@ -8,6 +8,11 @@ import { SessionStore } from "./session-store.js";
 
 const openDatabases: AppDatabase[] = [];
 const tempDirs: string[] = [];
+const OWNER_ID = "user_owner";
+
+function seed(store: SessionStore, session: StorySession, ownerId = OWNER_ID): void {
+  store.create(session, ownerId);
+}
 
 function createStore(): SessionStore {
   const dir = mkdtempSync(join(tmpdir(), "instory-session-store-"));
@@ -36,7 +41,7 @@ describe("SessionStore", () => {
       timeline: [createNode("node_0", "turn_0", "2026-05-20T00:00:00.000Z")]
     });
 
-    store.create(session);
+    seed(store, session);
 
     expect(store.findById("sess_test")).toEqual(session);
     expect(store.findById("missing")).toBeNull();
@@ -54,7 +59,7 @@ describe("SessionStore", () => {
 
   it("appends a turn without rewriting existing history", () => {
     const store = createStore();
-    store.create(
+    seed(store, 
       createSession({
         id: "sess_test",
         updatedAt: "2026-05-20T00:00:00.000Z",
@@ -84,7 +89,7 @@ describe("SessionStore", () => {
 
   it("appends a turn without a timeline node", () => {
     const store = createStore();
-    store.create(createSession({ id: "sess_test", updatedAt: "2026-05-20T00:00:00.000Z" }));
+    seed(store, createSession({ id: "sess_test", updatedAt: "2026-05-20T00:00:00.000Z" }));
 
     store.appendTurn("sess_test", {
       turn: createTurn("turn_0", "2026-05-20T00:01:00.000Z"),
@@ -102,14 +107,14 @@ describe("SessionStore", () => {
     const store = createStore();
     const turnId = "turn_0";
 
-    store.create(
+    seed(store, 
       createSession({
         id: "sess_a",
         updatedAt: "2026-05-20T00:00:00.000Z",
         turns: [{ ...createTurn(turnId, "2026-05-20T00:00:00.000Z"), narration: "A 的开场" }]
       })
     );
-    store.create(
+    seed(store, 
       createSession({
         id: "sess_b",
         updatedAt: "2026-05-20T00:01:00.000Z",
@@ -124,14 +129,14 @@ describe("SessionStore", () => {
   it("summarises the latest session per story without loading transcripts", () => {
     const store = createStore();
 
-    store.create(
+    seed(store, 
       createSession({
         id: "sess_old",
         updatedAt: "2026-05-20T00:00:00.000Z",
         turns: [{ ...createTurn("turn_0", "2026-05-20T00:00:00.000Z"), narration: "旧的一段" }]
       })
     );
-    store.create(
+    seed(store, 
       createSession({
         id: "sess_new",
         updatedAt: "2026-05-20T01:00:00.000Z",
@@ -142,7 +147,7 @@ describe("SessionStore", () => {
       })
     );
 
-    const overviews = store.listRecentOverviews();
+    const overviews = store.listRecentOverviews(OWNER_ID);
 
     expect(overviews).toHaveLength(1);
     expect(overviews[0]).toMatchObject({
@@ -156,9 +161,25 @@ describe("SessionStore", () => {
 
   it("reports a null latest narration for a session with no turns", () => {
     const store = createStore();
-    store.create(createSession({ id: "sess_empty", updatedAt: "2026-05-20T00:00:00.000Z" }));
+    seed(store, createSession({ id: "sess_empty", updatedAt: "2026-05-20T00:00:00.000Z" }));
 
-    expect(store.listRecentOverviews()[0]?.latestNarration).toBeNull();
+    expect(store.listRecentOverviews(OWNER_ID)[0]?.latestNarration).toBeNull();
+  });
+
+  it("hides another reader's session from scoped reads and lists", () => {
+    const store = createStore();
+    seed(store, createSession({ id: "sess_mine", updatedAt: "2026-05-20T00:00:00.000Z" }));
+    seed(store, createSession({ id: "sess_theirs", updatedAt: "2026-05-20T01:00:00.000Z" }), "user_other");
+
+    expect(store.findById("sess_mine", OWNER_ID)?.id).toBe("sess_mine");
+    expect(store.findById("sess_theirs", OWNER_ID)).toBeNull();
+    // An unscoped read is still possible for admin-facing callers.
+    expect(store.findById("sess_theirs")?.id).toBe("sess_theirs");
+
+    expect(store.listRecentOverviews(OWNER_ID).map((item) => item.id)).toEqual(["sess_mine"]);
+    expect(store.listRecentOverviews("user_other").map((item) => item.id)).toEqual(["sess_theirs"]);
+    // listRecent stays global because it backs the admin console.
+    expect(store.listRecent()).toHaveLength(2);
   });
 });
 
