@@ -143,6 +143,14 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
           </div>
         </div>
 
+        {/* The action panel shows its own copy of this, but a failure from 继续阅读
+            has no panel open, and silently doing nothing is worse than a message. */}
+        {error ? (
+          <p className="reader-error error" role="alert">
+            {error}
+          </p>
+        ) : null}
+
         {latestTurn ? (
           <div className="reading-intervention-bar w-full sm:w-auto sm:min-w-[360px] md:min-w-96">
             <Button

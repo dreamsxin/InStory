@@ -61,4 +61,10 @@ export interface LLMProviderConfig {
   timeoutMs?: number;
   maxAttempts?: number;
   retryBaseDelayMs?: number;
+  /**
+   * Mock provider only: pause between streamed pieces. At zero the mock finishes
+   * within a frame, which no real model does and which leaves the reader's
+   * in-progress state impossible to observe or test.
+   */
+  mockStreamChunkDelayMs?: number;
 }

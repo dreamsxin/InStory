@@ -11,7 +11,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present && npm run typecheck:e2e",
     "typecheck:e2e": "tsc -p tsconfig.e2e.json",
     "test": "npm run test --workspaces --if-present",
-    "test:e2e": "playwright test",
+    "test:e2e": "tsx e2e/reset-database.ts && playwright test",
     "verify:llm": "tsx scripts/verify-llm-provider.ts"
   },
   "workspaces": [

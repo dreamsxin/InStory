@@ -64,7 +64,8 @@ test.describe("sign-in", () => {
     await page.getByLabel("密码").fill("definitely-not-the-password");
     await page.getByRole("button", { name: "登录", exact: true }).click();
 
-    await expect(page.getByRole("alert")).toContainText("邮箱或密码不正确");
+    // Scoped to the form: Next renders its own empty role="alert" route announcer.
+    await expect(page.locator("form.auth-form").getByRole("alert")).toContainText("邮箱或密码不正确");
     await expect(page).toHaveURL(/\/login$/);
   });
 
@@ -76,6 +77,6 @@ test.describe("sign-in", () => {
     await page.getByLabel("密码").fill(PASSWORD);
     await page.getByRole("button", { name: "创建账号" }).click();
 
-    await expect(page.getByRole("alert")).toContainText("该邮箱已被注册");
+    await expect(page.locator("form.auth-form").getByRole("alert")).toContainText("该邮箱已被注册");
   });
 });

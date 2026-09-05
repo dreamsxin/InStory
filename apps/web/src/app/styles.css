@@ -755,6 +755,18 @@ a {
   margin-bottom: 10px;
 }
 
+.reader-error {
+  margin: 12px auto 0;
+  width: 100%;
+  max-width: 760px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in oklab, var(--accent-strong) 45%, transparent);
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--accent-strong) 12%, transparent);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
 .reading-intervention-bar {
   display: flex;
   flex-wrap: wrap;

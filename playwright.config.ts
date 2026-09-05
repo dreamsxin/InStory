@@ -21,7 +21,8 @@ export const E2E_DATABASE_PATH = join(process.cwd(), "data", "e2e.sqlite");
  */
 export default defineConfig({
   testDir: "./e2e",
-  globalSetup: "./e2e/global-setup.ts",
+  // The database is reset by the test:e2e script, not here: Playwright starts the
+  // webServer processes before globalSetup, so by then the API holds the file open.
   // Registration writes to a shared database, so tests share state deliberately.
   fullyParallel: false,
   workers: 1,
@@ -36,7 +37,15 @@ export default defineConfig({
     // The UI is Chinese; keep the browser locale aligned with it.
     locale: "zh-CN"
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    {
+      name: "chrome",
+      // Uses the Chrome already installed on the machine instead of Playwright's
+      // bundled Chromium, so a run needs no browser download. Override with
+      // PLAYWRIGHT_CHANNEL="" to fall back to the bundled build.
+      use: { ...devices["Desktop Chrome"], channel: process.env.PLAYWRIGHT_CHANNEL ?? "chrome" }
+    }
+  ],
   webServer: [
     {
       command: "npm run start -w apps/server",
@@ -50,6 +59,9 @@ export default defineConfig({
         SQLITE_DATABASE_PATH: E2E_DATABASE_PATH,
         ADMIN_TOKEN: "e2e-admin-token-0123456789abcdef0123456789abcdef",
         LLM_PROVIDER: "mock",
+        // Without a pause the mock finishes within a frame and the in-progress
+        // reader state is never observable, so the streaming UI goes untested.
+        MOCK_STREAM_CHUNK_DELAY_MS: "60",
         DAILY_TURN_QUOTA: "20"
       }
     },
@@ -60,7 +72,8 @@ export default defineConfig({
       timeout: 120_000,
       env: {
         PORT: String(WEB_PORT),
-        NEXT_PUBLIC_API_BASE: `http://127.0.0.1:${API_PORT}`,
+        // Both the /api rewrite and the server-side fetches read this.
+        API_PROXY_TARGET: `http://127.0.0.1:${API_PORT}`,
         ADMIN_TOKEN: "e2e-admin-token-0123456789abcdef0123456789abcdef"
       }
     }

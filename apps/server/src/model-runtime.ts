@@ -78,7 +78,8 @@ export class ModelRuntime {
       model: config.model,
       timeoutMs: Number(process.env.LLM_TIMEOUT_MS || 45_000),
       maxAttempts: Number(process.env.LLM_MAX_ATTEMPTS || 3),
-      retryBaseDelayMs: Number(process.env.LLM_RETRY_BASE_DELAY_MS || 500)
+      retryBaseDelayMs: Number(process.env.LLM_RETRY_BASE_DELAY_MS || 500),
+      mockStreamChunkDelayMs: Number(process.env.MOCK_STREAM_CHUNK_DELAY_MS || 0)
     });
   }
 }

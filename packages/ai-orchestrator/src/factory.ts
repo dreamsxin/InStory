@@ -4,7 +4,7 @@ import type { LLMProvider, LLMProviderConfig } from "./provider.js";
 
 export function createLLMProvider(config: LLMProviderConfig): LLMProvider {
   if (config.provider === "mock") {
-    return new MockNarrativeProvider();
+    return new MockNarrativeProvider({ chunkDelayMs: config.mockStreamChunkDelayMs });
   }
 
   if (!config.baseUrl || !config.apiKey || !config.model) {

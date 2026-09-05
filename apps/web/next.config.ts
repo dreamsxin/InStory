@@ -10,6 +10,15 @@ const nextConfig: NextConfig = {
   transpilePackages: ["@instory/shared"],
 
   /**
+   * The dev server only serves /_next/* to origins it recognises, and it does not
+   * treat 127.0.0.1 as the same origin as localhost. Without this the client bundle
+   * is refused when the app is opened on 127.0.0.1: the markup renders but nothing
+   * hydrates, so every button silently does nothing. Dev-only setting.
+   */
+  allowedDevOrigins: ["localhost", "127.0.0.1"],
+
+
+  /**
    * Proxies the API under this origin so browser requests are same-origin.
    *
    * The session cookie is host-only on the web origin, so a browser would never

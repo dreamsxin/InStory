@@ -47,9 +47,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Only chromium: the suite checks behaviour, not cross-browser rendering.
+      # Only Chrome: the suite checks behaviour, not cross-browser rendering. The
+      # config targets the chrome channel so a local run can reuse an already
+      # installed Chrome instead of downloading a browser.
       - name: Install browser
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chrome
 
       - name: End-to-end tests
         run: npm run test:e2e

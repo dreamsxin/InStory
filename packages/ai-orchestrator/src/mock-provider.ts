@@ -12,6 +12,18 @@ import type {
  * newly authored story never reads back the seed story's content.
  */
 export class MockNarrativeProvider implements LLMProvider {
+  /**
+   * Pause between streamed pieces. Zero by default so unit tests stay fast, but a
+   * real model takes seconds, and with no pause at all the reader's in-progress
+   * state exists for less than a frame - which makes it untestable and hides
+   * regressions in the streaming UI.
+   */
+  private readonly chunkDelayMs: number;
+
+  constructor(options: { chunkDelayMs?: number } = {}) {
+    this.chunkDelayMs = Math.max(0, options.chunkDelayMs ?? 0);
+  }
+
   async generateNarrative(input: GenerateNarrativeInput): Promise<NarrativeGeneration> {
     const result = this.buildResult(input);
     return { result, usage: estimateUsage(input, result) };
@@ -25,6 +37,9 @@ export class MockNarrativeProvider implements LLMProvider {
     const result = this.buildResult(input);
 
     for (const piece of chunkText(result.narration, 24)) {
+      if (this.chunkDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, this.chunkDelayMs));
+      }
       yield { type: "narration_delta", text: piece };
     }
 
