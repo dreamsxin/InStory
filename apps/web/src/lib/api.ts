@@ -11,7 +11,14 @@ import type {
 } from "@instory/shared";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000";
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? process.env.NEXT_PUBLIC_ADMIN_TOKEN;
+
+/**
+ * Server-only. Never fall back to a NEXT_PUBLIC_* variable here: Next.js inlines
+ * those into the client bundle, which would publish the admin credential to every
+ * visitor. Admin reads happen in server components and admin writes go through
+ * server actions, so this value must stay on the server.
+ */
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
 
 export interface AdminStatus {
   service: string;
@@ -363,6 +370,10 @@ async function adminRequest<T>(
   path: string,
   init: RequestInit = {}
 ): Promise<T> {
+  if (typeof window !== "undefined") {
+    throw new Error("Admin API 只能在服务端调用，请通过 server component 或 server action 访问。");
+  }
+
   const headers: Record<string, string> = {};
   if (init.body) {
     headers["Content-Type"] = "application/json";
