@@ -55,6 +55,30 @@ const SESSION_COOKIE_NAME = "instory_session";
 
 const GENERATION_BURST_MESSAGE = "推进太快了，稍等一会儿再继续。";
 
+/**
+ * How much history each read materialises. A long story is otherwise a growing tax
+ * on every request: the reader page shipped the whole transcript to the browser, and
+ * generating one turn loaded it all just to quote the last few.
+ */
+const DEFAULT_TURN_WINDOW = 40;
+const MAX_TURN_WINDOW = 200;
+/** Enough to cover what the prompt quotes, plus room for the memory panel. */
+const TIMELINE_WINDOW = 20;
+/** The prompt uses the last 6 turns; a little slack costs nothing. */
+const GENERATION_TURN_WINDOW = 8;
+const GENERATION_READ_WINDOW = {
+  recentTurns: GENERATION_TURN_WINDOW,
+  recentTimelineNodes: GENERATION_TURN_WINDOW
+};
+
+function readTurnLimit(raw: string | undefined, fallback: number): number {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return Math.min(Math.floor(parsed), MAX_TURN_WINDOW);
+}
+
 const updateModelConfigSchema = z.object({
   provider: z.enum(["mock", "openai-compatible"]),
   baseUrl: z.string().nullish(),
@@ -313,6 +337,11 @@ export interface BuildAppOptions {
   /** Overrides individual abuse limits; anything omitted keeps its default. */
   abuseLimits?: Partial<AbuseLimitSettings>;
   /**
+   * Turns returned by GET /api/sessions/:id when the caller does not ask for a
+   * specific count. Callers can request more, up to MAX_TURN_WINDOW.
+   */
+  sessionTurnWindow?: number;
+  /**
    * How many reverse proxies sit in front of the API, or a trusted address/CIDR.
    * Required for per-address limits to mean anything behind a proxy, because
    * otherwise every request appears to come from the proxy. Must stay off when
@@ -335,6 +364,10 @@ export async function buildApp(options: BuildAppOptions) {
   });
 
   const abuseLimits: AbuseLimitSettings = { ...DEFAULT_ABUSE_LIMITS, ...options.abuseLimits };
+  const defaultTurnWindow = readTurnLimit(
+    options.sessionTurnWindow === undefined ? undefined : String(options.sessionTurnWindow),
+    DEFAULT_TURN_WINDOW
+  );
   const authAttemptLimiter = new SlidingWindowRateLimiter(abuseLimits.authAttempts);
   const loginFailureLimiter = new SlidingWindowRateLimiter(abuseLimits.loginFailuresPerAccount);
   const generationLimiter = new SlidingWindowRateLimiter(abuseLimits.generationBurst);
@@ -888,14 +921,64 @@ export async function buildApp(options: BuildAppOptions) {
 
     // A session belonging to another reader is reported as missing rather than
     // forbidden, so ids cannot be probed.
-    const session = options.sessionStore.findById(sessionId, request.authUser.id);
+    const turnLimit = readTurnLimit((request.query as { turnLimit?: string }).turnLimit, defaultTurnWindow);
+    const session = options.sessionStore.findById(sessionId, request.authUser.id, {
+      recentTurns: turnLimit,
+      recentTimelineNodes: TIMELINE_WINDOW
+    });
 
     if (!session) {
       return reply.code(404).send({ error: "Session not found" });
     }
 
-    return { session };
+    const oldestLoadedTurnId = session.turns[0]?.id ?? null;
+
+    return {
+      session,
+      // Says how much of the transcript this response actually carries, so the client
+      // can offer to load the rest instead of quietly showing a truncated story.
+      history: {
+        turnCount: options.sessionStore.countTurns(sessionId),
+        loadedTurns: session.turns.length,
+        oldestLoadedTurnId,
+        hasMore: oldestLoadedTurnId
+          ? options.sessionStore.hasTurnsBefore(sessionId, oldestLoadedTurnId)
+          : false
+      }
+    };
   });
+
+  /**
+   * Older turns, for walking backwards through a long transcript. Cursor-based on a
+   * turn id rather than an offset, so inserting a turn cannot shift the window.
+   */
+  app.get("/api/sessions/:sessionId/turns", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string };
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
+    }
+
+    const query = request.query as { before?: string; limit?: string };
+    if (!query.before) {
+      return reply.code(400).send({ error: "before 参数必填" });
+    }
+
+    // Ownership first: without this the cursor could be used to read another
+    // reader's transcript.
+    if (!options.sessionStore.findById(sessionId, request.authUser.id, { recentTurns: 0, recentTimelineNodes: 0 })) {
+      return reply.code(404).send({ error: "Session not found" });
+    }
+
+    const limit = readTurnLimit(query.limit, defaultTurnWindow);
+    const turns = options.sessionStore.listTurnsBefore(sessionId, query.before, limit);
+    const oldest = turns[0]?.id ?? null;
+
+    return {
+      turns,
+      hasMore: oldest ? options.sessionStore.hasTurnsBefore(sessionId, oldest) : false
+    };
+  });
+
 
   /**
    * Reader-initiated report. Ownership is checked first so a report cannot be used to
@@ -907,7 +990,11 @@ export async function buildApp(options: BuildAppOptions) {
       return reply.code(401).send({ error: "请先登录" });
     }
 
-    const session = options.sessionStore.findById(sessionId, request.authUser.id);
+    // No history needed: the reported turn is fetched by id below.
+    const session = options.sessionStore.findById(sessionId, request.authUser.id, {
+      recentTurns: 0,
+      recentTimelineNodes: 0
+    });
     if (!session) {
       return reply.code(404).send({ error: "Session not found" });
     }
@@ -918,7 +1005,9 @@ export async function buildApp(options: BuildAppOptions) {
       return reply.code(400).send({ error: "请填写举报原因。" });
     }
 
-    const reportedTurn = body.turnId ? session.turns.find((turn) => turn.id === body.turnId) : session.turns.at(-1);
+    // Looked up in the database rather than in a loaded window, so an old passage
+    // can still be reported.
+    const reportedTurn = options.sessionStore.findTurn(sessionId, body.turnId);
 
     const event = options.moderationStore.record({
       userId: request.authUser.id,
@@ -942,7 +1031,7 @@ export async function buildApp(options: BuildAppOptions) {
       return reply.code(401).send({ error: "请先登录" });
     }
 
-    const session = options.sessionStore.findById(sessionId, request.authUser.id);
+    const session = options.sessionStore.findById(sessionId, request.authUser.id, GENERATION_READ_WINDOW);
 
     if (!session) {
       return reply.code(404).send({ error: "Session not found" });
@@ -1054,8 +1143,8 @@ export async function buildApp(options: BuildAppOptions) {
     if (!request.authUser) {
       return reply.code(401).send({ error: "请先登录" });
     }
+    const session = options.sessionStore.findById(sessionId, request.authUser.id, GENERATION_READ_WINDOW);
 
-    const session = options.sessionStore.findById(sessionId, request.authUser.id);
     if (!session) {
       return reply.code(404).send({ error: "Session not found" });
     }
@@ -1204,6 +1293,8 @@ export async function buildApp(options: BuildAppOptions) {
       return reply.code(401).send({ error: "请先登录" });
     }
 
+    // Deliberately unwindowed: a branch copies every turn and node up to the chosen
+    // point, so this is the one read that genuinely needs the whole transcript.
     const session = options.sessionStore.findById(sessionId, request.authUser.id);
     const body = request.body as { timelineNodeId?: string };
 
@@ -1243,7 +1334,12 @@ export async function buildApp(options: BuildAppOptions) {
       return reply.code(401).send({ error: "请先登录" });
     }
 
-    const session = options.sessionStore.findById(sessionId, request.authUser.id);
+    // Only the story and the reader role carry over, so the old transcript is
+    // irrelevant here.
+    const session = options.sessionStore.findById(sessionId, request.authUser.id, {
+      recentTurns: 0,
+      recentTimelineNodes: 0
+    });
 
     if (!session) {
       return reply.code(404).send({ error: "Session not found" });

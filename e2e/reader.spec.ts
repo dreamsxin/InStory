@@ -109,6 +109,37 @@ test.describe("reader", () => {
     await expect(heading).toBeVisible();
   });
 
+  test("loads older turns on demand instead of shipping the whole transcript", async ({
+    page,
+    request
+  }) => {
+    const { token } = await signInViaApi(page, request, "e2e-history@example.com", "E2E 历史");
+    const sessionId = await startSession(request, token);
+
+    // Advance through the API so the test spends its time on the UI, not on
+    // waiting for six streamed passages.
+    for (let index = 0; index < 5; index += 1) {
+      const advanced = await request.post(`${API_BASE}/api/sessions/${sessionId}/turns`, {
+        headers: { authorization: `Bearer ${token}` },
+        data: { inputType: "read_continue", content: "继续阅读" }
+      });
+      expect(advanced.status()).toBe(200);
+    }
+
+    await page.goto(`/story/${sessionId}`);
+
+    // SESSION_TURN_WINDOW is 5, so one of the six turns is left behind.
+    await expect(page.locator(".turn")).toHaveCount(5);
+    await expect(page.locator(".older-turns-row")).toContainText("已载入 5/6 回合");
+
+    await page.getByRole("button", { name: "载入更早的回合" }).click();
+
+    await expect(page.locator(".turn")).toHaveCount(6);
+    // Nothing older remains, so the control goes away rather than lying.
+    await expect(page.locator(".older-turns-row")).toHaveCount(0);
+    // The opening passage is the one that was missing.
+    await expect(page.locator(".turn").first()).toContainText("旧宅东厢房");
+  });
 
   test("sends a visitor without a session to sign in instead of leaking the story", async ({
     page,

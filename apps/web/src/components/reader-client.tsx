@@ -4,12 +4,14 @@ import { Button, Card, Chip, Label, TextArea, TextField } from "@heroui/react";
 import type { SessionTurn, StorySession, TurnQuota, WorldState } from "@instory/shared";
 import {
   createTurn,
+  getOlderTurns,
   QuotaExceededError,
   RateLimitedError,
   resetSession,
   rewindSession,
   streamTurn,
-  UnauthenticatedError
+  UnauthenticatedError,
+  type SessionHistoryInfo
 } from "@/lib/api";
 import { BrandMark } from "@/components/brand-mark";
 import { useEffect, useRef, useState } from "react";
@@ -18,9 +20,11 @@ import { useRouter } from "next/navigation";
 type ReaderPanel = "status" | "memory" | "action" | null;
 
 export function ReaderClient({
+  initialHistory,
   initialSession,
   storyTitle
 }: {
+  initialHistory: SessionHistoryInfo;
   initialSession: StorySession;
   storyTitle: string;
 }) {
@@ -34,6 +38,9 @@ export function ReaderClient({
   // Visible by default: the bar carries the story title, the reader's identity and
   // the remaining daily quota, none of which are worth having if nobody sees them.
   const [chromeVisible, setChromeVisible] = useState(true);
+  // Only a window of the transcript is loaded; this tracks how much is still behind us.
+  const [history, setHistory] = useState(initialHistory);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -52,6 +59,52 @@ export function ReaderClient({
   function stopGeneration() {
     abortRef.current?.abort();
   }
+
+  /**
+   * Prepends the previous page of turns. Scroll position is restored by height delta,
+   * because inserting text above the viewport would otherwise throw the reader back
+   * to a passage they had already left.
+   */
+  async function loadOlder() {
+    const cursor = history.oldestLoadedTurnId;
+    if (!cursor || loadingOlder) {
+      return;
+    }
+
+    setLoadingOlder(true);
+    setError(null);
+
+    const container = scrollRef.current;
+    const heightBefore = container?.scrollHeight ?? 0;
+    const offsetBefore = container?.scrollTop ?? 0;
+
+    try {
+      const page = await getOlderTurns(session.id, cursor);
+      if (page.turns.length === 0) {
+        setHistory((current) => ({ ...current, hasMore: false }));
+        return;
+      }
+
+      setSession((current) => ({ ...current, turns: [...page.turns, ...current.turns] }));
+      setHistory((current) => ({
+        ...current,
+        loadedTurns: current.loadedTurns + page.turns.length,
+        oldestLoadedTurnId: page.turns[0]?.id ?? current.oldestLoadedTurnId,
+        hasMore: page.hasMore
+      }));
+
+      requestAnimationFrame(() => {
+        if (container) {
+          container.scrollTop = offsetBefore + (container.scrollHeight - heightBefore);
+        }
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "加载更早的回合失败");
+    } finally {
+      setLoadingOlder(false);
+    }
+  }
+
 
   async function submit(content: string, inputType: "free_text" | "choice" | "read_continue", choiceId?: string) {
     if (!content.trim()) {
@@ -102,6 +155,12 @@ export function ReaderClient({
         updatedAt: new Date().toISOString()
       }));
       setQuota(response.quota);
+      // Keep the counter honest, otherwise it drifts behind as the story grows.
+      setHistory((current) => ({
+        ...current,
+        turnCount: current.turnCount + 1,
+        loadedTurns: current.loadedTurns + 1
+      }));
       setText("");
       setActivePanel(null);
     } catch (err) {
@@ -143,6 +202,21 @@ export function ReaderClient({
           ref={scrollRef}
         >
           <div className="turns reading-surface w-full min-w-0 sm:max-w-[760px]">
+            {history.hasMore ? (
+              <div className="older-turns-row">
+                <Button
+                  isDisabled={loadingOlder || loading}
+                  size="sm"
+                  variant="outline"
+                  onPress={() => void loadOlder()}
+                >
+                  {loadingOlder ? "载入中..." : "载入更早的回合"}
+                </Button>
+                <span className="muted">
+                  已载入 {history.loadedTurns}/{history.turnCount} 回合
+                </span>
+              </div>
+            ) : null}
             {session.turns.map((turn) => (
               <TurnView key={turn.id} turn={turn} />
             ))}

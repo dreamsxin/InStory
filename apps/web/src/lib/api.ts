@@ -5,6 +5,7 @@ import type {
   CreateTurnResponse,
   ReaderProfile,
   ReaderSessionListItem,
+  SessionTurn,
   StoryDetail,
   StorySession,
   StorySummary,
@@ -341,17 +342,53 @@ export async function getStoryDetail(storyId: string): Promise<StoryDetail> {
   return (await response.json()) as StoryDetail;
 }
 
-export async function getSession(sessionId: string): Promise<StorySession> {
-  const response = await apiFetch(`/api/sessions/${sessionId}`);
+/** How much of a session's transcript a response carried, and whether more exists. */
+export interface SessionHistoryInfo {
+  turnCount: number;
+  loadedTurns: number;
+  oldestLoadedTurnId: string | null;
+  hasMore: boolean;
+}
+
+export interface SessionWithHistory {
+  session: StorySession;
+  history: SessionHistoryInfo;
+}
+
+/**
+ * Loads a session with a bounded window of recent turns. A long story would
+ * otherwise ship its entire transcript on every page view.
+ */
+export async function getSession(sessionId: string, turnLimit?: number): Promise<SessionWithHistory> {
+  const query = turnLimit ? `?turnLimit=${turnLimit}` : "";
+  const response = await apiFetch(`/api/sessions/${sessionId}${query}`);
   if (response.status === 401) {
     throw new UnauthenticatedError();
   }
   if (!response.ok) {
     throw new Error("加载故事会话失败");
   }
-  const data = (await response.json()) as { session: StorySession };
-  return data.session;
+  return (await response.json()) as SessionWithHistory;
 }
+
+/** Turns older than `beforeTurnId`, oldest first, for walking back through history. */
+export async function getOlderTurns(
+  sessionId: string,
+  beforeTurnId: string,
+  limit = 20
+): Promise<{ turns: SessionTurn[]; hasMore: boolean }> {
+  const response = await apiFetch(
+    `/api/sessions/${sessionId}/turns?before=${encodeURIComponent(beforeTurnId)}&limit=${limit}`
+  );
+  if (response.status === 401) {
+    throw new UnauthenticatedError();
+  }
+  if (!response.ok) {
+    throw new Error("加载更早的回合失败");
+  }
+  return (await response.json()) as { turns: SessionTurn[]; hasMore: boolean };
+}
+
 
 export async function createTurn(params: {
   sessionId: string;

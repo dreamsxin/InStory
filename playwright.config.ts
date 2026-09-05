@@ -62,6 +62,10 @@ export default defineConfig({
         // Without a pause the mock finishes within a frame and the in-progress
         // reader state is never observable, so the streaming UI goes untested.
         MOCK_STREAM_CHUNK_DELAY_MS: "60",
+        // Small on purpose: lets a six-turn session exercise "load older turns"
+        // without generating dozens of passages first. Still above the two turns the
+        // other reader specs rely on being present after a reload.
+        SESSION_TURN_WINDOW: "5",
         DAILY_TURN_QUOTA: "20"
       }
     },

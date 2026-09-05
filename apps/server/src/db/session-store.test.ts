@@ -181,6 +181,89 @@ describe("SessionStore", () => {
     // listRecent stays global because it backs the admin console.
     expect(store.listRecent()).toHaveLength(2);
   });
+
+  it("reads only the newest turns when a window is given, still oldest first", () => {
+    const store = createStore();
+    const turns = Array.from({ length: 10 }, (_, index) =>
+      createTurn(`turn_${index}`, `2026-05-20T00:${String(index).padStart(2, "0")}:00.000Z`)
+    );
+    seed(store, createSession({ id: "sess_test", updatedAt: "2026-05-20T00:09:00.000Z", turns }));
+
+    const windowed = store.findById("sess_test", OWNER_ID, { recentTurns: 3 });
+    expect(windowed?.turns.map((turn) => turn.id)).toEqual(["turn_7", "turn_8", "turn_9"]);
+
+    // No window still means the whole transcript, which rewind depends on.
+    expect(store.findById("sess_test", OWNER_ID)?.turns).toHaveLength(10);
+  });
+
+  it("windows timeline nodes independently of turns", () => {
+    const store = createStore();
+    const timeline = Array.from({ length: 5 }, (_, index) =>
+      createNode(`node_${index}`, `turn_${index}`, `2026-05-20T00:0${index}:00.000Z`)
+    );
+    seed(store, createSession({ id: "sess_test", updatedAt: "2026-05-20T00:04:00.000Z", timeline }));
+
+    const windowed = store.findById("sess_test", OWNER_ID, { recentTimelineNodes: 2 });
+    expect(windowed?.timeline.map((node) => node.id)).toEqual(["node_3", "node_4"]);
+  });
+
+  it("walks backwards through older turns from a cursor", () => {
+    const store = createStore();
+    const turns = Array.from({ length: 6 }, (_, index) =>
+      createTurn(`turn_${index}`, `2026-05-20T00:0${index}:00.000Z`)
+    );
+    seed(store, createSession({ id: "sess_test", updatedAt: "2026-05-20T00:05:00.000Z", turns }));
+
+    expect(store.listTurnsBefore("sess_test", "turn_4", 2).map((turn) => turn.id)).toEqual([
+      "turn_2",
+      "turn_3"
+    ]);
+    // Asking for more than exists yields what there is, without wrapping around.
+    expect(store.listTurnsBefore("sess_test", "turn_1", 5).map((turn) => turn.id)).toEqual(["turn_0"]);
+    expect(store.listTurnsBefore("sess_test", "turn_0", 5)).toEqual([]);
+
+    expect(store.hasTurnsBefore("sess_test", "turn_1")).toBe(true);
+    expect(store.hasTurnsBefore("sess_test", "turn_0")).toBe(false);
+  });
+
+  it("refuses a cursor that belongs to another session", () => {
+    const store = createStore();
+    seed(
+      store,
+      createSession({
+        id: "sess_a",
+        updatedAt: "2026-05-20T00:01:00.000Z",
+        turns: [createTurn("turn_0", "2026-05-20T00:00:00.000Z"), createTurn("turn_1", "2026-05-20T00:01:00.000Z")]
+      })
+    );
+    seed(
+      store,
+      createSession({
+        id: "sess_b",
+        updatedAt: "2026-05-20T00:01:00.000Z",
+        turns: [createTurn("turn_0", "2026-05-20T00:00:00.000Z")]
+      })
+    );
+
+    // turn_1 exists, but not in sess_b, so it must not leak sess_a's history.
+    expect(store.listTurnsBefore("sess_b", "turn_1", 5)).toEqual([]);
+    expect(store.hasTurnsBefore("sess_b", "turn_1")).toBe(false);
+  });
+
+  it("counts turns from the denormalised counter", () => {
+    const store = createStore();
+    seed(
+      store,
+      createSession({
+        id: "sess_test",
+        updatedAt: "2026-05-20T00:01:00.000Z",
+        turns: [createTurn("turn_0", "2026-05-20T00:00:00.000Z"), createTurn("turn_1", "2026-05-20T00:01:00.000Z")]
+      })
+    );
+
+    expect(store.countTurns("sess_test")).toBe(2);
+    expect(store.countTurns("missing")).toBe(0);
+  });
 });
 
 function createState(turnCount = 0): WorldState {

@@ -71,6 +71,7 @@ const app = await buildApp({
   adminToken,
   dailyTurnQuota: Number(process.env.DAILY_TURN_QUOTA || 20),
   pricing: readPricingFromEnv(process.env),
+  sessionTurnWindow: Number(process.env.SESSION_TURN_WINDOW || 0) || undefined,
   trustProxy: readTrustProxy(process.env.TRUST_PROXY),
   // Sign-in is not wired into the web client yet, so local development still falls
   // back to the seeded legacy reader. Production always requires a real session.

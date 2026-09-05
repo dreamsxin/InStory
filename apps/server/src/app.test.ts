@@ -2,7 +2,13 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { CreateSessionResponse, CreateTurnResponse, StoryDetail, StorySession } from "@instory/shared";
+import type {
+  CreateSessionResponse,
+  CreateTurnResponse,
+  SessionTurn,
+  StoryDetail,
+  StorySession
+} from "@instory/shared";
 import { buildApp } from "./app.js";
 import { StoryCatalog } from "./data/story-catalog.js";
 import { AppDatabase } from "./db/app-database.js";
@@ -1608,4 +1614,105 @@ describe("abuse limits", () => {
     expect(streamed.statusCode).toBe(429);
   });
 });
+
+describe("session history windowing", () => {
+  /** Builds a session with the opening turn plus `extra` generated turns. */
+  async function seedTranscript(extra: number): Promise<string> {
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/stories/rain-mansion/sessions",
+      payload: { entryMode: "existing_character", characterId: "lu_qinghe" }
+    });
+    const sessionId = created.json<CreateSessionResponse>().session.id;
+
+    for (let index = 0; index < extra; index += 1) {
+      const advanced = await app.inject({
+        method: "POST",
+        url: `/api/sessions/${sessionId}/turns`,
+        payload: { inputType: "read_continue", content: "继续阅读" }
+      });
+      expect(advanced.statusCode).toBe(200);
+    }
+
+    return sessionId;
+  }
+
+  it("ships only a window of turns and says how much is left", async () => {
+    const sessionId = await seedTranscript(3);
+
+    const windowed = await app.inject({ method: "GET", url: `/api/sessions/${sessionId}?turnLimit=2` });
+    expect(windowed.statusCode).toBe(200);
+
+    const body = windowed.json<{
+      session: StorySession;
+      history: { turnCount: number; loadedTurns: number; oldestLoadedTurnId: string | null; hasMore: boolean };
+    }>();
+
+    expect(body.session.turns).toHaveLength(2);
+    expect(body.history).toMatchObject({ turnCount: 4, loadedTurns: 2, hasMore: true });
+    expect(body.history.oldestLoadedTurnId).toBe(body.session.turns[0]?.id);
+  });
+
+  it("reports no more history once the whole transcript fits", async () => {
+    const sessionId = await seedTranscript(1);
+
+    const body = await app.inject({ method: "GET", url: `/api/sessions/${sessionId}` });
+    const parsed = body.json<{ session: StorySession; history: { turnCount: number; hasMore: boolean } }>();
+
+    expect(parsed.session.turns).toHaveLength(2);
+    expect(parsed.history).toMatchObject({ turnCount: 2, hasMore: false });
+  });
+
+  it("walks backwards through older turns from a cursor", async () => {
+    const sessionId = await seedTranscript(3);
+
+    const windowed = await app.inject({ method: "GET", url: `/api/sessions/${sessionId}?turnLimit=1` });
+    const cursor = windowed.json<{ session: StorySession }>().session.turns[0]?.id as string;
+
+    const older = await app.inject({
+      method: "GET",
+      url: `/api/sessions/${sessionId}/turns?before=${cursor}&limit=2`
+    });
+    expect(older.statusCode).toBe(200);
+
+    const page = older.json<{ turns: SessionTurn[]; hasMore: boolean }>();
+    expect(page.turns).toHaveLength(2);
+    // Oldest first, and strictly older than the cursor.
+    expect(page.turns.every((turn) => turn.createdAt <= cursor)).toBe(true);
+    expect(page.hasMore).toBe(true);
+
+    const rest = await app.inject({
+      method: "GET",
+      url: `/api/sessions/${sessionId}/turns?before=${page.turns[0]?.id}&limit=10`
+    });
+    expect(rest.json<{ hasMore: boolean }>().hasMore).toBe(false);
+  });
+
+  it("requires a cursor and refuses an unknown session", async () => {
+    const sessionId = await seedTranscript(1);
+
+    const noCursor = await app.inject({ method: "GET", url: `/api/sessions/${sessionId}/turns` });
+    expect(noCursor.statusCode).toBe(400);
+
+    const missing = await app.inject({ method: "GET", url: "/api/sessions/sess_missing/turns?before=turn_0" });
+    expect(missing.statusCode).toBe(404);
+  });
+
+  it("still resolves a reported turn that falls outside the loaded window", async () => {
+    const sessionId = await seedTranscript(3);
+
+    // The opening turn is the oldest, so a windowed read would not contain it.
+    const full = await app.inject({ method: "GET", url: `/api/sessions/${sessionId}?turnLimit=200` });
+    const oldestTurnId = full.json<{ session: StorySession }>().session.turns[0]?.id as string;
+
+    const reported = await app.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/report`,
+      payload: { turnId: oldestTurnId, reason: "开场这段有问题" }
+    });
+    expect(reported.statusCode).toBe(201);
+    expect(reported.json<{ event: { turnId: string | null } }>().event.turnId).toBe(oldestTurnId);
+  });
+});
+
 

@@ -8,10 +8,11 @@ export default async function StoryPage({ params }: { params: Promise<{ sessionI
   }
 
   const { sessionId } = await params;
-  const session = await getSession(sessionId);
+  const { session, history } = await getSession(sessionId);
   // The session only carries storyId, and the reader needs the title in its header.
   const story = await getStoryDetail(session.storyId);
 
-  return <ReaderClient initialSession={session} storyTitle={story.story.title} />;
+  return <ReaderClient initialHistory={history} initialSession={session} storyTitle={story.story.title} />;
 }
+
 

@@ -23,6 +23,17 @@ export interface AppendTurnInput {
 }
 
 /**
+ * How much of a session's history to materialise. Omitting a field loads all of it,
+ * which is what rewind needs; the reader and the generation path pass a window so a
+ * long story does not cost a full transcript on every request.
+ */
+export interface SessionReadWindow {
+  recentTurns?: number;
+  recentTimelineNodes?: number;
+}
+
+
+/**
  * Sessions are stored relationally: the session row holds the reader role, the
  * current world state and a denormalised turn counter, while turns and timeline
  * nodes live in their own tables. Appending a turn therefore inserts one row
@@ -97,9 +108,10 @@ export class SessionStore {
 
   /**
    * Reads a session. Pass ownerId to require the session to belong to that user;
-   * omitting it is only appropriate for admin-facing reads.
+   * omitting it is only appropriate for admin-facing reads. Pass a window to load
+   * only the newest turns and timeline nodes; without one the whole history is read.
    */
-  findById(id: string, ownerId?: string): StorySession | null {
+  findById(id: string, ownerId?: string, window: SessionReadWindow = {}): StorySession | null {
     const row = this.database.db
       .prepare(
         `SELECT id, story_id AS storyId, user_id AS userId, reader_role AS readerRole, state,
@@ -131,8 +143,8 @@ export class SessionStore {
       storyId: row.storyId,
       readerRole: JSON.parse(row.readerRole ?? "{}") as ReaderRole,
       state: JSON.parse(row.state ?? "{}") as WorldState,
-      turns: this.listTurns(id),
-      timeline: this.listTimeline(id),
+      turns: this.listTurns(id, window.recentTurns),
+      timeline: this.listTimeline(id, window.recentTimelineNodes),
       createdAt: row.createdAt,
       updatedAt: row.updatedAt
     };
@@ -200,6 +212,107 @@ export class SessionStore {
     return this.database.databasePath;
   }
 
+  /** Total turns in a session, read from the denormalised counter. */
+  countTurns(sessionId: string): number {
+    const row = this.database.db
+      .prepare("SELECT turn_count AS turnCount FROM reader_sessions WHERE id = ?")
+      .get(sessionId) as { turnCount: number } | undefined;
+    return row?.turnCount ?? 0;
+  }
+
+  /**
+   * Turns immediately older than the given one, oldest first. Used to walk backwards
+   * through a long transcript instead of shipping all of it at once. Returns an empty
+   * array when the cursor turn does not belong to the session.
+   */
+  listTurnsBefore(sessionId: string, beforeTurnId: string, limit: number): SessionTurn[] {
+    const cursor = this.database.db
+      .prepare("SELECT seq FROM session_turns WHERE session_id = ? AND id = ?")
+      .get(sessionId, beforeTurnId) as { seq: number } | undefined;
+
+    if (!cursor) {
+      return [];
+    }
+
+    const rows = this.database.db
+      .prepare(
+        `SELECT id, input_type AS inputType, input, narration, dialogues, choices,
+                state_snapshot AS stateSnapshot, created_at AS createdAt
+         FROM session_turns
+         WHERE session_id = ? AND seq < ?
+         ORDER BY seq DESC
+         LIMIT ?`
+      )
+      .all(sessionId, cursor.seq, Math.max(0, limit))
+      .reverse() as Array<{
+      id: string;
+      inputType: string;
+      input: string;
+      narration: string;
+      dialogues: string;
+      choices: string;
+      stateSnapshot: string;
+      createdAt: string;
+    }>;
+
+    return rows.map((row) => this.toTurn(sessionId, row));
+  }
+
+  /** Whether any turn in the session is older than the given one. */
+  hasTurnsBefore(sessionId: string, beforeTurnId: string): boolean {
+    const cursor = this.database.db
+      .prepare("SELECT seq FROM session_turns WHERE session_id = ? AND id = ?")
+      .get(sessionId, beforeTurnId) as { seq: number } | undefined;
+
+    if (!cursor) {
+      return false;
+    }
+
+    const row = this.database.db
+      .prepare("SELECT 1 AS present FROM session_turns WHERE session_id = ? AND seq < ? LIMIT 1")
+      .get(sessionId, cursor.seq) as { present: number } | undefined;
+
+    return row !== undefined;
+  }
+
+  /**
+   * One turn by id, or the newest turn when no id is given. Lets callers that only
+   * need a single turn — reporting a passage, for instance — avoid materialising the
+   * transcript just to search it in memory.
+   */
+  findTurn(sessionId: string, turnId?: string | null): SessionTurn | null {
+    const row = (
+      turnId
+        ? this.database.db
+            .prepare(
+              `SELECT id, input_type AS inputType, input, narration, dialogues, choices,
+                      state_snapshot AS stateSnapshot, created_at AS createdAt
+               FROM session_turns WHERE session_id = ? AND id = ?`
+            )
+            .get(sessionId, turnId)
+        : this.database.db
+            .prepare(
+              `SELECT id, input_type AS inputType, input, narration, dialogues, choices,
+                      state_snapshot AS stateSnapshot, created_at AS createdAt
+               FROM session_turns WHERE session_id = ? ORDER BY seq DESC LIMIT 1`
+            )
+            .get(sessionId)
+    ) as
+      | {
+          id: string;
+          inputType: string;
+          input: string;
+          narration: string;
+          dialogues: string;
+          choices: string;
+          stateSnapshot: string;
+          createdAt: string;
+        }
+      | undefined;
+
+    return row ? this.toTurn(sessionId, row) : null;
+  }
+
   private nextSeq(table: "session_turns" | "session_timeline_nodes", sessionId: string): number {
     const row = this.database.db
       .prepare(`SELECT COALESCE(MAX(seq) + 1, 0) AS nextSeq FROM ${table} WHERE session_id = ?`)
@@ -263,14 +376,27 @@ export class SessionStore {
       );
   }
 
-  private listTurns(sessionId: string): SessionTurn[] {
-    const rows = this.database.db
-      .prepare(
-        `SELECT id, input_type AS inputType, input, narration, dialogues, choices,
-                state_snapshot AS stateSnapshot, created_at AS createdAt
-         FROM session_turns WHERE session_id = ? ORDER BY seq`
-      )
-      .all(sessionId) as Array<{
+  private listTurns(sessionId: string, recent?: number): SessionTurn[] {
+    // Windowed reads take the newest rows and flip them back, because "the last N"
+    // cannot be expressed with a plain ascending LIMIT.
+    const rows = (
+      recent === undefined
+        ? this.database.db
+            .prepare(
+              `SELECT id, input_type AS inputType, input, narration, dialogues, choices,
+                      state_snapshot AS stateSnapshot, created_at AS createdAt
+               FROM session_turns WHERE session_id = ? ORDER BY seq`
+            )
+            .all(sessionId)
+        : this.database.db
+            .prepare(
+              `SELECT id, input_type AS inputType, input, narration, dialogues, choices,
+                      state_snapshot AS stateSnapshot, created_at AS createdAt
+               FROM session_turns WHERE session_id = ? ORDER BY seq DESC LIMIT ?`
+            )
+            .all(sessionId, Math.max(0, recent))
+            .reverse()
+    ) as Array<{
       id: string;
       inputType: string;
       input: string;
@@ -281,7 +407,23 @@ export class SessionStore {
       createdAt: string;
     }>;
 
-    return rows.map((row) => ({
+    return rows.map((row) => this.toTurn(sessionId, row));
+  }
+
+  private toTurn(
+    sessionId: string,
+    row: {
+      id: string;
+      inputType: string;
+      input: string;
+      narration: string;
+      dialogues: string;
+      choices: string;
+      stateSnapshot: string;
+      createdAt: string;
+    }
+  ): SessionTurn {
+    return {
       id: row.id,
       sessionId,
       inputType: row.inputType as SessionTurn["inputType"],
@@ -291,17 +433,28 @@ export class SessionStore {
       choices: JSON.parse(row.choices) as SessionTurn["choices"],
       stateSnapshot: JSON.parse(row.stateSnapshot) as WorldState,
       createdAt: row.createdAt
-    }));
+    };
   }
 
-  private listTimeline(sessionId: string): TimelineNode[] {
-    const rows = this.database.db
-      .prepare(
-        `SELECT id, turn_id AS turnId, title, summary, state_snapshot AS stateSnapshot,
-                created_at AS createdAt
-         FROM session_timeline_nodes WHERE session_id = ? ORDER BY seq`
-      )
-      .all(sessionId) as Array<{
+  private listTimeline(sessionId: string, recent?: number): TimelineNode[] {
+    const rows = (
+      recent === undefined
+        ? this.database.db
+            .prepare(
+              `SELECT id, turn_id AS turnId, title, summary, state_snapshot AS stateSnapshot,
+                      created_at AS createdAt
+               FROM session_timeline_nodes WHERE session_id = ? ORDER BY seq`
+            )
+            .all(sessionId)
+        : this.database.db
+            .prepare(
+              `SELECT id, turn_id AS turnId, title, summary, state_snapshot AS stateSnapshot,
+                      created_at AS createdAt
+               FROM session_timeline_nodes WHERE session_id = ? ORDER BY seq DESC LIMIT ?`
+            )
+            .all(sessionId, Math.max(0, recent))
+            .reverse()
+    ) as Array<{
       id: string;
       turnId: string;
       title: string;
