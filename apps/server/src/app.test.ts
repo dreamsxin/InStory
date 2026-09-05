@@ -521,6 +521,77 @@ describe("server API", () => {
     expect(missing.statusCode).toBe(404);
   });
 
+  it("opens a newly authored story with its own setting instead of the seed story", async () => {
+    const createdProfile = await app.inject({
+      method: "POST",
+      url: "/api/reader/profiles",
+      payload: {
+        name: "叶九",
+        gender: "女",
+        visibility: "private",
+        personality: "谨慎、擅长交易。",
+        avatarUrl: null,
+        description: "在市集里替人赎回名字的中间人。"
+      }
+    });
+    const profileId = createdProfile.json<{ profile: { id: string } }>().profile.id;
+
+    await app.inject({
+      method: "POST",
+      url: "/api/stories",
+      payload: {
+        id: "lantern-bazaar",
+        title: "提灯集",
+        tagline: "你在提灯集里赎回自己的名字。",
+        genre: "奇幻悬疑",
+        coverUrl: null,
+        premise: "提灯集只在雾起时出现，每一次交易都要付出一段记忆。",
+        openingLocationName: "提灯长廊",
+        openingLocationDescription: "灯笼一路悬到雾里，照不出任何影子。",
+        worldRules: ["不能说出真名"],
+        castProfileIds: [profileId],
+        visibility: "private",
+        aiFreedom: "medium",
+        experienceMode: "coauthored",
+        defaultSegmentLength: "standard"
+      }
+    });
+
+    const session = await app.inject({
+      method: "POST",
+      url: "/api/stories/lantern-bazaar/sessions",
+      payload: { entryMode: "custom_role", readerProfileId: profileId }
+    });
+    expect(session.statusCode).toBe(200);
+
+    const body = session.json<CreateSessionResponse>();
+    const openingText = [
+      body.openingTurn.narration,
+      ...body.openingTurn.dialogues.map((dialogue) => `${dialogue.speaker}${dialogue.text}`),
+      ...body.openingTurn.choices.map((choice) => choice.text),
+      body.session.timeline[0]?.summary ?? ""
+    ].join("\n");
+
+    // The seed story must not leak into another story's opening.
+    expect(openingText).not.toContain("陆清河");
+    expect(openingText).not.toContain("旧宅");
+    expect(body.openingTurn.narration).toContain("提灯长廊");
+    expect(body.openingTurn.narration).toContain("提灯集只在雾起时出现");
+    expect(body.session.state.location).toBe("提灯长廊");
+
+    const advanced = await app.inject({
+      method: "POST",
+      url: `/api/sessions/${body.session.id}/turns`,
+      payload: { inputType: "read_continue", content: "继续阅读" }
+    });
+    expect(advanced.statusCode).toBe(200);
+
+    const turnBody = advanced.json<CreateTurnResponse>();
+    expect(turnBody.turn.narration).not.toContain("陆清河");
+    expect(turnBody.turn.narration).not.toContain("旧宅");
+    expect(turnBody.turn.narration).toContain("提灯长廊");
+  });
+
   it("creates a minimal story through client story API", async () => {
     const createdProfile = await app.inject({
       method: "POST",

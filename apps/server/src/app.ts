@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import cors from "@fastify/cors";
 import Fastify from "fastify";
 import { z } from "zod";
@@ -20,7 +21,8 @@ import type {
   SessionTurn,
   StoryDetail,
   StorySession,
-  TimelineNode
+  TimelineNode,
+  WorldState
 } from "@instory/shared";
 import type { StoryCatalog } from "./data/story-catalog.js";
 import type { ReaderProfileStore } from "./db/reader-profile-store.js";
@@ -37,6 +39,90 @@ const updateModelConfigSchema = z.object({
 
 const updateStorySummarySchema = storySummarySchema.omit({ id: true, ownerId: true });
 const LOCAL_READER_ID = "local-reader";
+
+/** Constant-time bearer token comparison so failures do not leak the token byte by byte. */
+function matchesBearerToken(authorization: string, expectedToken: string): boolean {
+  const expected = Buffer.from(`Bearer ${expectedToken}`);
+  const provided = Buffer.from(authorization);
+
+  return expected.length === provided.length && timingSafeEqual(expected, provided);
+}
+
+interface OpeningScene {
+  state: WorldState;
+  turn: SessionTurn;
+  node: TimelineNode;
+}
+
+/**
+ * Derives the opening turn from the story's own world configuration. Both session
+ * creation and session reset go through here so that no story ever inherits the
+ * seed story's setting, cast or dialogue.
+ */
+function buildOpeningScene(params: {
+  story: StoryDetail;
+  sessionId: string;
+  mode: "start" | "restart";
+  now: string;
+}): OpeningScene {
+  const { story, sessionId, mode, now } = params;
+  const openingLocation = story.world.locations[0] ?? null;
+  const locationName = openingLocation?.name ?? "未知之地";
+  const host = story.characters[0] ?? null;
+  const state = createInitialState({
+    scene: `${story.story.title}·开场`,
+    location: locationName
+  });
+
+  const narration = [openingLocation?.description, `你在${locationName}睁开眼。${story.world.premise}`]
+    .filter((part): part is string => Boolean(part))
+    .join("\n\n");
+
+  const turn: SessionTurn = {
+    id: "turn_0",
+    sessionId,
+    inputType: "free_text",
+    input: mode === "restart" ? "重新开始" : "进入故事",
+    narration,
+    dialogues: host
+      ? [
+          {
+            speaker: host.name,
+            text: `你终于来了。在${locationName}，先别急着开口。`
+          }
+        ]
+      : [],
+    choices: [
+      {
+        id: "opening_c1",
+        text: host ? `向${host.name}询问自己为何在这里` : "弄清自己为何会在这里",
+        risk: "medium"
+      },
+      {
+        id: "opening_c2",
+        text: `先观察${locationName}里的线索`,
+        risk: "low"
+      }
+    ],
+    stateSnapshot: state,
+    createdAt: now
+  };
+
+  const node: TimelineNode = {
+    id: "node_0",
+    sessionId,
+    turnId: turn.id,
+    title: state.scene,
+    summary:
+      mode === "restart"
+        ? `你重新开始《${story.story.title}》，回到${locationName}。`
+        : `你进入《${story.story.title}》，在${locationName}开始这段故事。`,
+    stateSnapshot: state,
+    createdAt: now
+  };
+
+  return { state, turn, node };
+}
 
 export interface BuildAppOptions {
   sessionStore: SessionStore;
@@ -76,7 +162,7 @@ export async function buildApp(options: BuildAppOptions) {
     }
 
     const authorization = request.headers.authorization;
-    if (authorization !== `Bearer ${options.adminToken}`) {
+    if (!authorization || !matchesBearerToken(authorization, options.adminToken)) {
       return reply.code(401).send({ error: "Unauthorized" });
     }
   });
@@ -323,7 +409,8 @@ export async function buildApp(options: BuildAppOptions) {
       requestedCharacter?.storyId === storyId ? requestedCharacter : storyDetail.characters[0] ?? null;
     const now = new Date().toISOString();
     const sessionId = `sess_${crypto.randomUUID()}`;
-    const initialState = createInitialState();
+    const opening = buildOpeningScene({ story: storyDetail, sessionId, mode: "start", now });
+    const initialState = opening.state;
 
     const session: StorySession = {
       id: sessionId,
@@ -345,43 +432,9 @@ export async function buildApp(options: BuildAppOptions) {
       updatedAt: now
     };
 
-    const openingTurn: SessionTurn = {
-      id: "turn_0",
-      sessionId,
-      inputType: "free_text",
-      input: "进入故事",
-      narration: "你醒来时，窗外正落着细雨。陌生的旧宅木梁低垂，空气里有潮湿的檀香味。门外有人停下脚步，像是在确认你的呼吸。",
-      dialogues: [
-        {
-          speaker: "陆清河",
-          text: "醒了就别出声。今晚，这座宅子不认生人。"
-        }
-      ],
-      choices: [
-        {
-          id: "opening_c1",
-          text: "询问自己为何在这里",
-          risk: "medium"
-        },
-        {
-          id: "opening_c2",
-          text: "先观察房间里的线索",
-          risk: "low"
-        }
-      ],
-      stateSnapshot: initialState,
-      createdAt: now
-    };
+    const openingTurn: SessionTurn = opening.turn;
 
-    const openingNode: TimelineNode = {
-      id: "node_0",
-      sessionId,
-      turnId: openingTurn.id,
-      title: initialState.scene,
-      summary: "你在雨夜旧宅醒来，陆清河提醒你不要出声。",
-      stateSnapshot: initialState,
-      createdAt: now
-    };
+    const openingNode: TimelineNode = opening.node;
 
     session.turns.push(openingTurn);
     session.timeline.push(openingNode);
@@ -520,43 +573,15 @@ export async function buildApp(options: BuildAppOptions) {
 
     const now = new Date().toISOString();
     const newSessionId = `sess_${crypto.randomUUID()}`;
-    const initialState = createInitialState();
-    const openingTurn: SessionTurn = {
-      id: "turn_0",
+    const opening = buildOpeningScene({
+      story: storyDetail,
       sessionId: newSessionId,
-      inputType: "free_text",
-      input: "重新开始",
-      narration: "你醒来时，窗外正落着细雨。陌生的旧宅木梁低垂，空气里有潮湿的檀香味。门外有人停下脚步，像是在确认你的呼吸。",
-      dialogues: [
-        {
-          speaker: "陆清河",
-          text: "醒了就别出声。今晚，这座宅子不认生人。"
-        }
-      ],
-      choices: [
-        {
-          id: "opening_c1",
-          text: "询问自己为何在这里",
-          risk: "medium"
-        },
-        {
-          id: "opening_c2",
-          text: "先观察房间里的线索",
-          risk: "low"
-        }
-      ],
-      stateSnapshot: initialState,
-      createdAt: now
-    };
-    const openingNode: TimelineNode = {
-      id: "node_0",
-      sessionId: newSessionId,
-      turnId: openingTurn.id,
-      title: initialState.scene,
-      summary: "你重新开始故事，在雨夜旧宅醒来。",
-      stateSnapshot: initialState,
-      createdAt: now
-    };
+      mode: "restart",
+      now
+    });
+    const initialState = opening.state;
+    const openingTurn: SessionTurn = opening.turn;
+    const openingNode: TimelineNode = opening.node;
     const resetSession: StorySession = {
       id: newSessionId,
       storyId: session.storyId,

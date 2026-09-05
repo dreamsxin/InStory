@@ -3,12 +3,12 @@ import type { NarrativeResult, StorySession, WorldState } from "@instory/shared"
 import { applyStateDelta, createInitialState, createTimelineNode, shouldCreateTimelineNode } from "./state.js";
 
 describe("story state engine", () => {
-  it("creates the default opening state", () => {
+  it("creates a story-agnostic default opening state", () => {
     const state = createInitialState();
 
     expect(state).toEqual({
-      scene: "雨夜醒来",
-      location: "旧宅东厢房",
+      scene: "故事开场",
+      location: "未知之地",
       emotion: {
         alertness: 4,
         fear: 2
@@ -19,6 +19,14 @@ describe("story state engine", () => {
       flags: {},
       turnCount: 0
     });
+  });
+
+  it("uses the opening scene and location supplied by the story", () => {
+    const state = createInitialState({ scene: "雨夜醒来", location: "旧宅东厢房" });
+
+    expect(state.scene).toBe("雨夜醒来");
+    expect(state.location).toBe("旧宅东厢房");
+    expect(state.turnCount).toBe(0);
   });
 
   it("applies state deltas without losing existing values", () => {
@@ -100,6 +108,15 @@ describe("story state engine", () => {
         createNarrativeResult({
           memoryEvents: [],
           cluesAdded: ["异常脚印"]
+        })
+      )
+    ).toBe(true);
+    expect(
+      shouldCreateTimelineNode(
+        createState({ turnCount: 2 }),
+        createNarrativeResult({
+          memoryEvents: [],
+          cluesAdded: ["异常脚印", "湿信纸"]
         })
       )
     ).toBe(true);

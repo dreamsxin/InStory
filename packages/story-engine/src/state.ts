@@ -6,10 +6,20 @@ import type {
   WorldState
 } from "@instory/shared";
 
-export function createInitialState(): WorldState {
+export interface StoryOpening {
+  scene?: string;
+  location?: string;
+}
+
+/**
+ * Builds the opening world state. The defaults are deliberately story-agnostic:
+ * callers should pass the opening scene/location from the story's world config so
+ * that a newly authored story never inherits another story's setting.
+ */
+export function createInitialState(opening: StoryOpening = {}): WorldState {
   return {
-    scene: "雨夜醒来",
-    location: "旧宅东厢房",
+    scene: opening.scene ?? "故事开场",
+    location: opening.location ?? "未知之地",
     emotion: {
       alertness: 4,
       fear: 2
@@ -45,7 +55,11 @@ export function applyStateDelta(state: WorldState, delta: StateDelta): WorldStat
 }
 
 export function shouldCreateTimelineNode(state: WorldState, result: NarrativeResult): boolean {
-  return state.turnCount === 0 || result.memoryEvents.length > 0 || result.stateDelta.cluesAdded?.length === 1;
+  if (state.turnCount === 0 || result.memoryEvents.length > 0) {
+    return true;
+  }
+
+  return (result.stateDelta.cluesAdded?.length ?? 0) > 0;
 }
 
 export function createTimelineNode(params: {
