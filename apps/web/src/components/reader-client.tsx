@@ -17,7 +17,13 @@ import { useRouter } from "next/navigation";
 
 type ReaderPanel = "status" | "memory" | "action" | null;
 
-export function ReaderClient({ initialSession }: { initialSession: StorySession }) {
+export function ReaderClient({
+  initialSession,
+  storyTitle
+}: {
+  initialSession: StorySession;
+  storyTitle: string;
+}) {
   const router = useRouter();
   const [session, setSession] = useState(initialSession);
   const [activePanel, setActivePanel] = useState<ReaderPanel>(null);
@@ -25,6 +31,9 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
   const [loading, setLoading] = useState(false);
   const [streamingNarration, setStreamingNarration] = useState("");
   const [quota, setQuota] = useState<TurnQuota | null>(null);
+  // Visible by default: the bar carries the story title, the reader's identity and
+  // the remaining daily quota, none of which are worth having if nobody sees them.
+  const [chromeVisible, setChromeVisible] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -114,11 +123,11 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
   return (
     <main className="reader-shell reader-shell-focus h-dvh w-full overflow-hidden">
       <section className="reader reader-stage h-dvh w-full min-w-0 p-0 sm:p-4 md:p-8">
-        <div className="topbar reader-topbar reader-chrome-hidden">
+        <div className={`topbar reader-topbar${chromeVisible ? "" : " reader-chrome-hidden"}`}>
           <div className="brand-row">
             <BrandMark size={40} />
             <div className="brand">
-              <h1>雨夜旧宅</h1>
+              <h1>{storyTitle}</h1>
               <p className="muted">身份：{session.readerRole.name}</p>
             </div>
           </div>
@@ -181,6 +190,15 @@ export function ReaderClient({ initialSession }: { initialSession: StorySession 
         </Button>
         <Button className="w-full min-w-0 sm:w-auto" size="sm" variant={activePanel === "action" ? "secondary" : "outline"} onPress={() => setActivePanel((panel) => (panel === "action" ? null : "action"))}>
           行动
+        </Button>
+        <Button
+          aria-pressed={!chromeVisible}
+          className="w-full min-w-0 sm:w-auto"
+          size="sm"
+          variant={chromeVisible ? "outline" : "secondary"}
+          onPress={() => setChromeVisible((visible) => !visible)}
+        >
+          {chromeVisible ? "沉浸阅读" : "显示信息栏"}
         </Button>
       </nav>
 

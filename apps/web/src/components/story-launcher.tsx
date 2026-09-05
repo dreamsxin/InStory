@@ -72,8 +72,8 @@ export function StoryLauncher({
             </Select.Trigger>
             <Select.Popover>
               <ListBox>
-                <ListBox.Item id={DEFAULT_ROLE_KEY} textValue="默认角色：陆清河">
-                  默认角色：陆清河
+                <ListBox.Item id={DEFAULT_ROLE_KEY} textValue="默认角色（由故事指定）">
+                  默认角色（由故事指定）
                   <ListBox.ItemIndicator />
                 </ListBox.Item>
                 {profiles.map((profile) => (

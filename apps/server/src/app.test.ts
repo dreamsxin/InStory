@@ -605,6 +605,21 @@ describe("server API", () => {
     expect(turnBody.turn.narration).not.toContain("陆清河");
     expect(turnBody.turn.narration).not.toContain("旧宅");
     expect(turnBody.turn.narration).toContain("提灯长廊");
+
+    // The "default role" path sends no characterId, so the story's own leading
+    // character has to be chosen. Naming one client-side would name the seed
+    // story's character, which this story does not have.
+    const defaultRole = await app.inject({
+      method: "POST",
+      url: "/api/stories/lantern-bazaar/sessions",
+      payload: { entryMode: "existing_character", characterId: null }
+    });
+    expect(defaultRole.statusCode).toBe(200);
+
+    const defaultRoleBody = defaultRole.json<CreateSessionResponse>();
+    expect(defaultRoleBody.session.readerRole.name).not.toBe("陆清河");
+    expect(defaultRoleBody.session.readerRole.characterId).not.toBe("lu_qinghe");
+    expect(defaultRoleBody.session.state.location).toBe("提灯长廊");
   });
 
   it("creates a minimal story through client story API", async () => {

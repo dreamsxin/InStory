@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { ReaderClient } from "@/components/reader-client";
-import { getCurrentUser, getSession } from "@/lib/api";
+import { getCurrentUser, getSession, getStoryDetail } from "@/lib/api";
 
 export default async function StoryPage({ params }: { params: Promise<{ sessionId: string }> }) {
   if (!(await getCurrentUser())) {
@@ -9,6 +9,9 @@ export default async function StoryPage({ params }: { params: Promise<{ sessionI
 
   const { sessionId } = await params;
   const session = await getSession(sessionId);
+  // The session only carries storyId, and the reader needs the title in its header.
+  const story = await getStoryDetail(session.storyId);
 
-  return <ReaderClient initialSession={session} />;
+  return <ReaderClient initialSession={session} storyTitle={story.story.title} />;
 }
+

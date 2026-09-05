@@ -552,8 +552,8 @@ function StoryTrialLauncher({ profiles, story }: { profiles: ReaderProfile[]; st
           </Select.Trigger>
           <Select.Popover>
             <ListBox>
-              <ListBox.Item id={TRIAL_DEFAULT_ROLE_KEY} textValue="默认角色：陆清河">
-                默认角色：陆清河
+              <ListBox.Item id={TRIAL_DEFAULT_ROLE_KEY} textValue="默认角色（由故事指定）">
+                默认角色（由故事指定）
                 <ListBox.ItemIndicator />
               </ListBox.Item>
               {profiles.map((profile) => (
@@ -777,7 +777,7 @@ function CreateProfilePanel() {
           </Select>
           <TextField isRequired name="description">
             <Label>身份背景</Label>
-            <TextArea maxLength={2000} placeholder="现代法医，被卷入雨夜旧宅谜案。" rows={3} />
+            <TextArea maxLength={2000} placeholder="一句话交代来历、动机和最在意的事，例如：退役军医，为寻回失踪的妹妹而来。" rows={3} />
           </TextField>
           <Button type="submit">创建入戏角色</Button>
         </form>

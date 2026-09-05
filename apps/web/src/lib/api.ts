@@ -173,7 +173,9 @@ export async function createSession(storyId: string, readerProfileId?: string | 
     method: "POST",
     body: JSON.stringify({
       entryMode: readerProfileId ? "custom_role" : "existing_character",
-      characterId: readerProfileId ? null : "lu_qinghe",
+      // Null on purpose: the server picks the story's own leading character. Naming
+      // one here would be the seed story's character, which no other story has.
+      characterId: null,
       readerProfileId: readerProfileId ?? null
     })
   });

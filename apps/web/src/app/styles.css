@@ -702,20 +702,6 @@ a {
   padding-bottom: 6px;
 }
 
-.reader-chrome-toggle {
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  z-index: 20;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.86);
-  box-shadow: var(--shadow-soft);
-  color: var(--text);
-  padding: 10px 14px;
-  backdrop-filter: blur(14px);
-}
-
 .reader-tool-dock {
   position: fixed;
   right: 18px;
@@ -1558,13 +1544,8 @@ a {
   .reader-chrome-hidden.reader-sidebar {
     display: none;
   }
-
-  .reader-chrome-toggle {
-    right: 14px;
-    bottom: max(14px, env(safe-area-inset-bottom));
-    padding: 9px 12px;
-  }
 }
+
 
 @media (max-width: 960px) and (max-height: 560px) and (orientation: landscape) {
   html,
@@ -1815,13 +1796,8 @@ a {
   .reader-shell-focus {
     grid-template-columns: minmax(0, 1fr);
   }
-
-  .reader-chrome-toggle {
-    right: max(10px, env(safe-area-inset-right));
-    bottom: max(10px, env(safe-area-inset-bottom));
-    padding: 8px 11px;
-  }
 }
+
 
 /* Sign-in and account */
 

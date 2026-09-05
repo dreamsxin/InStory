@@ -84,7 +84,31 @@ test.describe("reader", () => {
     await expect(page.locator(".turn-streaming")).toBeHidden();
 
     await expect(page.locator(".quota-chip")).toContainText("今日剩余");
+    // Visible, not merely present: the bar used to carry the hidden-chrome class
+    // unconditionally with no button to turn it back on.
+    await expect(page.locator(".quota-chip")).toBeVisible();
   });
+
+  test("names the story it is actually playing, and can hide the bar", async ({ page, request }) => {
+    const { token } = await signInViaApi(page, request, "e2e-title@example.com", "E2E 标题");
+    const sessionId = await startSession(request, token);
+
+    // Read the expected title from the API so a hardcoded literal cannot pass.
+    const detail = await request.get(`${API_BASE}/api/stories/rain-mansion`);
+    const expectedTitle = ((await detail.json()) as { story: { title: string } }).story.title;
+
+    await page.goto(`/story/${sessionId}`);
+
+    const heading = page.locator(".reader-topbar h1");
+    await expect(heading).toHaveText(expectedTitle);
+
+    await page.getByRole("button", { name: "沉浸阅读" }).click();
+    await expect(heading).toBeHidden();
+
+    await page.getByRole("button", { name: "显示信息栏" }).click();
+    await expect(heading).toBeVisible();
+  });
+
 
   test("sends a visitor without a session to sign in instead of leaking the story", async ({
     page,

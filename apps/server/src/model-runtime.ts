@@ -137,17 +137,22 @@ function toPublicConfig(config: StoredModelConfig): PublicModelConfig {
   };
 }
 
+/**
+ * Synthetic probe session for /api/admin/models/verify. Deliberately references no
+ * real story or character: it must keep working after the seed story is renamed or
+ * deleted, and it is never persisted.
+ */
 function createVerificationSession(): StorySession {
   const state = createInitialState();
 
   return {
     id: "verify_session",
-    storyId: "rain-mansion",
+    storyId: "verify-story",
     readerRole: {
       mode: "existing_character",
-      characterId: "lu_qinghe",
-      name: "陆清河",
-      description: "旧宅管事"
+      characterId: "verify_character",
+      name: "同行者",
+      description: "陪你走完这段路的人"
     },
     state,
     turns: [
@@ -156,11 +161,11 @@ function createVerificationSession(): StorySession {
         sessionId: "verify_session",
         inputType: "free_text",
         input: "进入故事",
-        narration: "你醒来时，窗外正落着细雨。门外有人停下脚步。",
+        narration: "你醒来时，门外有人停下脚步。",
         dialogues: [
           {
-            speaker: "陆清河",
-            text: "醒了就别出声。今晚，这座宅子不认生人。"
+            speaker: "同行者",
+            text: "醒了就别出声。今晚这里不认生人。"
           }
         ],
         choices: [
@@ -179,8 +184,8 @@ function createVerificationSession(): StorySession {
         id: "node_0",
         sessionId: "verify_session",
         turnId: "turn_0",
-        title: "雨夜醒来",
-        summary: "你在雨夜旧宅醒来，陆清河提醒你不要出声。",
+        title: "醒来",
+        summary: "你在陌生的地方醒来，有人提醒你不要出声。",
         stateSnapshot: state,
         createdAt: "2026-05-20T00:00:00.000Z"
       }
