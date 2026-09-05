@@ -95,9 +95,30 @@ export interface AdminSessionListItem {
 
 export interface AdminModerationEvent {
   id: string;
-  type: string;
-  status: string;
+  userId: string | null;
+  sessionId: string | null;
+  storyId: string | null;
+  turnId: string | null;
+  surface: "reader_input" | "model_output" | "story_config" | "report";
+  action: "allowed" | "flagged" | "blocked";
+  status: "open" | "resolved" | "dismissed";
+  categories: string[];
+  excerpt: string;
+  detail: string | null;
+  reportedBy: string | null;
   createdAt: string;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+  resolution: string | null;
+}
+
+export interface AdminModerationQueue {
+  events: AdminModerationEvent[];
+  counts: {
+    open: number;
+    blockedToday: number;
+    flaggedToday: number;
+  };
 }
 
 export interface AdminModelVerificationResult {
@@ -649,9 +670,23 @@ export async function getAdminSessions(limit = 20): Promise<AdminSessionListItem
   return data.sessions;
 }
 
-export async function getAdminModerationEvents(): Promise<AdminModerationEvent[]> {
-  const data = await adminGet<{ events: AdminModerationEvent[] }>("/api/admin/moderation/events");
-  return data.events;
+export async function getAdminModerationEvents(status?: "open" | "resolved" | "dismissed"): Promise<AdminModerationQueue> {
+  const query = status ? `?status=${status}` : "";
+  return adminGet<AdminModerationQueue>(`/api/admin/moderation/events${query}`);
+}
+
+export async function resolveAdminModerationEvent(
+  eventId: string,
+  input: { status: "resolved" | "dismissed"; resolution?: string | null }
+): Promise<AdminModerationEvent> {
+  const data = await adminRequest<{ event: AdminModerationEvent }>(
+    `/api/admin/moderation/events/${eventId}/resolve`,
+    {
+      method: "POST",
+      body: JSON.stringify(input)
+    }
+  );
+  return data.event;
 }
 
 async function adminGet<T>(path: string): Promise<T> {

@@ -2,7 +2,30 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { updateAdminModelConfig, updateAdminStorySummary, verifyAdminModelConfig } from "@/lib/api";
+import {
+  resolveAdminModerationEvent,
+  updateAdminModelConfig,
+  updateAdminStorySummary,
+  verifyAdminModelConfig
+} from "@/lib/api";
+
+/** Handles both the resolve and the dismiss buttons; the submitter carries which one. */
+export async function resolveModerationEventAction(formData: FormData) {
+  const eventId = String(formData.get("eventId") ?? "");
+  if (!eventId) {
+    return;
+  }
+
+  const status = formData.get("status") === "dismissed" ? "dismissed" : "resolved";
+  const resolution = String(formData.get("resolution") ?? "").trim();
+
+  await resolveAdminModerationEvent(eventId, {
+    status,
+    resolution: resolution || null
+  });
+
+  revalidatePath("/admin");
+}
 
 export async function updateModelConfigAction(formData: FormData) {
   const provider = formData.get("provider") === "openai-compatible" ? "openai-compatible" : "mock";

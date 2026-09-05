@@ -8,6 +8,7 @@ import {
   getAdminUsage
 } from "@/lib/api";
 import { ModelConfigForm, StorySummaryForm } from "@/components/admin-console-forms";
+import { resolveModerationEventAction } from "@/app/admin/actions";
 import { BrandMark } from "@/components/brand-mark";
 import Link from "next/link";
 
@@ -17,7 +18,7 @@ export default async function AdminPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const query = await searchParams;
-  const [status, modelConfig, stories, sessions, moderationEvents, usage] = await Promise.all([
+  const [status, modelConfig, stories, sessions, moderation, usage] = await Promise.all([
     getAdminStatus(),
     getAdminModelConfig(),
     getAdminStories(),
@@ -39,6 +40,7 @@ export default async function AdminPage({
         <nav className="app-nav" aria-label="Admin navigation">
           <a href="#model">模型</a>
           <a href="#usage">用量</a>
+          <a href="#moderation">审核</a>
           <a href="#stories">故事</a>
           <a href="#sessions">会话</a>
           <Link href="/">客户端</Link>
@@ -232,38 +234,92 @@ export default async function AdminPage({
         )}
       </section>
 
-      <section className="panel">
-        <h2>审核事件</h2>
-        {moderationEvents.length ? (
-          <div className="admin-table-wrap">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>类型</th>
-                  <th>状态</th>
-                  <th>时间</th>
-                </tr>
-              </thead>
-              <tbody>
-                {moderationEvents.map((event) => (
-                  <tr key={event.id}>
-                    <td className="mono">{event.id}</td>
-                    <td>{event.type}</td>
-                    <td>{event.status}</td>
-                    <td>{formatDate(event.createdAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      <section className="panel" id="moderation">
+        <div className="admin-usage-head">
+          <h2>审核队列</h2>
+          <span className="muted">
+            待处理 {moderation.counts.open} · 今日拦截 {moderation.counts.blockedToday} · 今日标记{" "}
+            {moderation.counts.flaggedToday}
+          </span>
+        </div>
+        <p className="muted admin-usage-note">
+          拦截已经生效，列在这里只作审计；待处理的是标记内容和读者举报，需要人工判断。
+          流式生成的片段在判定完成前已经送达读者，复审时应假设读者已看到。
+        </p>
+        {moderation.events.length ? (
+          <ul className="moderation-list">
+            {moderation.events.map((event) => (
+              <li className={`moderation-item is-${event.action}`} key={event.id}>
+                <div className="moderation-meta">
+                  <span className={`moderation-badge is-${event.action}`}>{ACTION_LABELS[event.action]}</span>
+                  <span className="moderation-surface">{SURFACE_LABELS[event.surface]}</span>
+                  {event.categories.map((category) => (
+                    <span className="moderation-category" key={category}>
+                      {CATEGORY_LABELS[category] ?? category}
+                    </span>
+                  ))}
+                  <span className="muted">{formatDate(event.createdAt)}</span>
+                  {event.status !== "open" ? (
+                    <span className="muted">
+                      已{event.status === "dismissed" ? "驳回" : "处置"}
+                      {event.resolvedBy ? `（${event.resolvedBy}）` : null}
+                      {event.resolution ? `：${event.resolution}` : null}
+                    </span>
+                  ) : null}
+                </div>
+                <blockquote className="moderation-excerpt">{event.excerpt}</blockquote>
+                {event.detail ? <p className="moderation-detail">{event.detail}</p> : null}
+                {event.sessionId ? <p className="mono moderation-ref">会话 {event.sessionId}</p> : null}
+                {event.status === "open" ? (
+                  <form action={resolveModerationEventAction} className="moderation-actions">
+                    <input name="eventId" type="hidden" value={event.id} />
+                    <input
+                      aria-label="处置说明"
+                      className="moderation-note"
+                      name="resolution"
+                      placeholder="处置说明（可选）"
+                      type="text"
+                    />
+                    <button className="moderation-button" name="status" type="submit" value="resolved">
+                      确认违规
+                    </button>
+                    <button className="moderation-button" name="status" type="submit" value="dismissed">
+                      驳回
+                    </button>
+                  </form>
+                ) : null}
+              </li>
+            ))}
+          </ul>
         ) : (
-          <p className="muted">暂无审核事件。MVP 阶段先保留接口和视图占位。</p>
+          <p className="muted">暂无审核事件。</p>
         )}
       </section>
     </main>
   );
 }
+
+const ACTION_LABELS: Record<string, string> = {
+  blocked: "已拦截",
+  flagged: "待复审",
+  allowed: "通过"
+};
+
+const SURFACE_LABELS: Record<string, string> = {
+  reader_input: "读者输入",
+  model_output: "模型输出",
+  story_config: "故事配置",
+  report: "读者举报"
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  minor_safety: "未成年人保护",
+  self_harm: "自我伤害",
+  sexual_content: "性内容",
+  violence: "暴力",
+  hate: "仇恨言论",
+  illicit: "违法内容"
+};
 
 function VerificationNotice({ query }: { query: Record<string, string | string[] | undefined> }) {
   const status = readQuery(query.verify);

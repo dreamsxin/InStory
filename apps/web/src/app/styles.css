@@ -1991,3 +1991,118 @@ a {
   font-size: 13px;
   line-height: 1.7;
 }
+
+/* Moderation queue */
+
+.moderation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.moderation-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: 12px;
+}
+
+/* Severity is carried by the left edge, so the queue can be triaged at a glance. */
+.moderation-item.is-blocked {
+  border-left-color: #c0392b;
+}
+
+.moderation-item.is-flagged {
+  border-left-color: #d68910;
+}
+
+.moderation-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.moderation-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-weight: 600;
+}
+
+.moderation-badge.is-blocked {
+  color: #c0392b;
+}
+
+.moderation-badge.is-flagged {
+  color: #b9770e;
+}
+
+.moderation-surface,
+.moderation-category {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.moderation-excerpt {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 2px solid var(--line);
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.moderation-detail {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.moderation-ref {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.moderation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.moderation-note {
+  flex: 1 1 200px;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+}
+
+.moderation-button {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.moderation-button:hover {
+  border-color: currentColor;
+}
