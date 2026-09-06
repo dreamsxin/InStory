@@ -75,18 +75,25 @@ test.describe("reader", () => {
     await expect(page.locator(".turn").last()).toContainText(narration.slice(0, 12));
   });
 
-  test("shows the remaining daily quota after advancing", async ({ page, request }) => {
+  test("shows the remaining daily quota before and after advancing", async ({ page, request }) => {
     const { token } = await signInViaApi(page, request, "e2e-quota@example.com", "E2E 配额");
     const sessionId = await startSession(request, token);
 
     await page.goto(`/story/${sessionId}`);
+
+    // On arrival, not only after spending: the budget now comes with the session,
+    // so nobody has to burn a turn to find out how many are left.
+    const quota = page.locator(".quota-chip");
+    await expect(quota).toBeVisible();
+    await expect(quota).toContainText("今日剩余 20/20");
+
     await page.getByRole("button", { name: /继续阅读/ }).click();
     await expect(page.locator(".turn-streaming")).toBeHidden();
 
-    await expect(page.locator(".quota-chip")).toContainText("今日剩余");
+    await expect(quota).toContainText("今日剩余 19/20");
     // Visible, not merely present: the bar used to carry the hidden-chrome class
     // unconditionally with no button to turn it back on.
-    await expect(page.locator(".quota-chip")).toBeVisible();
+    await expect(quota).toBeVisible();
   });
 
   test("lays the action panel out as one titled sheet and submits free text", async ({

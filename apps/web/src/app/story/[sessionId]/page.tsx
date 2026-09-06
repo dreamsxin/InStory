@@ -10,7 +10,7 @@ export default async function StoryPage({ params }: { params: Promise<{ sessionI
   const { sessionId } = await params;
 
   try {
-    const { session, history } = await getSession(sessionId);
+    const { session, history, quota } = await getSession(sessionId);
     // The session only carries storyId, and the reader needs the title and the
     // story's own reading theme in its header and page frame.
     const story = await getStoryDetail(session.storyId);
@@ -18,6 +18,7 @@ export default async function StoryPage({ params }: { params: Promise<{ sessionI
     return (
       <ReaderClient
         initialHistory={history}
+        initialQuota={quota}
         initialSession={session}
         readingTheme={story.story.readingTheme}
         storyTitle={story.story.title}

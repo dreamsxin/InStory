@@ -1784,10 +1784,18 @@ describe("session history windowing", () => {
     const sessionId = await seedTranscript(1);
 
     const body = await app.inject({ method: "GET", url: `/api/sessions/${sessionId}` });
-    const parsed = body.json<{ session: StorySession; history: { turnCount: number; hasMore: boolean } }>();
+    const parsed = body.json<{
+      session: StorySession;
+      history: { turnCount: number; hasMore: boolean };
+      quota: { remainingTurnsToday: number; dailyLimit: number; usedToday: number };
+    }>();
 
     expect(parsed.session.turns).toHaveLength(2);
     expect(parsed.history).toMatchObject({ turnCount: 2, hasMore: false });
+    // The read carries the day's budget, so the reader sees it on arrival rather
+    // than after spending a turn to find out.
+    expect(parsed.quota.dailyLimit).toBeGreaterThan(0);
+    expect(parsed.quota.remainingTurnsToday).toBe(parsed.quota.dailyLimit - parsed.quota.usedToday);
   });
 
   it("walks backwards through older turns from a cursor", async () => {

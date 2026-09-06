@@ -994,7 +994,10 @@ export async function buildApp(options: BuildAppOptions) {
         hasMore: oldestLoadedTurnId
           ? options.sessionStore.hasTurnsBefore(sessionId, oldestLoadedTurnId)
           : false
-      }
+      },
+      // Carried on the read so the reader can see what is left before spending any
+      // of it. It used to appear only after the first turn of the day.
+      quota: resolveQuota(options.usageStore, request.authUser.id, options.dailyTurnQuota ?? 20)
     };
   });
 

@@ -9,6 +9,7 @@ import type {
   StoryDetail,
   StorySession,
   StorySummary,
+  TurnQuota,
   UpdateStoryRequest
 } from "@instory/shared";
 
@@ -386,6 +387,8 @@ export interface SessionHistoryInfo {
 export interface SessionWithHistory {
   session: StorySession;
   history: SessionHistoryInfo;
+  /** What is left of today's budget, so the reader sees it before spending any. */
+  quota: TurnQuota;
 }
 
 /**

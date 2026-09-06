@@ -22,11 +22,13 @@ type ReaderPanel = "status" | "memory" | "action" | null;
 
 export function ReaderClient({
   initialHistory,
+  initialQuota,
   initialSession,
   readingTheme,
   storyTitle
 }: {
   initialHistory: SessionHistoryInfo;
+  initialQuota: TurnQuota;
   initialSession: StorySession;
   readingTheme: ReadingTheme;
   storyTitle: string;
@@ -37,7 +39,7 @@ export function ReaderClient({
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [streamingNarration, setStreamingNarration] = useState("");
-  const [quota, setQuota] = useState<TurnQuota | null>(null);
+  const [quota, setQuota] = useState<TurnQuota>(initialQuota);
   // Visible by default: the bar carries the story title, the reader's identity and
   // the remaining daily quota, none of which are worth having if nobody sees them.
   const [chromeVisible, setChromeVisible] = useState(true);
@@ -198,11 +200,11 @@ export function ReaderClient({
               <p className="muted">身份：{session.readerRole.name}</p>
             </div>
           </div>
-          {quota ? (
-            <Chip className="quota-chip" aria-label={`今日剩余推进 ${quota.remainingTurnsToday} 次`}>
-              今日剩余 {quota.remainingTurnsToday}/{quota.dailyLimit}
-            </Chip>
-          ) : null}
+          {/* Always present: the budget arrives with the session, so a reader knows
+              what is left before spending any of it. */}
+          <Chip className="quota-chip" aria-label={`今日剩余推进 ${quota.remainingTurnsToday} 次`}>
+            今日剩余 {quota.remainingTurnsToday}/{quota.dailyLimit}
+          </Chip>
         </div>
 
         <div
