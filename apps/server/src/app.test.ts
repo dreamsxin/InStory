@@ -1466,6 +1466,49 @@ describe("authentication", () => {
         })
       ).statusCode
     ).toBe(401);
+
+    // Promoting through the console is what keeps the shared token a bootstrap
+    // path rather than the permanent way in.
+    const promoted = await authApp.inject({
+      method: "PUT",
+      url: `/api/admin/users/${reader.id}/role`,
+      headers: { authorization: "Bearer shared-secret" },
+      payload: { role: "admin" }
+    });
+    expect(promoted.statusCode).toBe(200);
+    expect(promoted.json<{ user: { role: string } }>().user.role).toBe("admin");
+
+    expect(
+      (
+        await authApp.inject({
+          method: "GET",
+          url: "/api/admin/status",
+          headers: { authorization: `Bearer ${readerToken}` }
+        })
+      ).statusCode
+    ).toBe(200);
+
+    // A reader cannot promote themselves, and an unknown id is a 404 rather than
+    // a silent success.
+    expect(
+      (
+        await authApp.inject({
+          method: "PUT",
+          url: `/api/admin/users/${admin.id}/role`,
+          payload: { role: "reader" }
+        })
+      ).statusCode
+    ).toBe(401);
+    expect(
+      (
+        await authApp.inject({
+          method: "PUT",
+          url: "/api/admin/users/missing/role",
+          headers: { authorization: "Bearer shared-secret" },
+          payload: { role: "admin" }
+        })
+      ).statusCode
+    ).toBe(404);
   });
 });
 

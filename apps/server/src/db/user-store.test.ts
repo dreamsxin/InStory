@@ -137,4 +137,20 @@ describe("UserStore", () => {
 
     expect(store.findById(admin.id)?.role).toBe("admin");
   });
+
+  it("promotes and demotes an account, and reports an unknown id", () => {
+    const store = createStore();
+    const user = store.create({
+      email: "promote@example.com",
+      displayName: "读者",
+      password: "pw-12345678"
+    });
+    expect(user.role).toBe("reader");
+
+    expect(store.setRole(user.id, "admin")?.role).toBe("admin");
+    expect(store.findById(user.id)?.role).toBe("admin");
+
+    expect(store.setRole(user.id, "reader")?.role).toBe("reader");
+    expect(store.setRole("missing", "admin")).toBeNull();
+  });
 });

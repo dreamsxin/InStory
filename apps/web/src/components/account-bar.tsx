@@ -1,11 +1,18 @@
 import type { AuthUser } from "@instory/shared";
+import Link from "next/link";
 import { logoutAction } from "@/app/auth/actions";
 
 export function AccountBar({ user }: { user: AuthUser }) {
   return (
     <div className="account-bar">
       <span className="account-name">{user.displayName}</span>
-      {user.role === "admin" ? <span className="account-role">管理员</span> : null}
+      {/* The badge doubles as the only way into the console: it used to be plain
+          text, so even an administrator had to type the address by hand. */}
+      {user.role === "admin" ? (
+        <Link className="account-role" href="/admin">
+          管理控制台
+        </Link>
+      ) : null}
       <form action={logoutAction}>
         <button className="account-logout" type="submit">
           退出登录

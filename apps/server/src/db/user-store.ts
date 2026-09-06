@@ -92,6 +92,15 @@ export class UserStore {
     return row ?? null;
   }
 
+  /** Promotes or demotes an account. Returns null when the id is unknown. */
+  setRole(userId: string, role: UserRole, now = new Date()): UserRecord | null {
+    const result = this.database.db
+      .prepare("UPDATE users SET role = ?, updated_at = ? WHERE id = ?")
+      .run(role, now.toISOString(), userId);
+    return result.changes > 0 ? this.findById(userId) : null;
+  }
+
+
   emailExists(email: string): boolean {
     const row = this.database.db
       .prepare("SELECT 1 AS found FROM users WHERE email_normalized = ?")

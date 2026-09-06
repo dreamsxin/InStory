@@ -1,11 +1,13 @@
 import { Card, Chip } from "@heroui/react";
+import { redirect } from "next/navigation";
 import {
   getAdminModelConfig,
   getAdminModerationEvents,
   getAdminSessions,
   getAdminStatus,
   getAdminStories,
-  getAdminUsage
+  getAdminUsage,
+  getCurrentUser
 } from "@/lib/api";
 import { ModelConfigForm, StorySummaryForm } from "@/components/admin-console-forms";
 import { resolveModerationEventAction } from "@/app/admin/actions";
@@ -17,6 +19,20 @@ export default async function AdminPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  /**
+   * The console's own fetches carry the server-held admin token, so without this
+   * check anyone who typed the URL was served real model config, sessions and
+   * moderation data. The account's role is the gate; the token stays the
+   * bootstrap path for the first administrator.
+   */
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+  if (user.role !== "admin") {
+    redirect("/");
+  }
+
   const query = await searchParams;
   const [status, modelConfig, stories, sessions, moderation, usage] = await Promise.all([
     getAdminStatus(),

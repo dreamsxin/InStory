@@ -89,6 +89,8 @@ const updateModelConfigSchema = z.object({
 
 const updateStorySummarySchema = storySummarySchema.omit({ id: true, ownerId: true });
 
+const updateUserRoleSchema = z.object({ role: z.enum(["reader", "admin"]) });
+
 /** Constant-time bearer token comparison so failures do not leak the token byte by byte. */
 function matchesBearerToken(authorization: string, expectedToken: string): boolean {
   const expected = Buffer.from(`Bearer ${expectedToken}`);
@@ -561,6 +563,26 @@ export async function buildApp(options: BuildAppOptions) {
   app.get("/api/admin/models", async () => ({
     ...options.modelRuntime.getPublicConfig()
   }));
+
+  /**
+   * Hands the admin role to an account. The very first administrator is
+   * bootstrapped with the shared token; after that the console itself is enough,
+   * so nobody needs shell access to the database to add a colleague.
+   */
+  app.put("/api/admin/users/:userId/role", async (request, reply) => {
+    const parsed = updateUserRoleSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
+    }
+
+    const { userId } = request.params as { userId: string };
+    const user = options.userStore.setRole(userId, parsed.data.role);
+    if (!user) {
+      return reply.code(404).send({ error: "User not found" });
+    }
+
+    return { user: toAuthUser(user) };
+  });
 
   app.put("/api/admin/models", async (request, reply) => {
     const parsed = updateModelConfigSchema.safeParse(request.body);

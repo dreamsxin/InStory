@@ -2,24 +2,26 @@ import { expect, test } from "@playwright/test";
 
 const API_BASE = "http://127.0.0.1:4000";
 const PASSWORD = "e2e-password-123";
+/** Matches playwright.config.ts, and is the console's bootstrap credential. */
+const ADMIN_TOKEN = "e2e-admin-token-0123456789abcdef0123456789abcdef";
 
-/** Registers through the API, hands the browser the cookie, and returns the token. */
+/** Registers through the API, hands the browser the cookie, and returns the account. */
 async function signIn(
   page: import("@playwright/test").Page,
   request: import("@playwright/test").APIRequestContext,
   email: string
-): Promise<string> {
+): Promise<{ token: string; userId: string }> {
   const response = await request.post(`${API_BASE}/api/auth/register`, {
     data: { email, displayName: "E2E 外壳", password: PASSWORD }
   });
   expect(response.status()).toBe(201);
-  const { token } = (await response.json()) as { token: string };
+  const { token, user } = (await response.json()) as { token: string; user: { id: string } };
 
   await page.context().addCookies([
     { name: "instory_session", value: token, domain: "127.0.0.1", path: "/", httpOnly: true, sameSite: "Lax" }
   ]);
 
-  return token;
+  return { token, userId: user.id };
 }
 
 /** True when the page itself scrolls, which is what an app-like shell must avoid. */
@@ -37,7 +39,7 @@ async function overflowY(page: import("@playwright/test").Page, selector: string
 
 test.describe("app-like shell", () => {
   test("the reader scrolls its transcript, not the page", async ({ page, request }) => {
-    const token = await signIn(page, request, "e2e-shell-reader@example.com");
+    const { token } = await signIn(page, request, "e2e-shell-reader@example.com");
 
     const created = await request.post(`${API_BASE}/api/stories/rain-mansion/sessions`, {
       headers: { authorization: `Bearer ${token}` },
@@ -106,7 +108,15 @@ test.describe("app-like shell", () => {
   });
 
   test("the console keeps its header pinned and scrolls the rest", async ({ page, request }) => {
-    await signIn(page, request, "e2e-shell-admin@example.com");
+    const { userId } = await signIn(page, request, "e2e-shell-admin@example.com");
+
+    // The console renders real model config and sessions, so the page checks the
+    // account's role. Promotion goes through the token, as it would in production.
+    const promoted = await request.put(`${API_BASE}/api/admin/users/${userId}/role`, {
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+      data: { role: "admin" }
+    });
+    expect(promoted.status()).toBe(200);
 
     await page.goto("/admin");
     const header = page.locator(".admin-header");
@@ -120,6 +130,17 @@ test.describe("app-like shell", () => {
       element.scrollTop = element.scrollHeight;
     });
     await expect(header).toBeInViewport();
+  });
+
+  test("the console turns away an account that is not an administrator", async ({ page, request }) => {
+    await signIn(page, request, "e2e-shell-reader-admin@example.com");
+
+    // Anyone who typed the address used to be served the console in full.
+    await page.goto("/admin");
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.locator(".admin-header")).toHaveCount(0);
+    // And a reader is never offered the way in.
+    await expect(page.locator(".account-bar a")).toHaveCount(0);
   });
 
   test("the sign-in screen fits one screen and never scrolls the page", async ({ page }) => {
