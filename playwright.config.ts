@@ -66,6 +66,10 @@ export default defineConfig({
         // without generating dozens of passages first. Still above the two turns the
         // other reader specs rely on being present after a reload.
         SESSION_TURN_WINDOW: "5",
+        // The whole suite registers from one address, which the default 10-per-minute
+        // limit is meant to stop. Raised so adding a test cannot fail unrelated ones.
+        AUTH_ATTEMPTS_PER_MINUTE: "500",
+        GENERATION_BURST_PER_MINUTE: "200",
         DAILY_TURN_QUOTA: "20"
       }
     },

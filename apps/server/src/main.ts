@@ -52,6 +52,22 @@ function readTrustProxy(value: string | undefined): boolean | number | string[] 
   return addresses.length > 0 ? addresses : false;
 }
 
+/**
+ * Abuse limits are tunable because the right number depends on the deployment: an
+ * end-to-end suite hammers one address on purpose, and a shared-egress corporate
+ * network looks like one address too. Omit to keep the built-in defaults.
+ */
+function readLimit(raw: string | undefined, windowMs: number) {
+  const limit = Number(raw);
+  return Number.isFinite(limit) && limit > 0 ? { limit: Math.floor(limit), windowMs } : undefined;
+}
+
+const abuseLimits = {
+  authAttempts: readLimit(process.env.AUTH_ATTEMPTS_PER_MINUTE, 60_000),
+  loginFailuresPerAccount: readLimit(process.env.LOGIN_FAILURES_PER_ACCOUNT, 15 * 60_000),
+  generationBurst: readLimit(process.env.GENERATION_BURST_PER_MINUTE, 60_000)
+};
+
 const database = new AppDatabase(process.env.SQLITE_DATABASE_PATH ?? defaultDatabasePath);
 const modelRuntime = new ModelRuntime(new ModelConfigStore(database), createInitialModelConfig(process.env));
 const sessionStore = new SessionStore(database);
@@ -72,6 +88,7 @@ const app = await buildApp({
   dailyTurnQuota: Number(process.env.DAILY_TURN_QUOTA || 20),
   pricing: readPricingFromEnv(process.env),
   sessionTurnWindow: Number(process.env.SESSION_TURN_WINDOW || 0) || undefined,
+  abuseLimits,
   trustProxy: readTrustProxy(process.env.TRUST_PROXY),
   // Sign-in is not wired into the web client yet, so local development still falls
   // back to the seeded legacy reader. Production always requires a real session.

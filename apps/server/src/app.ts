@@ -363,7 +363,14 @@ export async function buildApp(options: BuildAppOptions) {
     trustProxy: options.trustProxy ?? false
   });
 
-  const abuseLimits: AbuseLimitSettings = { ...DEFAULT_ABUSE_LIMITS, ...options.abuseLimits };
+  // Spreading would let an explicit `undefined` overwrite a default, which is easy to
+  // pass by accident when the overrides come from optional env vars.
+  const abuseLimits: AbuseLimitSettings = {
+    authAttempts: options.abuseLimits?.authAttempts ?? DEFAULT_ABUSE_LIMITS.authAttempts,
+    loginFailuresPerAccount:
+      options.abuseLimits?.loginFailuresPerAccount ?? DEFAULT_ABUSE_LIMITS.loginFailuresPerAccount,
+    generationBurst: options.abuseLimits?.generationBurst ?? DEFAULT_ABUSE_LIMITS.generationBurst
+  };
   const defaultTurnWindow = readTurnLimit(
     options.sessionTurnWindow === undefined ? undefined : String(options.sessionTurnWindow),
     DEFAULT_TURN_WINDOW

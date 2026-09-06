@@ -1,7 +1,7 @@
 "use client";
 
 import { Avatar, Button, Card, Chip, Input, Label, ListBox, Select, TextArea, TextField } from "@heroui/react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { ReaderProfile, ReaderSessionListItem, StoryDetail, StorySummary } from "@instory/shared";
 import { BrandMark } from "@/components/brand-mark";
@@ -28,11 +28,15 @@ const navItems: Array<{ id: HomeTab; label: string; hint: string }> = [
 const TRIAL_DEFAULT_ROLE_KEY = "__trial_default__";
 
 export function HomeWorkspace({
+  accountBar,
   myStoryDetails,
   profiles,
   sessions,
   stories
 }: {
+  /** Rendered on the server and placed in the top bar, so it stays put while the
+   *  content scrolls instead of adding height above the shell. */
+  accountBar?: ReactNode;
   myStoryDetails: StoryDetail[];
   profiles: ReaderProfile[];
   sessions: ReaderSessionListItem[];
@@ -54,20 +58,24 @@ export function HomeWorkspace({
           <span>{navItems.find((item) => item.id === activeTab)?.hint}</span>
           <strong>{navItems.find((item) => item.id === activeTab)?.label}</strong>
         </div>
-        <nav className="app-nav desktop-nav" aria-label="InStory navigation">
-          {navItems.map((item) => (
-            <button
-              aria-current={activeTab === item.id ? "page" : undefined}
-              className="nav-pill"
-              key={item.id}
-              type="button"
-              onClick={() => setActiveTab(item.id)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </nav>
+        <div className="app-topbar-end">
+          <nav className="app-nav desktop-nav" aria-label="InStory navigation">
+            {navItems.map((item) => (
+              <button
+                aria-current={activeTab === item.id ? "page" : undefined}
+                className="nav-pill"
+                key={item.id}
+                type="button"
+                onClick={() => setActiveTab(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
+          {accountBar}
+        </div>
       </div>
+
 
       <Card className="app-hero">
         <div>

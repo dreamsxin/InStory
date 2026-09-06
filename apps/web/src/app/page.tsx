@@ -23,9 +23,13 @@ export default async function HomePage() {
   ]);
 
   return (
-    <>
-      <AccountBar user={user} />
-      <HomeWorkspace myStoryDetails={myStoryDetails} profiles={profiles} sessions={sessions} stories={stories} />
-    </>
+    <HomeWorkspace
+      accountBar={<AccountBar user={user} />}
+      myStoryDetails={myStoryDetails}
+      profiles={profiles}
+      sessions={sessions}
+      stories={stories}
+    />
   );
 }
+
