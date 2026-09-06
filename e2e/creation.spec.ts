@@ -100,6 +100,38 @@ test.describe("creation console", () => {
     await expect(editor.getByLabel("世界前提")).toHaveValue("一座靠潮水记事的港城，涨潮时没人敢翻旧卷宗。");
   });
 
+  test("offers the last trial back instead of silently starting another one", async ({ page, request }) => {
+    await signIn(page, request, "e2e-trial-story@example.com");
+    await page.goto("/");
+    await page.locator(".app-topbar").getByRole("button", { name: "创作" }).click();
+
+    const storyId = `e2e-lamp-keeper-${Date.now()}`;
+    const panel = page.locator(".create-story-panel");
+    await panel.getByLabel("故事 ID").fill(storyId);
+    await panel.getByLabel("标题").fill("守灯人");
+    await panel.getByLabel("类型").fill("西方幻想");
+    await panel.getByLabel("一句话钩子").fill("灯灭之前，必须有人守着。");
+    await panel.getByLabel("世界前提").fill("一座只有灯塔还亮着的荒岛。");
+    await panel.getByLabel("起点地点").fill("灯塔顶层");
+    await panel.getByLabel("起点场景").fill("风从破窗灌进来，灯芯只剩一寸。");
+    await panel.getByRole("button", { name: "创建故事" }).click();
+    await expect(panel.locator(".form-feedback")).toHaveClass(/is-ok/);
+
+    const editor = page.locator(".story-management-list .management-details");
+    await editor.locator("summary").click();
+    await editor.getByRole("button", { name: "试玩故事" }).click();
+    await expect(page).toHaveURL(/\/story\//);
+
+    // Coming back used to offer only 试玩故事, which built a second identical
+    // progress card every time the author re-checked the opening.
+    await page.goto("/");
+    await page.locator(".app-topbar").getByRole("button", { name: "创作" }).click();
+    const reopened = page.locator(".story-management-list .management-details");
+    await reopened.locator("summary").click();
+    await expect(reopened.getByRole("button", { name: /回到上次试玩/ })).toBeVisible();
+    await expect(reopened.getByRole("button", { name: "从开场重新试玩" })).toBeVisible();
+  });
+
   test("reports a saved reader profile in place", async ({ page, request }) => {
     await signIn(page, request, "e2e-create-profile@example.com");
     await page.goto("/");

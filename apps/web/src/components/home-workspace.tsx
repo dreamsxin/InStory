@@ -102,7 +102,9 @@ export function HomeWorkspace({
       <section className="mobile-tab-panel">
         {activeTab === "stories" ? <StoriesView profiles={profiles} sessions={sessions} stories={stories} /> : null}
         {activeTab === "continue" ? <ContinueView sessions={sessions} /> : null}
-        {activeTab === "create" ? <CreateView myStoryDetails={myStoryDetails} profiles={profiles} /> : null}
+        {activeTab === "create" ? (
+          <CreateView myStoryDetails={myStoryDetails} profiles={profiles} sessions={sessions} />
+        ) : null}
       </section>
 
       <nav className="bottom-tabbar" aria-label="Mobile navigation">
@@ -227,7 +229,15 @@ function ContinueStoryCard({ session }: { session: ReaderSessionListItem }) {
   );
 }
 
-function CreateView({ myStoryDetails, profiles }: { myStoryDetails: StoryDetail[]; profiles: ReaderProfile[] }) {
+function CreateView({
+  myStoryDetails,
+  profiles,
+  sessions
+}: {
+  myStoryDetails: StoryDetail[];
+  profiles: ReaderProfile[];
+  sessions: ReaderSessionListItem[];
+}) {
   const [createTab, setCreateTab] = useState<CreateTab>("stories");
 
   return (
@@ -258,7 +268,7 @@ function CreateView({ myStoryDetails, profiles }: { myStoryDetails: StoryDetail[
       {createTab === "profiles" ? (
         <CreatorProfilesPanel profiles={profiles} />
       ) : (
-        <CreatorStoriesPanel myStoryDetails={myStoryDetails} profiles={profiles} />
+        <CreatorStoriesPanel myStoryDetails={myStoryDetails} profiles={profiles} sessions={sessions} />
       )}
     </div>
   );
@@ -304,7 +314,17 @@ function CreatorProfilesPanel({ profiles }: { profiles: ReaderProfile[] }) {
   );
 }
 
-function CreatorStoriesPanel({ myStoryDetails, profiles }: { myStoryDetails: StoryDetail[]; profiles: ReaderProfile[] }) {
+function CreatorStoriesPanel({
+  myStoryDetails,
+  profiles,
+  sessions
+}: {
+  myStoryDetails: StoryDetail[];
+  profiles: ReaderProfile[];
+  sessions: ReaderSessionListItem[];
+}) {
+  const sessionsByStoryId = new Map(sessions.map((session) => [session.storyId, session]));
+
   return (
     <div className="creator-layer">
       <Card className="profile-panel">
@@ -329,7 +349,11 @@ function CreatorStoriesPanel({ myStoryDetails, profiles }: { myStoryDetails: Sto
                       <Chip size="sm" variant="soft">{visibilityLabel(detail.story.visibility)}</Chip>
                     </div>
                   </summary>
-                  <StoryEditForm detail={detail} profiles={profiles} />
+                  <StoryEditForm
+                    detail={detail}
+                    existingSession={sessionsByStoryId.get(detail.story.id)}
+                    profiles={profiles}
+                  />
                 </details>
               ))}
             </div>
@@ -407,13 +431,21 @@ function ProfileEditForm({ profile }: { profile: ReaderProfile }) {
   );
 }
 
-function StoryEditForm({ detail, profiles }: { detail: StoryDetail; profiles: ReaderProfile[] }) {
+function StoryEditForm({
+  detail,
+  existingSession,
+  profiles
+}: {
+  detail: StoryDetail;
+  existingSession?: ReaderSessionListItem;
+  profiles: ReaderProfile[];
+}) {
   const openingLocation = detail.world.locations[0];
   const [result, action, pending] = useActionState(updateStoryAction, IDLE_FORM);
 
   return (
     <div className="management-edit">
-      <StoryTrialLauncher profiles={profiles} story={detail.story} />
+      <StoryTrialLauncher existingSession={existingSession} profiles={profiles} story={detail.story} />
       <form className="profile-form embedded" action={action}>
         <input name="storyId" type="hidden" value={detail.story.id} />
         <section className="form-section">
@@ -563,7 +595,15 @@ function StoryEditForm({ detail, profiles }: { detail: StoryDetail; profiles: Re
   );
 }
 
-function StoryTrialLauncher({ profiles, story }: { profiles: ReaderProfile[]; story: StorySummary }) {
+function StoryTrialLauncher({
+  existingSession,
+  profiles,
+  story
+}: {
+  existingSession?: ReaderSessionListItem;
+  profiles: ReaderProfile[];
+  story: StorySummary;
+}) {
   const router = useRouter();
   const [readerProfileId, setReaderProfileId] = useState(profiles[0]?.id ?? TRIAL_DEFAULT_ROLE_KEY);
   const [loading, setLoading] = useState(false);
@@ -587,9 +627,13 @@ function StoryTrialLauncher({ profiles, story }: { profiles: ReaderProfile[]; st
       <div>
         <span className="eyebrow">Preview</span>
         <h3>试玩这个故事</h3>
-        <p className="muted">以一个入戏身份进入开场，检查世界设定、角色上下文和阅读体验。</p>
+        <p className="muted">
+          {existingSession
+            ? "上次试玩还在，可以接着往下读，也可以从开场重新检查一遍。"
+            : "以一个入戏身份进入开场，检查世界设定、角色上下文和阅读体验。"}
+        </p>
       </div>
-      <div className="trial-launcher-controls">
+      <div className={existingSession ? "trial-launcher-controls has-trial" : "trial-launcher-controls"}>
         <Select
           className="instory-select"
           selectedKey={readerProfileId}
@@ -615,14 +659,28 @@ function StoryTrialLauncher({ profiles, story }: { profiles: ReaderProfile[]; st
             </ListBox>
           </Select.Popover>
         </Select>
-        <Button isDisabled={loading} onPress={startTrial}>
-          {loading ? "进入中..." : "试玩故事"}
-        </Button>
+        {existingSession ? (
+          // Before this every 试玩 built another session, so checking the opening
+          // twice left two identical progress cards and no way to tell them apart.
+          <>
+            <Button isDisabled={loading} onPress={() => router.push(`/story/${existingSession.id}`)}>
+              回到上次试玩（{existingSession.turnCount} 回合）
+            </Button>
+            <Button isDisabled={loading} variant="outline" onPress={startTrial}>
+              {loading ? "进入中..." : "从开场重新试玩"}
+            </Button>
+          </>
+        ) : (
+          <Button isDisabled={loading} onPress={startTrial}>
+            {loading ? "进入中..." : "试玩故事"}
+          </Button>
+        )}
       </div>
       {error ? <p className="error">{error}</p> : null}
     </div>
   );
 }
+
 
 function CreateStoryPanel({ profiles }: { profiles: ReaderProfile[] }) {
   const [result, action, pending] = useActionState(createStoryAction, IDLE_FORM);

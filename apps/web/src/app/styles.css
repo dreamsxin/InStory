@@ -687,6 +687,12 @@ a {
   align-items: end;
 }
 
+/* An open trial adds a second button - return to it, or restart from the opening. */
+.trial-launcher-controls.has-trial {
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+}
+
+
 .danger-button {
   border-color: rgba(178, 41, 41, 0.32);
   color: #9f1f1f;
