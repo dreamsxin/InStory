@@ -13,6 +13,7 @@ import {
   createReaderProfileAction,
   createStoryAction,
   deleteReaderProfileAction,
+  deleteSessionAction,
   deleteStoryAction,
   updateReaderProfileAction,
   updateStoryAction
@@ -203,7 +204,24 @@ function ContinueStoryCard({ session }: { session: ReaderSessionListItem }) {
           <Chip size="sm" variant="soft">{formatUpdatedAt(session.updatedAt)}</Chip>
         </div>
         <p className="continue-summary">{session.latestSummary}</p>
-        <a className="button-link" href={`/story/${session.id}`}>继续阅读</a>
+        <div className="continue-actions">
+          <a className="button-link" href={`/story/${session.id}`}>继续阅读</a>
+          {/* Sessions only ever accumulated - every trial run of a story you are
+              writing leaves one behind - and nothing could remove them. */}
+          <form
+            action={deleteSessionAction}
+            onSubmit={(event) => {
+              if (!window.confirm(`确认删除《${story.title}》的这段进度？${session.turnCount} 回合与存档都会被删除，无法撤销。`)) {
+                event.preventDefault();
+              }
+            }}
+          >
+            <input name="sessionId" type="hidden" value={session.id} />
+            <Button className="danger-button" size="sm" type="submit" variant="outline">
+              删除进度
+            </Button>
+          </form>
+        </div>
       </Card.Content>
     </Card>
   );

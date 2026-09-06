@@ -155,6 +155,31 @@ export class SessionStore {
     return row.count;
   }
 
+  /**
+   * Removes a reading session and everything written under it. Scoped by owner on
+   * purpose: the id alone must never be enough to delete someone else's reading.
+   */
+  deleteOwned(sessionId: string, ownerId: string): boolean {
+    const owned = this.database.db
+      .prepare("SELECT 1 AS found FROM reader_sessions WHERE id = ? AND user_id = ?")
+      .get(sessionId, ownerId) as { found: number } | undefined;
+    if (!owned) {
+      return false;
+    }
+
+    this.database.db.exec("BEGIN");
+    try {
+      this.database.db.prepare("DELETE FROM session_timeline_nodes WHERE session_id = ?").run(sessionId);
+      this.database.db.prepare("DELETE FROM session_turns WHERE session_id = ?").run(sessionId);
+      const result = this.database.db.prepare("DELETE FROM reader_sessions WHERE id = ?").run(sessionId);
+      this.database.db.exec("COMMIT");
+      return result.changes > 0;
+    } catch (error) {
+      this.database.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
   listRecent(limit = 20): SessionListItem[] {
     return this.database.db
       .prepare(

@@ -486,7 +486,21 @@ function TimelinePanel({
             <h2>存档记忆</h2>
             <p className="muted">选择一个记忆恢复为新分支，或重新开启本故事。</p>
           </div>
-          <Button isDisabled={loading} size="sm" type="button" variant="outline" onPress={onReset}>
+          {/* Both controls here throw away reading nobody can get back, so they ask
+              first - the same way deleting a story or a role already does. */}
+          <Button
+            isDisabled={loading}
+            size="sm"
+            type="button"
+            variant="outline"
+            onPress={() => {
+              // No turn count in the copy: only a window of the transcript is
+              // loaded, so any number here would be smaller than the truth.
+              if (window.confirm("确认重置本故事？全部回合与存档都会清空，从开场重新开始，无法撤销。")) {
+                onReset();
+              }
+            }}
+          >
             重置会话
           </Button>
         </div>
@@ -495,7 +509,17 @@ function TimelinePanel({
             <div className="timeline-item" key={node.id}>
               <strong>{node.title}</strong>
               <p className="muted">{node.summary}</p>
-              <Button isDisabled={loading} size="sm" type="button" variant="outline" onPress={() => onRewind(node.id)}>
+              <Button
+                isDisabled={loading}
+                size="sm"
+                type="button"
+                variant="outline"
+                onPress={() => {
+                  if (window.confirm(`确认恢复到「${node.title}」？这之后的回合会被丢弃，无法撤销。`)) {
+                    onRewind(node.id);
+                  }
+                }}
+              >
                 恢复此存档
               </Button>
             </div>

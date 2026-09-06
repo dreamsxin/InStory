@@ -8,6 +8,7 @@ import {
   createStory,
   deleteMyStory,
   deleteReaderProfile,
+  deleteSession,
   updateMyStory,
   updateReaderProfile
 } from "@/lib/api";
@@ -198,5 +199,12 @@ export async function updateStoryAction(_state: FormResult, formData: FormData):
 export async function deleteStoryAction(formData: FormData) {
   const storyId = String(formData.get("storyId") ?? "").trim();
   await deleteMyStory(storyId);
+  revalidatePath("/");
+}
+
+/** Removes one reading progress card, transcript and saves included. */
+export async function deleteSessionAction(formData: FormData) {
+  const sessionId = String(formData.get("sessionId") ?? "").trim();
+  await deleteSession(sessionId);
   revalidatePath("/");
 }

@@ -999,6 +999,25 @@ export async function buildApp(options: BuildAppOptions) {
   });
 
   /**
+   * Removes a reading session. Readers accumulate sessions - every trial run of a
+   * story they are writing creates one - and until now nothing could remove them.
+   */
+  app.delete("/api/sessions/:sessionId", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string };
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
+    }
+
+    // Same reasoning as the read route: someone else's session is "not found".
+    if (!options.sessionStore.deleteOwned(sessionId, request.authUser.id)) {
+      return reply.code(404).send({ error: "Session not found" });
+    }
+
+    return reply.code(204).send();
+  });
+
+
+  /**
    * Older turns, for walking backwards through a long transcript. Cursor-based on a
    * turn id rather than an offset, so inserting a turn cannot shift the window.
    */

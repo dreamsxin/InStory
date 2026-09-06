@@ -345,6 +345,25 @@ export async function deleteMyStory(storyId: string): Promise<void> {
   }
 }
 
+/** Removes one reading session, including its transcript and its saves. */
+export async function deleteSession(sessionId: string): Promise<void> {
+  const response = await apiFetch(`/api/sessions/${sessionId}`, {
+    method: "DELETE"
+  });
+
+  if (response.status === 401) {
+    throw new UnauthenticatedError();
+  }
+
+  if (response.status === 404) {
+    throw new ApiNotFoundError("这段阅读进度不存在或已被删除。");
+  }
+
+  if (!response.ok) {
+    throw new Error("删除阅读进度失败");
+  }
+}
+
 export async function getStoryDetail(storyId: string): Promise<StoryDetail> {
   const response = await apiFetch(`/api/stories/${storyId}`);
   if (response.status === 404) {

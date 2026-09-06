@@ -568,6 +568,14 @@ a {
   -webkit-line-clamp: 2;
 }
 
+/* The card's two verbs: come back to the story, or let it go. */
+.continue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
 .button-link {
   display: inline-flex;
   align-items: center;

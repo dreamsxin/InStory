@@ -239,6 +239,21 @@ describe("server API", () => {
     expect(body.session.turns[0]?.input).toBe("重新开始");
   });
 
+  it("deletes a session and then reports it as missing", async () => {
+    const created = await createSession();
+
+    const removed = await app.inject({
+      method: "DELETE",
+      url: `/api/sessions/${created.session.id}`
+    });
+    expect(removed.statusCode).toBe(204);
+
+    // Gone means gone: the read route no longer finds it, and deleting twice is a
+    // 404 rather than a silent success.
+    expect((await app.inject({ method: "GET", url: `/api/sessions/${created.session.id}` })).statusCode).toBe(404);
+    expect((await app.inject({ method: "DELETE", url: `/api/sessions/${created.session.id}` })).statusCode).toBe(404);
+  });
+
   it("returns clear errors for missing resources and invalid requests", async () => {
     const missingStory = await app.inject({
       method: "GET",

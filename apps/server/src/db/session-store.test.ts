@@ -57,6 +57,30 @@ describe("SessionStore", () => {
     ]);
   });
 
+  it("deletes a session with its turns and saves, and only for its owner", () => {
+    const store = createStore();
+    seed(
+      store,
+      createSession({
+        id: "sess_delete",
+        updatedAt: "2026-05-20T00:00:00.000Z",
+        turns: [createTurn("turn_0", "2026-05-20T00:00:00.000Z")],
+        timeline: [createNode("node_0", "turn_0", "2026-05-20T00:00:00.000Z")]
+      })
+    );
+
+    // Another reader's id must not be enough to delete this reading.
+    expect(store.deleteOwned("sess_delete", "user_someone_else")).toBe(false);
+    expect(store.findById("sess_delete")).not.toBeNull();
+
+    expect(store.deleteOwned("sess_delete", OWNER_ID)).toBe(true);
+    expect(store.findById("sess_delete")).toBeNull();
+    expect(store.count()).toBe(0);
+    // The transcript goes with it rather than being left orphaned.
+    expect(store.countTurns("sess_delete")).toBe(0);
+    expect(store.deleteOwned("sess_delete", OWNER_ID)).toBe(false);
+  });
+
   it("appends a turn without rewriting existing history", () => {
     const store = createStore();
     seed(store, 

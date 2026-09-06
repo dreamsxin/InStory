@@ -188,6 +188,42 @@ test.describe("reader", () => {
     await expect(page.locator(".scene-divider-label")).toHaveText("旧宅东厢房");
   });
 
+  test("asks before it throws away reading, and obeys the answer", async ({ page, request }) => {
+    const { token } = await signInViaApi(page, request, "e2e-confirm@example.com", "E2E 确认");
+    const sessionId = await startSession(request, token);
+
+    await page.goto(`/story/${sessionId}`);
+    await expect(page.locator(".turn").first()).toBeVisible();
+    await page.getByRole("button", { name: "记忆" }).click();
+
+    // Reset starts a fresh session and cannot be undone, so a dismissed dialog has
+    // to leave the reader exactly where they were - deleting a story already asked.
+    page.once("dialog", (dialog) => void dialog.dismiss());
+    await page.getByRole("button", { name: "重置会话" }).click();
+    await expect(page).toHaveURL(new RegExp(`/story/${sessionId}$`));
+
+    page.once("dialog", (dialog) => void dialog.accept());
+    await page.getByRole("button", { name: "重置会话" }).click();
+    await expect(page).not.toHaveURL(new RegExp(`/story/${sessionId}$`));
+    await expect(page).toHaveURL(/\/story\/sess_/);
+  });
+
+  test("lets a reader delete a reading progress card", async ({ page, request }) => {
+    const { token } = await signInViaApi(page, request, "e2e-delete-session@example.com", "E2E 删除进度");
+    await startSession(request, token);
+
+    await page.goto("/");
+    await page.locator(".app-topbar").getByRole("button", { name: "继续" }).click();
+    await expect(page.locator(".story-card")).toHaveCount(1);
+
+    // Sessions only ever accumulated before this, with no way to remove one.
+    page.once("dialog", (dialog) => void dialog.accept());
+    await page.getByRole("button", { name: "删除进度" }).click();
+
+    await expect(page.locator(".story-card")).toHaveCount(0);
+    await expect(page.getByText("还没有阅读进度")).toBeVisible();
+  });
+
   test("sends a visitor without a session to sign in instead of leaking the story", async ({
     page,
     request
