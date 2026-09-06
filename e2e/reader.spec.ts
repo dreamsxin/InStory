@@ -142,6 +142,11 @@ test.describe("reader", () => {
 
     await page.getByRole("button", { name: "显示信息栏" }).click();
     await expect(heading).toBeVisible();
+
+    // The reader used to be a dead end: no control led anywhere else.
+    await page.getByRole("link", { name: "返回书架" }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.locator(".app-topbar")).toBeVisible();
   });
 
   test("loads older turns on demand instead of shipping the whole transcript", async ({

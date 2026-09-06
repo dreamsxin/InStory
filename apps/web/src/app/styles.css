@@ -707,6 +707,30 @@ a {
   transition: opacity 160ms ease, transform 160ms ease, max-height 160ms ease;
 }
 
+/* The way back to the shelf. Quiet on purpose - it has to be findable without
+   competing with the story - and built on the tokens so it follows the theme. */
+.reader-exit {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.reader-exit:hover {
+  border-color: color-mix(in oklab, var(--accent) 40%, var(--line));
+  background: color-mix(in oklab, var(--accent) 5%, var(--panel));
+}
+
 .reader-chrome-hidden {
   pointer-events: none;
   opacity: 0;

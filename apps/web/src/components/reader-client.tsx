@@ -15,6 +15,7 @@ import {
 } from "@/lib/api";
 import { BrandMark } from "@/components/brand-mark";
 import { useEffect, useRef, useState, Fragment } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 type ReaderPanel = "status" | "memory" | "action" | null;
@@ -186,6 +187,11 @@ export function ReaderClient({
       <section className="reader reader-stage h-dvh w-full min-w-0 p-0 sm:p-4 md:p-8">
         <div className={`topbar reader-topbar${chromeVisible ? "" : " reader-chrome-hidden"}`}>
           <div className="brand-row">
+            {/* The way out. Without it the reader is a dead end: the only exits were
+                the browser's own back button and editing the address bar. */}
+            <Link aria-label="返回书架" className="reader-exit" href="/">
+              ← 书架
+            </Link>
             <BrandMark size={40} />
             <div className="brand">
               <h1>{storyTitle}</h1>
