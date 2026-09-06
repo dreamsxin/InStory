@@ -64,6 +64,21 @@ test.describe("app-like shell", () => {
 
     // The account controls belong to the chrome, so they must stay on screen.
     await expect(page.locator(".app-topbar .account-bar")).toBeVisible();
+
+    // One card per story, sized like a card. A lone story used to fill the whole
+    // grid row (auto-fit collapses empty tracks), so its 16/9 cover alone made a
+    // ~900px slab; rows also have to size to content, not to the panel height.
+    await expect(page.locator(".story-card")).toHaveCount(1);
+    expect(await page.locator(".story-grid").evaluate((el) => getComputedStyle(el).alignContent)).toBe("start");
+
+    const card = (await page.locator(".story-card").first().boundingBox()) ?? { height: 0, width: 0 };
+    const grid = (await page.locator(".story-grid").boundingBox()) ?? { height: 0, width: 0 };
+    expect(card.width).toBeGreaterThan(0);
+    // Empty tracks are kept, so the single card occupies one column, not the row.
+    expect(card.width).toBeLessThan(grid.width / 2);
+    // And it is not stretched: the row is exactly as tall as the card.
+    expect(grid.height).toBeCloseTo(card.height, 0);
+
   });
 
   test("the console keeps its header pinned and scrolls the rest", async ({ page, request }) => {

@@ -196,7 +196,13 @@ a {
 
 .story-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  /* auto-fill, not auto-fit: empty tracks are kept, so a lone story stays a
+     card instead of stretching across the whole column (its 16/9 cover alone
+     would then be ~450px tall). */
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  /* Rows size to their cards. Without this the grid stretches them to fill the
+     scrolling panel, so a single story renders as one full-height slab. */
+  align-content: start;
   gap: 16px;
 }
 
@@ -284,6 +290,9 @@ a {
 
 .app-section {
   display: grid;
+  /* Same reason as .story-grid: the section is a child of the scrolling panel, so its
+     rows must size to content rather than being stretched to fill the viewport. */
+  align-content: start;
   gap: 16px;
 }
 
