@@ -235,7 +235,12 @@ export interface ReaderSessionListItem {
   id: string;
   storyId: string;
   storyTitle: string;
-  story?: StorySummary;
+  /**
+   * The story as it is configured now. Always present: the server drops a session
+   * whose story no longer exists rather than shipping one without it, so nothing
+   * downstream has to invent a genre or an experience mode to fill the gap.
+   */
+  story: StorySummary;
   readerRoleName: string;
   latestSummary: string;
   turnCount: number;
