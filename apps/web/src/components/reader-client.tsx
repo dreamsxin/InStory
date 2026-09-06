@@ -14,7 +14,7 @@ import {
   type SessionHistoryInfo
 } from "@/lib/api";
 import { BrandMark } from "@/components/brand-mark";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, Fragment } from "react";
 import { useRouter } from "next/navigation";
 
 type ReaderPanel = "status" | "memory" | "action" | null;
@@ -219,9 +219,17 @@ export function ReaderClient({
                 </span>
               </div>
             ) : null}
-            {session.turns.map((turn) => (
-              <TurnView key={turn.id} turn={turn} />
-            ))}
+            {session.turns.map((turn, index) => {
+              // Only the loaded window is in hand, so a divider above the first
+              // passage is honest only when that passage really opens the story.
+              const scene = sceneChangeLabel(turn, session.turns[index - 1], index === 0 && !history.hasMore);
+              return (
+                <Fragment key={turn.id}>
+                  {scene ? <SceneDivider label={scene} /> : null}
+                  <TurnView turn={turn} />
+                </Fragment>
+              );
+            })}
             {loading ? (
               <StreamingTurnView narration={streamingNarration} onStop={stopGeneration} />
             ) : null}
@@ -367,6 +375,35 @@ function TurnView({ turn }: { turn: SessionTurn }) {
         </p>
       ))}
     </article>
+  );
+}
+
+/**
+ * The place a passage happens in, but only when it is news. Printing the location
+ * above every passage is noise; marking the move is what tells the reader they
+ * walked somewhere.
+ */
+function sceneChangeLabel(
+  turn: SessionTurn,
+  previous: SessionTurn | undefined,
+  isStoryStart: boolean
+): string | null {
+  const location = turn.stateSnapshot.location?.trim();
+  if (!location) {
+    return null;
+  }
+  if (!previous) {
+    return isStoryStart ? location : null;
+  }
+  return previous.stateSnapshot.location?.trim() === location ? null : location;
+}
+
+/** A break in the transcript where the story changes place. */
+function SceneDivider({ label }: { label: string }) {
+  return (
+    <div className="scene-divider" role="separator">
+      <span className="scene-divider-label">{label}</span>
+    </div>
   );
 }
 

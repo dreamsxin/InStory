@@ -166,6 +166,9 @@ test.describe("reader", () => {
     // SESSION_TURN_WINDOW is 5, so one of the six turns is left behind.
     await expect(page.locator(".turn")).toHaveCount(5);
     await expect(page.locator(".older-turns-row")).toContainText("已载入 5/6 回合");
+    // The passage that opens the story is still behind the cursor, so there is no
+    // honest place to put a scene divider yet.
+    await expect(page.locator(".scene-divider")).toHaveCount(0);
 
     await page.getByRole("button", { name: "载入更早的回合" }).click();
 
@@ -174,6 +177,10 @@ test.describe("reader", () => {
     await expect(page.locator(".older-turns-row")).toHaveCount(0);
     // The opening passage is the one that was missing.
     await expect(page.locator(".turn").first()).toContainText("旧宅东厢房");
+    // And now that the beginning is on screen it gets a scene divider — exactly one,
+    // because the six passages never leave the room.
+    await expect(page.locator(".scene-divider")).toHaveCount(1);
+    await expect(page.locator(".scene-divider-label")).toHaveText("旧宅东厢房");
   });
 
   test("sends a visitor without a session to sign in instead of leaking the story", async ({

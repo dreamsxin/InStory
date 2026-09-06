@@ -1035,6 +1035,46 @@ a {
   hyphens: auto;
 }
 
+/* Chinese prose indents every paragraph, and doing it here is most of what makes
+   a passage read like a page rather than a chat bubble. */
+.turn .reader-paragraph {
+  text-indent: 2em;
+}
+
+.turn .dialogue {
+  text-indent: 0;
+}
+
+/* Where the story changes place. Both the hairlines and the plate come from the
+   theme tokens, so a scene break in a gilded book and one in a cyber log each
+   look like they belong to their own world. */
+.scene-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 4px 8px;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+}
+
+.scene-divider::before,
+.scene-divider::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--line), transparent);
+}
+
+.scene-divider-label {
+  flex: 0 0 auto;
+  padding: 3px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 .dialogue {
   border-left: 3px solid var(--accent);
   padding-left: 12px;
