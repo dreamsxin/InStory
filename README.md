@@ -1,4 +1,4 @@
-﻿# InStory
+# InStory
 
 <p align="center">
   <img src="apps/web/public/icon-512.png" alt="InStory logo" width="128" height="128" />
@@ -153,7 +153,11 @@ npm run dev:web
 - Web: `http://localhost:3000`
 - Admin 控制台: `http://localhost:3000/admin`
 
+`/admin` 按账号角色拦截：未登录跳 `/login`，普通读者跳回首页。把自己的邮箱写进 `ADMIN_EMAILS`（逗号分隔）即可获得管理员身份——注册时直接生效，已有账号在下次登录时自动提权；已有管理员也可以用 `PUT /api/admin/users/:userId/role` 把角色发给别人。拿到角色后，首页账号栏会出现 `管理控制台` 入口。
+
 如果服务端设置了 `ADMIN_TOKEN`，Web 服务也需要设置同样的 `ADMIN_TOKEN`，用于服务端渲染 `/admin` 时请求 Admin API。
+
+用户侧的完整流程（访客、读者、创作、管理员）见 `docs/INTERACTION_DESIGN.md` 第 11–13 章。
 
 ### 常用检查
 

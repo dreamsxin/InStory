@@ -68,6 +68,21 @@ const abuseLimits = {
   generationBurst: readLimit(process.env.GENERATION_BURST_PER_MINUTE, 60_000)
 };
 
+/**
+ * The console is gated on the account's role, so an operator needs a way to give
+ * themselves that role. Listing the address here is that way: it applies on
+ * register and on every sign-in, which covers both a fresh install and an account
+ * that already exists.
+ */
+function readAdminEmails(raw: string | undefined): string[] | undefined {
+  const emails = (raw ?? "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+  return emails.length > 0 ? emails : undefined;
+}
+
+
 const database = new AppDatabase(process.env.SQLITE_DATABASE_PATH ?? defaultDatabasePath);
 const modelRuntime = new ModelRuntime(new ModelConfigStore(database), createInitialModelConfig(process.env));
 const sessionStore = new SessionStore(database);
@@ -85,6 +100,7 @@ const app = await buildApp({
   moderationStore,
   modelRuntime,
   adminToken,
+  adminEmails: readAdminEmails(process.env.ADMIN_EMAILS),
   dailyTurnQuota: Number(process.env.DAILY_TURN_QUOTA || 20),
   pricing: readPricingFromEnv(process.env),
   sessionTurnWindow: Number(process.env.SESSION_TURN_WINDOW || 0) || undefined,

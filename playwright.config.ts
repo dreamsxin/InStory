@@ -50,7 +50,11 @@ export default defineConfig({
     {
       command: "npm run start -w apps/server",
       url: `http://127.0.0.1:${API_PORT}/api/health`,
-      reuseExistingServer: !process.env.CI,
+      // Never reuse: a dev server on the same port holds the development database,
+      // and reusing it silently runs the whole suite against real data - which both
+      // fills that database with test accounts and makes the next run fail on
+      // duplicate emails. Failing on the busy port is the honest outcome.
+      reuseExistingServer: false,
       timeout: 60_000,
       env: {
         NODE_ENV: "production",
@@ -76,7 +80,9 @@ export default defineConfig({
     {
       command: "npm run dev -w apps/web",
       url: `http://127.0.0.1:${WEB_PORT}/login`,
-      reuseExistingServer: !process.env.CI,
+      // Same reason as the API: a reused dev server carries different env, so the
+      // suite would be testing a different configuration than the one it declares.
+      reuseExistingServer: false,
       timeout: 120_000,
       env: {
         PORT: String(WEB_PORT),

@@ -325,6 +325,12 @@ export interface BuildAppOptions {
   moderationChecker?: ModerationChecker;
   modelRuntime: ModelRuntime;
   adminToken?: string;
+  /**
+   * Accounts that hold the admin role by configuration. Applied on register and on
+   * every sign-in, so an operator can grant themselves the console without shell
+   * access to the database - which was the only way in before.
+   */
+  adminEmails?: string[];
   /** Successful generations allowed per reader per UTC day. Defaults to 20. */
   dailyTurnQuota?: number;
   /** Per-million-token prices used to derive cost. Zero means "unknown". */
@@ -468,6 +474,21 @@ export async function buildApp(options: BuildAppOptions) {
     return verdict;
   }
 
+  /**
+   * Keeps configured operator accounts on the admin role. Runs on register and on
+   * every sign-in so a fresh install and an existing account both end up with a
+   * console they can reach; the shared token stays for automation.
+   */
+  function promoteIfListed(user: UserRecord): UserRecord {
+    const listed = options.adminEmails?.some(
+      (email) => email.trim().toLowerCase() === user.email.trim().toLowerCase()
+    );
+    if (!listed || user.role === "admin") {
+      return user;
+    }
+    return options.userStore.setRole(user.id, "admin") ?? user;
+  }
+
   app.post("/api/auth/register", async (request, reply) => {
     if (rejectIfLimited(reply, authAttemptLimiter.consume(`register:${request.ip}`))) {
       return reply;
@@ -487,7 +508,7 @@ export async function buildApp(options: BuildAppOptions) {
 
     reply.header("set-cookie", buildSessionCookie(session.token, SESSION_TTL_MS / 1000, secureCookies));
     return reply.code(201).send({
-      user: toAuthUser(user),
+      user: toAuthUser(promoteIfListed(user)),
       token: session.token,
       expiresAt: session.expiresAt
     });
@@ -524,7 +545,7 @@ export async function buildApp(options: BuildAppOptions) {
     reply.header("set-cookie", buildSessionCookie(session.token, SESSION_TTL_MS / 1000, secureCookies));
 
     return {
-      user: toAuthUser(user),
+      user: toAuthUser(promoteIfListed(user)),
       token: session.token,
       expiresAt: session.expiresAt
     };

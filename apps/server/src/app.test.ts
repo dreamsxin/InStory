@@ -1510,6 +1510,73 @@ describe("authentication", () => {
       ).statusCode
     ).toBe(404);
   });
+
+  it("keeps configured operator addresses on the admin role", async () => {
+    authTempDir = mkdtempSync(join(tmpdir(), "instory-auth-"));
+    authDatabase = new AppDatabase(join(authTempDir, "auth.sqlite"));
+    const listedUserStore = new UserStore(authDatabase);
+    authApp = await buildApp({
+      sessionStore: new SessionStore(authDatabase),
+      readerProfileStore: new ReaderProfileStore(authDatabase),
+      storyCatalog: new StoryCatalog(authDatabase),
+      userStore: listedUserStore,
+      usageStore: new UsageStore(authDatabase),
+      moderationStore: new ModerationStore(authDatabase),
+      modelRuntime: new ModelRuntime(new ModelConfigStore(authDatabase), {
+        provider: "mock",
+        updatedAt: "2026-05-20T00:00:00.000Z"
+      }),
+      adminToken: "shared-secret",
+      // Deliberately cased and padded: the address comes from an env file.
+      adminEmails: [" Operator@Example.com "],
+      allowLegacyAnonymousUser: false,
+      logger: false
+    });
+
+    // A listed address is an admin from the moment it registers.
+    const registered = await authApp.inject({
+      method: "POST",
+      url: "/api/auth/register",
+      payload: { email: "operator@example.com", displayName: "运营", password: "pw-12345678" }
+    });
+    expect(registered.statusCode).toBe(201);
+    expect(registered.json<{ user: { role: string } }>().user.role).toBe("admin");
+
+    // An account that already existed is promoted on its next sign-in, which is
+    // what makes the setting usable on a database that is already in service.
+    const reader = listedUserStore.create({
+      email: "listed-later@example.com",
+      displayName: "后加入的运营",
+      password: "pw-12345678"
+    });
+    expect(reader.role).toBe("reader");
+    await authApp.close();
+    authApp = await buildApp({
+      sessionStore: new SessionStore(authDatabase),
+      readerProfileStore: new ReaderProfileStore(authDatabase),
+      storyCatalog: new StoryCatalog(authDatabase),
+      userStore: listedUserStore,
+      usageStore: new UsageStore(authDatabase),
+      moderationStore: new ModerationStore(authDatabase),
+      modelRuntime: new ModelRuntime(new ModelConfigStore(authDatabase), {
+        provider: "mock",
+        updatedAt: "2026-05-20T00:00:00.000Z"
+      }),
+      adminToken: "shared-secret",
+      adminEmails: ["listed-later@example.com"],
+      allowLegacyAnonymousUser: false,
+      logger: false
+    });
+
+    const signedIn = await authApp.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "listed-later@example.com", password: "pw-12345678" }
+    });
+    expect(signedIn.statusCode).toBe(200);
+    expect(signedIn.json<{ user: { role: string } }>().user.role).toBe("admin");
+    expect(listedUserStore.findById(reader.id)?.role).toBe("admin");
+  });
 });
 
 describe("abuse limits", () => {

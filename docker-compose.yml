@@ -10,6 +10,9 @@ services:
       # Required in production. Generate with:
       #   node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
       ADMIN_TOKEN: ${ADMIN_TOKEN:?ADMIN_TOKEN is required}
+      # Accounts that hold the admin role, comma separated. /admin is gated on the
+      # role, so without this the console has no reachable door on a fresh deploy.
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       LLM_PROVIDER: ${LLM_PROVIDER:-mock}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
