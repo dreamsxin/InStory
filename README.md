@@ -185,3 +185,10 @@ LLM_MODEL=...
 npm run verify:llm
 ```
 
+## 开源协议
+
+本项目使用 MIT 协议，完整条款见 [LICENSE](LICENSE)。你可以自由使用、修改、分发和商用，只需保留版权与许可声明。
+
+需要换成更严格的协议（例如 AGPL）时，只改 `LICENSE` 和 `package.json` 的 `license` 字段即可；协议一旦对外发布过，已取得代码的人仍可按当时的协议使用。
+
+
