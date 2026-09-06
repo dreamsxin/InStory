@@ -1,6 +1,6 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ReaderClient } from "@/components/reader-client";
-import { getCurrentUser, getSession, getStoryDetail } from "@/lib/api";
+import { ApiNotFoundError, getCurrentUser, getSession, getStoryDetail } from "@/lib/api";
 
 export default async function StoryPage({ params }: { params: Promise<{ sessionId: string }> }) {
   if (!(await getCurrentUser())) {
@@ -8,19 +8,29 @@ export default async function StoryPage({ params }: { params: Promise<{ sessionI
   }
 
   const { sessionId } = await params;
-  const { session, history } = await getSession(sessionId);
-  // The session only carries storyId, and the reader needs the title and the
-  // story's own reading theme in its header and page frame.
-  const story = await getStoryDetail(session.storyId);
 
-  return (
-    <ReaderClient
-      initialHistory={history}
-      initialSession={session}
-      readingTheme={story.story.readingTheme}
-      storyTitle={story.story.title}
-    />
-  );
+  try {
+    const { session, history } = await getSession(sessionId);
+    // The session only carries storyId, and the reader needs the title and the
+    // story's own reading theme in its header and page frame.
+    const story = await getStoryDetail(session.storyId);
+
+    return (
+      <ReaderClient
+        initialHistory={history}
+        initialSession={session}
+        readingTheme={story.story.readingTheme}
+        storyTitle={story.story.title}
+      />
+    );
+  } catch (error) {
+    // A stale bookmark is not a server failure, so it gets the 404 page rather
+    // than the error boundary.
+    if (error instanceof ApiNotFoundError) {
+      notFound();
+    }
+    throw error;
+  }
 }
 
 

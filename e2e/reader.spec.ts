@@ -200,4 +200,16 @@ test.describe("reader", () => {
 
     await expect(page).toHaveURL(/\/login$/);
   });
+
+  test("answers a stale bookmark with the 404 page, not a server error", async ({ page, request }) => {
+    await signInViaApi(page, request, "e2e-stale@example.com", "E2E 失效书签");
+
+    // A deleted session or a mistyped address used to throw, and with no boundary
+    // anywhere the reader got the framework's error screen with no way back.
+    await page.goto("/story/sess_does-not-exist");
+
+    await expect(page.locator(".fallback-title")).toHaveText("找不到这个页面");
+    await page.getByRole("link", { name: "回到书架" }).click();
+    await expect(page).toHaveURL(/\/$/);
+  });
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { Avatar, Button, Card, Chip, Input, Label, ListBox, Select, TextArea, TextField } from "@heroui/react";
-import { useState, type ReactNode } from "react";
+import { useActionState, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { ReaderProfile, ReaderSessionListItem, StoryDetail, StorySummary } from "@instory/shared";
 import { BrandMark } from "@/components/brand-mark";
@@ -17,6 +17,7 @@ import {
   updateReaderProfileAction,
   updateStoryAction
 } from "@/app/actions";
+import { IDLE_FORM, submitted, type FormResult } from "@/lib/form-result";
 
 type HomeTab = "stories" | "continue" | "create";
 type CreateTab = "profiles" | "stories";
@@ -325,9 +326,11 @@ function CreatorStoriesPanel({ myStoryDetails, profiles }: { myStoryDetails: Sto
 }
 
 function ProfileEditForm({ profile }: { profile: ReaderProfile }) {
+  const [result, action, pending] = useActionState(updateReaderProfileAction, IDLE_FORM);
+
   return (
     <div className="management-edit">
-      <form className="profile-form embedded" action={updateReaderProfileAction}>
+      <form className="profile-form embedded" action={action}>
         <input name="profileId" type="hidden" value={profile.id} />
         <div className="form-grid">
           <TextField defaultValue={profile.name} isRequired name="name">
@@ -365,7 +368,10 @@ function ProfileEditForm({ profile }: { profile: ReaderProfile }) {
           <TextArea maxLength={2000} rows={3} />
         </TextField>
         <div className="management-actions">
-          <Button type="submit">保存角色</Button>
+          <Button isDisabled={pending} type="submit">
+            {pending ? "保存中…" : "保存角色"}
+          </Button>
+          <FormFeedback result={result} />
         </div>
       </form>
       <form
@@ -385,11 +391,12 @@ function ProfileEditForm({ profile }: { profile: ReaderProfile }) {
 
 function StoryEditForm({ detail, profiles }: { detail: StoryDetail; profiles: ReaderProfile[] }) {
   const openingLocation = detail.world.locations[0];
+  const [result, action, pending] = useActionState(updateStoryAction, IDLE_FORM);
 
   return (
     <div className="management-edit">
       <StoryTrialLauncher profiles={profiles} story={detail.story} />
-      <form className="profile-form embedded" action={updateStoryAction}>
+      <form className="profile-form embedded" action={action}>
         <input name="storyId" type="hidden" value={detail.story.id} />
         <section className="form-section">
           <div>
@@ -506,7 +513,10 @@ function StoryEditForm({ detail, profiles }: { detail: StoryDetail; profiles: Re
           </div>
         </section>
         <div className="management-actions">
-          <Button type="submit">保存故事</Button>
+          <Button isDisabled={pending} type="submit">
+            {pending ? "保存中…" : "保存故事"}
+          </Button>
+          <FormFeedback result={result} />
         </div>
       </form>
       <form
@@ -586,6 +596,8 @@ function StoryTrialLauncher({ profiles, story }: { profiles: ReaderProfile[]; st
 }
 
 function CreateStoryPanel({ profiles }: { profiles: ReaderProfile[] }) {
+  const [result, action, pending] = useActionState(createStoryAction, IDLE_FORM);
+
   return (
     <Card className="profile-panel create-story-panel">
       <Card.Header>
@@ -595,33 +607,33 @@ function CreateStoryPanel({ profiles }: { profiles: ReaderProfile[] }) {
         </div>
       </Card.Header>
       <Card.Content>
-        <form className="profile-form embedded" action={createStoryAction}>
+        <form className="profile-form embedded" action={action}>
           <section className="form-section">
             <div>
               <span className="eyebrow">Step 1</span>
               <h3>展示信息</h3>
             </div>
             <div className="form-grid">
-              <TextField isRequired name="id">
+              <TextField defaultValue={submitted(result, "id")} isRequired name="id">
                 <Label>故事 ID</Label>
                 <Input maxLength={80} placeholder="moon-market" />
               </TextField>
-              <TextField isRequired name="title">
+              <TextField defaultValue={submitted(result, "title")} isRequired name="title">
                 <Label>标题</Label>
                 <Input maxLength={80} placeholder="月下市集" />
               </TextField>
             </div>
             <div className="form-grid">
-              <TextField isRequired name="genre">
+              <TextField defaultValue={submitted(result, "genre")} isRequired name="genre">
                 <Label>类型</Label>
                 <Input maxLength={40} placeholder="奇幻悬疑" />
               </TextField>
-              <TextField isRequired name="tagline">
+              <TextField defaultValue={submitted(result, "tagline")} isRequired name="tagline">
                 <Label>一句话钩子</Label>
                 <Input maxLength={160} placeholder="你在午夜市集里寻找被偷走的名字。" />
               </TextField>
             </div>
-            <TextField name="coverUrl" type="url">
+            <TextField defaultValue={submitted(result, "coverUrl")} name="coverUrl" type="url">
               <Label>封面图 URL</Label>
               <Input placeholder="用于故事卡片展示，后续可接上传或 AI 生图" />
             </TextField>
@@ -645,21 +657,29 @@ function CreateStoryPanel({ profiles }: { profiles: ReaderProfile[] }) {
               <span className="eyebrow">Step 2</span>
               <h3>世界入口</h3>
             </div>
-            <TextField isRequired name="premise">
+            <TextField defaultValue={submitted(result, "premise")} isRequired name="premise">
               <Label>世界前提</Label>
               <TextArea maxLength={4000} placeholder="这个世界如何运转，读者会被卷入什么冲突。" rows={4} />
             </TextField>
             <div className="form-grid">
-              <TextField isRequired name="openingLocationName">
+              <TextField
+                defaultValue={submitted(result, "openingLocationName")}
+                isRequired
+                name="openingLocationName"
+              >
                 <Label>起点地点</Label>
                 <Input maxLength={80} placeholder="市集入口" />
               </TextField>
-              <TextField isRequired name="openingLocationDescription">
+              <TextField
+                defaultValue={submitted(result, "openingLocationDescription")}
+                isRequired
+                name="openingLocationDescription"
+              >
                 <Label>起点场景</Label>
                 <TextArea maxLength={1000} placeholder="读者进入故事后看到的第一幕。" rows={3} />
               </TextField>
             </div>
-            <TextField name="worldRules">
+            <TextField defaultValue={submitted(result, "worldRules")} name="worldRules">
               <Label>世界规则</Label>
               <TextArea maxLength={4000} placeholder={"每行一条规则\n例如：不能直接说出真名。"} rows={3} />
             </TextField>
@@ -740,7 +760,10 @@ function CreateStoryPanel({ profiles }: { profiles: ReaderProfile[] }) {
               <ReadingThemeSelect selected={DEFAULT_READING_THEME} />
             </div>
           </section>
-          <Button type="submit">创建故事</Button>
+          <Button isDisabled={pending} type="submit">
+            {pending ? "创建中…" : "创建故事"}
+          </Button>
+          <FormFeedback result={result} />
         </form>
       </Card.Content>
     </Card>
@@ -748,6 +771,8 @@ function CreateStoryPanel({ profiles }: { profiles: ReaderProfile[] }) {
 }
 
 function CreateProfilePanel() {
+  const [result, action, pending] = useActionState(createReaderProfileAction, IDLE_FORM);
+
   return (
     <Card className="profile-panel create-profile-panel">
       <Card.Header>
@@ -757,7 +782,7 @@ function CreateProfilePanel() {
         </div>
       </Card.Header>
       <Card.Content>
-        <form className="profile-form embedded" action={createReaderProfileAction}>
+        <form className="profile-form embedded" action={action}>
           <TextField isRequired name="name">
             <Label>名称</Label>
             <Input maxLength={40} placeholder="林向晚" />
@@ -791,7 +816,10 @@ function CreateProfilePanel() {
             <Label>身份背景</Label>
             <TextArea maxLength={2000} placeholder="一句话交代来历、动机和最在意的事，例如：退役军医，为寻回失踪的妹妹而来。" rows={3} />
           </TextField>
-          <Button type="submit">创建入戏角色</Button>
+          <Button isDisabled={pending} type="submit">
+            {pending ? "创建中…" : "创建入戏角色"}
+          </Button>
+          <FormFeedback result={result} />
         </form>
       </Card.Content>
     </Card>
@@ -817,6 +845,26 @@ function AvatarSeed({ name, src }: { name: string; src: string | null }) {
 
 function visibilityLabel(visibility: "private" | "public") {
   return visibility === "public" ? "公开" : "仅自己可见";
+}
+
+/**
+ * One line of "it worked" or "it did not", next to the button that caused it.
+ * Before this the only signal was the page quietly revalidating, and a failure
+ * threw the reader onto the framework's error page along with their input.
+ */
+function FormFeedback({ result }: { result: FormResult }) {
+  if (result.status === "idle") {
+    return null;
+  }
+
+  return (
+    <p
+      className={`form-feedback ${result.status === "ok" ? "is-ok" : "is-error"}`}
+      role={result.status === "ok" ? "status" : "alert"}
+    >
+      {result.message}
+    </p>
+  );
 }
 
 function formatUpdatedAt(value: string) {

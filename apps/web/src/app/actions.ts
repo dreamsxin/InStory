@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { parseReadingTheme } from "@/lib/reading-themes";
+import type { FormResult } from "@/lib/form-result";
 import {
   createReaderProfile,
   createStory,
@@ -11,7 +12,27 @@ import {
   updateReaderProfile
 } from "@/lib/api";
 
-export async function createReaderProfileAction(formData: FormData) {
+/**
+ * Server actions used to return nothing and let failures throw, which sent the
+ * reader to the framework's error page and threw away everything they had typed -
+ * worst on the four-section story form. They now report back instead.
+ */
+function failed(error: unknown, fallback: string): FormResult {
+  return { status: "error", message: error instanceof Error ? error.message : fallback };
+}
+
+/** Every single-valued field, so a rejected form can be handed back filled in. */
+function submittedValues(formData: FormData): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const [key, value] of formData.entries()) {
+    if (typeof value === "string" && !(key in values)) {
+      values[key] = value;
+    }
+  }
+  return values;
+}
+
+export async function createReaderProfileAction(_state: FormResult, formData: FormData): Promise<FormResult> {
   const name = String(formData.get("name") ?? "").trim();
   const gender = String(formData.get("gender") ?? "").trim();
   const personality = String(formData.get("personality") ?? "").trim();
@@ -19,19 +40,24 @@ export async function createReaderProfileAction(formData: FormData) {
   const description = String(formData.get("description") ?? "").trim();
   const visibility = formData.get("visibility") === "public" ? "public" : "private";
 
-  await createReaderProfile({
-    name,
-    gender: gender || null,
-    personality,
-    avatarUrl: avatarUrl || null,
-    description,
-    visibility
-  });
+  try {
+    await createReaderProfile({
+      name,
+      gender: gender || null,
+      personality,
+      avatarUrl: avatarUrl || null,
+      description,
+      visibility
+    });
+  } catch (error) {
+    return { ...failed(error, "创建角色失败，请稍后重试。"), values: submittedValues(formData) };
+  }
 
   revalidatePath("/");
+  return { status: "ok", message: `已创建角色「${name}」，可在进入故事时选用。` };
 }
 
-export async function updateReaderProfileAction(formData: FormData) {
+export async function updateReaderProfileAction(_state: FormResult, formData: FormData): Promise<FormResult> {
   const profileId = String(formData.get("profileId") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
   const gender = String(formData.get("gender") ?? "").trim();
@@ -40,16 +66,21 @@ export async function updateReaderProfileAction(formData: FormData) {
   const description = String(formData.get("description") ?? "").trim();
   const visibility = formData.get("visibility") === "public" ? "public" : "private";
 
-  await updateReaderProfile(profileId, {
-    name,
-    gender: gender || null,
-    personality,
-    avatarUrl: avatarUrl || null,
-    description,
-    visibility
-  });
+  try {
+    await updateReaderProfile(profileId, {
+      name,
+      gender: gender || null,
+      personality,
+      avatarUrl: avatarUrl || null,
+      description,
+      visibility
+    });
+  } catch (error) {
+    return failed(error, "保存角色失败，请稍后重试。");
+  }
 
   revalidatePath("/");
+  return { status: "ok", message: "角色已保存。" };
 }
 
 export async function deleteReaderProfileAction(formData: FormData) {
@@ -58,7 +89,7 @@ export async function deleteReaderProfileAction(formData: FormData) {
   revalidatePath("/");
 }
 
-export async function createStoryAction(formData: FormData) {
+export async function createStoryAction(_state: FormResult, formData: FormData): Promise<FormResult> {
   const id = String(formData.get("id") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim();
   const tagline = String(formData.get("tagline") ?? "").trim();
@@ -83,28 +114,40 @@ export async function createStoryAction(formData: FormData) {
     ? String(formData.get("defaultSegmentLength"))
     : "standard";
 
-  await createStory({
-    id,
-    title,
-    tagline,
-    genre,
-    coverUrl: coverUrl || null,
-    readingTheme: parseReadingTheme(formData.get("readingTheme")),
-    premise,
-    openingLocationName,
-    openingLocationDescription,
-    worldRules,
-    castProfileIds,
-    visibility,
-    aiFreedom: aiFreedom as "low" | "medium" | "high",
-    experienceMode: experienceMode as "scripted" | "coauthored" | "improvised",
-    defaultSegmentLength: defaultSegmentLength as "short" | "standard" | "long"
-  });
+  try {
+    await createStory({
+      id,
+      title,
+      tagline,
+      genre,
+      coverUrl: coverUrl || null,
+      readingTheme: parseReadingTheme(formData.get("readingTheme")),
+      premise,
+      openingLocationName,
+      openingLocationDescription,
+      worldRules,
+      castProfileIds,
+      visibility,
+      aiFreedom: aiFreedom as "low" | "medium" | "high",
+      experienceMode: experienceMode as "scripted" | "coauthored" | "improvised",
+      defaultSegmentLength: defaultSegmentLength as "short" | "standard" | "long"
+    });
+  } catch (error) {
+    // The id has to be a slug and has to be unused, and both rules only fail here.
+    return { ...failed(error, "创建故事失败，请检查故事 ID 是否已被占用。"), values: submittedValues(formData) };
+  }
 
   revalidatePath("/");
+  return {
+    status: "ok",
+    message:
+      visibility === "public"
+        ? `已创建《${title}》并公开，现在可以在「故事」里进入。`
+        : `已创建《${title}》，默认仅自己可见；可在下方展开试玩，或改为公开。`
+  };
 }
 
-export async function updateStoryAction(formData: FormData) {
+export async function updateStoryAction(_state: FormResult, formData: FormData): Promise<FormResult> {
   const storyId = String(formData.get("storyId") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim();
   const tagline = String(formData.get("tagline") ?? "").trim();
@@ -128,23 +171,28 @@ export async function updateStoryAction(formData: FormData) {
     ? String(formData.get("defaultSegmentLength"))
     : "standard";
 
-  await updateMyStory(storyId, {
-    title,
-    tagline,
-    genre,
-    coverUrl: coverUrl || null,
-    readingTheme: parseReadingTheme(formData.get("readingTheme")),
-    premise,
-    openingLocationName,
-    openingLocationDescription,
-    worldRules,
-    visibility,
-    aiFreedom: aiFreedom as "low" | "medium" | "high",
-    experienceMode: experienceMode as "scripted" | "coauthored" | "improvised",
-    defaultSegmentLength: defaultSegmentLength as "short" | "standard" | "long"
-  });
+  try {
+    await updateMyStory(storyId, {
+      title,
+      tagline,
+      genre,
+      coverUrl: coverUrl || null,
+      readingTheme: parseReadingTheme(formData.get("readingTheme")),
+      premise,
+      openingLocationName,
+      openingLocationDescription,
+      worldRules,
+      visibility,
+      aiFreedom: aiFreedom as "low" | "medium" | "high",
+      experienceMode: experienceMode as "scripted" | "coauthored" | "improvised",
+      defaultSegmentLength: defaultSegmentLength as "short" | "standard" | "long"
+    });
+  } catch (error) {
+    return failed(error, "保存故事失败，请稍后重试。");
+  }
 
   revalidatePath("/");
+  return { status: "ok", message: `《${title}》已保存。` };
 }
 
 export async function deleteStoryAction(formData: FormData) {

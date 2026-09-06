@@ -76,6 +76,17 @@ export class UnauthenticatedError extends Error {
   }
 }
 
+/**
+ * Thrown when the API says the thing is not there. Pages map this to notFound()
+ * so a deleted story reads as "not in the book" instead of as a server failure.
+ */
+export class ApiNotFoundError extends Error {
+  constructor(message = "内容不存在或已被删除。") {
+    super(message);
+    this.name = "ApiNotFoundError";
+  }
+}
+
 export interface AdminStatus {
   service: string;
   storage: {
@@ -336,6 +347,9 @@ export async function deleteMyStory(storyId: string): Promise<void> {
 
 export async function getStoryDetail(storyId: string): Promise<StoryDetail> {
   const response = await apiFetch(`/api/stories/${storyId}`);
+  if (response.status === 404) {
+    throw new ApiNotFoundError("这个故事不存在或已被删除。");
+  }
   if (!response.ok) {
     throw new Error("加载故事详情失败");
   }
@@ -364,6 +378,9 @@ export async function getSession(sessionId: string, turnLimit?: number): Promise
   const response = await apiFetch(`/api/sessions/${sessionId}${query}`);
   if (response.status === 401) {
     throw new UnauthenticatedError();
+  }
+  if (response.status === 404) {
+    throw new ApiNotFoundError("这段阅读进度不存在或已被删除。");
   }
   if (!response.ok) {
     throw new Error("加载故事会话失败");
