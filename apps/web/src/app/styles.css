@@ -7,7 +7,9 @@
   --panel: #ffffff;
   --panel-strong: #eef1f5;
   --text: #1f1c18;
-  --muted: #6f675d;
+  /* Was #6f675d, which sat at 4.2:1 on the tinted top bars — under AA for body
+     text, and the first thing to disappear once a page darkened. */
+  --muted: #5f584e;
   --line: #e2e6ec;
   --accent: #8b2f2f;
   --accent-strong: #6f2222;
@@ -753,6 +755,8 @@ a {
   --page-edge: var(--line);
   --page-accent: var(--accent);
   --page-chrome: var(--surface);
+  --page-green: var(--green);
+  --page-blue: var(--blue);
   --page-frame: none;
   --page-frame-width: 0px;
   --page-frame-radius: 0px;
@@ -769,33 +773,69 @@ a {
   background: var(--page-backdrop);
 }
 
-/* Themed stories paint their own paper; untouched ones keep the shared card. */
-.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .turn {
-  border-color: var(--page-edge);
-  background: var(--page-paper);
+/* Themed stories rebind the shared surface tokens for their own subtree. Every
+   piece of reader furniture is already built on those tokens — turn cards, the
+   action presets, the textarea, the tool dock — so one block re-dresses all of
+   them, and nothing is left painting light text on a light box. */
+.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) {
+  --panel: var(--page-paper);
+  --panel-strong: var(--page-chrome);
+  --surface: var(--page-chrome);
+  --text: var(--page-ink);
+  --muted: var(--page-muted);
+  --line: var(--page-edge);
+  --accent: var(--page-accent);
+  --accent-strong: var(--page-accent);
+  /* The risk badges print their label in these, so a dark theme needs its own
+     pair or "稳妥" and "有风险" go dark-on-dark. */
+  --green: var(--page-green);
+  --blue: var(--page-blue);
+
   color: var(--page-ink);
-  font-family: var(--page-body-font);
 }
 
-.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .dialogue {
-  border-left-color: var(--page-accent);
-  color: var(--page-ink);
-}
-
-.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .reader-topbar {
-  border-color: var(--page-edge);
+/* The rail's two boxes are the only reader surfaces with hardcoded colours. */
+.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .reader-tool-dock,
+.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .reader-context-panel {
   background: var(--page-chrome);
 }
 
-.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .reader-topbar .brand h1 {
+/* HeroUI paints its own button text, so outline and ghost keep a near-black label
+   on any background: on a dark theme that is a button you cannot read. */
+.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .button--outline,
+.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .button--ghost {
+  border-color: var(--page-edge);
   color: var(--page-ink);
+}
+
+.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .button--secondary {
+  border-color: var(--page-edge);
+  background: var(--page-paper);
+  color: var(--page-ink);
+}
+
+/* Hover is the other half of the same problem: HeroUI lifts outline and ghost
+   buttons with a near-white film, which on a dark theme hides the label the
+   moment the pointer arrives. Mixing from the ink keeps the film on the right
+   side of the paper in both light and dark themes. */
+.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .button--outline:hover,
+.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .button--outline[data-hovered],
+.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .button--outline[data-pressed],
+.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .button--ghost:hover,
+.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .button--ghost[data-hovered],
+.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .button--ghost[data-pressed] {
+  background: color-mix(in oklab, var(--page-ink) 14%, transparent);
+  color: var(--page-ink);
+}
+
+.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .reader-scroll {
+  font-family: var(--page-body-font);
+}
+
+.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .reader-topbar .brand h1 {
   font-family: var(--page-title-font);
 }
 
-.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .reader-topbar .muted,
-.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .turn .muted {
-  color: var(--page-muted);
-}
 
 /* 西方幻想：羊皮纸底、烫金卷草四角与菱形花边。 */
 .reader-shell[data-reading-theme="western-fantasy"] {
@@ -803,9 +843,11 @@ a {
   --page-backdrop: radial-gradient(circle at 50% 0%, #fbf3e0, #f1e3c4 70%);
   --page-paper: rgba(255, 252, 244, 0.96);
   --page-ink: #33291c;
-  --page-muted: #7a6a4f;
+  --page-muted: #6d5d43;
   --page-edge: #ddc79f;
-  --page-accent: #9a6a1f;
+  /* Doubles as the fill behind white button labels, so it has to stay dark
+     enough for them: the lighter gold left 继续阅读 at 4.4:1. */
+  --page-accent: #8a5c15;
   --page-chrome: rgba(250, 242, 226, 0.94);
   --page-frame-width: 26px;
   --page-frame-radius: 6px;
@@ -821,7 +863,7 @@ a {
   --page-backdrop: linear-gradient(180deg, #f7f4ea, #eee9dc);
   --page-paper: rgba(253, 251, 245, 0.96);
   --page-ink: #2b2723;
-  --page-muted: #756f66;
+  --page-muted: #655f56;
   --page-edge: #ded7c6;
   --page-accent: #a33a33;
   --page-chrome: rgba(249, 246, 238, 0.94);
@@ -829,7 +871,7 @@ a {
   --page-frame-radius: 2px;
   --page-title-font: "Songti SC", "Noto Serif SC", STSong, serif;
   --page-body-font: "Songti SC", "Noto Serif SC", STSong, serif;
-  --page-frame: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg fill='none' stroke='%23a33a33' stroke-width='1.5'%3E%3Crect x='9' y='9' width='102' height='102'/%3E%3Cpath d='M16 44V16H44'/%3E%3Cpath d='M24 44V24H44'/%3E%3Cpath d='M104 44V16H76'/%3E%3Cpath d='M96 44V24H76'/%3E%3Cpath d='M16 76V104H44'/%3E%3Cpath d='M24 76V96H44'/%3E%3Cpath d='M104 76V104H76'/%3E%3Cpath d='M96 76V96H76'/%3E%3C/g%3E%3Cg fill='%23a33a33'%3E%3Cpath d='M60 11l5 5-5 5-5-5z'/%3E%3Cpath d='M60 109l5-5-5-5-5 5z'/%3E%3Cpath d='M11 60l5 5 5-5-5-5z'/%3E%3Cpath d='M109 60l-5 5-5-5 5-5z'/%3E%3C/g%3E%3C/svg%3E")
+  --page-frame: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg fill='none' stroke='%23a33a33' stroke-width='1.5'%3E%3Crect x='9' y='9' width='102' height='102'/%3E%3Cpath d='M16 44V16H44'/%3E%3Cpath d='M24 44V24H44'/%3E%3Cpath d='M104 44V16H76'/%3E%3Cpath d='M96 44V24H76'/%3E%3Cpath d='M16 76V104H44'/%3E%3Cpath d='M24 76V96H44'/%3E%3Cpath d='M104 76V104H76'/%3E%3Cpath d='M96 76V96H76'/%3E%3C/g%3E%3Cg fill='%23a33a33'%3E%3Cpath d='M60 13l3 3-3 3-3-3z'/%3E%3Cpath d='M60 107l3-3-3-3-3 3z'/%3E%3Cpath d='M13 60l3 3 3-3-3-3z'/%3E%3Cpath d='M107 60l-3 3-3-3 3-3z'/%3E%3C/g%3E%3C/svg%3E")
     40 / 20px / 0 round;
 }
 
@@ -843,11 +885,13 @@ a {
   --page-edge: #3b3746;
   --page-accent: #b0453f;
   --page-chrome: rgba(28, 26, 34, 0.92);
+  --page-green: #7fc7a2;
+  --page-blue: #8fbede;
   --page-frame-width: 22px;
   --page-frame-radius: 2px;
   --page-title-font: Georgia, "Songti SC", serif;
   --page-body-font: Georgia, "Songti SC", "Noto Serif SC", serif;
-  --page-frame: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg fill='none' stroke='%236f6680' stroke-width='2'%3E%3Cpath d='M8 46V20L20 8h26'/%3E%3Cpath d='M112 46V20L100 8H74'/%3E%3Cpath d='M8 74v26l12 12h26'/%3E%3Cpath d='M112 74v26l-12 12H74'/%3E%3Cpath d='M8 46v28'/%3E%3Cpath d='M112 46v28'/%3E%3Cpath d='M46 8h28'/%3E%3Cpath d='M46 112h28'/%3E%3Cpath d='M15 46v28'/%3E%3Cpath d='M105 46v28'/%3E%3Cpath d='M46 15h28'/%3E%3Cpath d='M46 105h28'/%3E%3C/g%3E%3Cg fill='%23b0453f'%3E%3Cpath d='M60 1l6 13H54z'/%3E%3Cpath d='M60 119l6-13H54z'/%3E%3Cpath d='M1 60l13 6V54z'/%3E%3Cpath d='M119 60l-13 6V54z'/%3E%3C/g%3E%3C/svg%3E")
+  --page-frame: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg fill='none' stroke='%236f6680' stroke-width='2'%3E%3Cpath d='M8 46V20L20 8h26'/%3E%3Cpath d='M112 46V20L100 8H74'/%3E%3Cpath d='M8 74v26l12 12h26'/%3E%3Cpath d='M112 74v26l-12 12H74'/%3E%3Cpath d='M8 46v28'/%3E%3Cpath d='M112 46v28'/%3E%3Cpath d='M46 8h28'/%3E%3Cpath d='M46 112h28'/%3E%3Cpath d='M15 46v28'/%3E%3Cpath d='M105 46v28'/%3E%3Cpath d='M46 15h28'/%3E%3Cpath d='M46 105h28'/%3E%3C/g%3E%3C/svg%3E")
     40 / 22px / 0 round;
 }
 
@@ -859,8 +903,12 @@ a {
   --page-ink: #dce9f5;
   --page-muted: #7f97ad;
   --page-edge: #1f3548;
-  --page-accent: #3fbfe0;
+  /* Deeper than the frame's own cyan on purpose: this one carries white button
+     labels, and bright cyan under white text is unreadable. */
+  --page-accent: #1d7f9e;
   --page-chrome: rgba(13, 21, 31, 0.9);
+  --page-green: #63d3a4;
+  --page-blue: #7cc4ea;
   --page-frame-width: 18px;
   --page-frame-radius: 0px;
   --page-title-font: "Segoe UI", Inter, system-ui, sans-serif;
@@ -990,7 +1038,9 @@ a {
 .dialogue {
   border-left: 3px solid var(--accent);
   padding-left: 12px;
-  color: #362d25;
+  /* Token, not a literal: themed readers rebind --text, and a hardcoded warm
+     near-black turned dialogue invisible on the dark themes. */
+  color: var(--text);
   margin-top: 12px;
 }
 

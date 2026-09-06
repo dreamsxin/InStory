@@ -62,6 +62,19 @@ test.describe("app-like shell", () => {
     });
     expect(Number.parseFloat(frame.width)).toBeGreaterThan(0);
     expect(frame.source).toContain("data:image/svg+xml");
+
+    // HeroUI paints its own button labels near-black, which the dark themes have to
+    // override or the controls on the page turn into blank pills.
+    const labelLuminance = await page
+      .locator(".reading-intervention-bar .button--outline")
+      .evaluate((element) => {
+        const channels = (getComputedStyle(element).color.match(/[\d.]+/g) ?? ["0", "0", "0"])
+          .slice(0, 3)
+          .map((value) => Number.parseFloat(value) / 255)
+          .map((value) => (value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4));
+        return 0.2126 * (channels[0] ?? 0) + 0.7152 * (channels[1] ?? 0) + 0.0722 * (channels[2] ?? 0);
+      });
+    expect(labelLuminance).toBeGreaterThan(0.5);
   });
 
   test("the home screen scrolls its tab panel, not the page", async ({ page, request }) => {
