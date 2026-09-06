@@ -20,3 +20,13 @@ export const IDLE_FORM: FormResult = { status: "idle", message: "" };
 export function submitted(result: FormResult, field: string): string {
   return result.values?.[field] ?? "";
 }
+
+/**
+ * What an edit form should show: this round's rejected edit if there is one,
+ * otherwise what the server has stored. Without it a failed save silently
+ * replaced the author's unsaved wording with the old value.
+ */
+export function kept(result: FormResult, field: string, stored: string): string {
+  return result.values?.[field] ?? stored;
+}
+

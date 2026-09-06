@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import type { ReaderProfile, ReaderSessionListItem, StoryDetail, StorySummary } from "@instory/shared";
 import { BrandMark } from "@/components/brand-mark";
 import { ReadingThemeSelect } from "@/components/reading-theme-select";
-import { DEFAULT_READING_THEME } from "@/lib/reading-themes";
+import { DEFAULT_READING_THEME, parseReadingTheme } from "@/lib/reading-themes";
 import { StoryLauncher } from "@/components/story-launcher";
 import { createSession } from "@/lib/api";
 import {
@@ -18,7 +18,7 @@ import {
   updateReaderProfileAction,
   updateStoryAction
 } from "@/app/actions";
-import { IDLE_FORM, submitted, type FormResult } from "@/lib/form-result";
+import { IDLE_FORM, kept, submitted, type FormResult } from "@/lib/form-result";
 
 type HomeTab = "stories" | "continue" | "create";
 type CreateTab = "profiles" | "stories";
@@ -351,24 +351,24 @@ function ProfileEditForm({ profile }: { profile: ReaderProfile }) {
       <form className="profile-form embedded" action={action}>
         <input name="profileId" type="hidden" value={profile.id} />
         <div className="form-grid">
-          <TextField defaultValue={profile.name} isRequired name="name">
+          <TextField defaultValue={kept(result, "name", profile.name)} isRequired name="name">
             <Label>名称</Label>
             <Input maxLength={40} />
           </TextField>
-          <TextField defaultValue={profile.gender ?? ""} name="gender">
+          <TextField defaultValue={kept(result, "gender", profile.gender ?? "")} name="gender">
             <Label>性别</Label>
             <Input maxLength={40} />
           </TextField>
         </div>
-        <TextField defaultValue={profile.personality} isRequired name="personality">
+        <TextField defaultValue={kept(result, "personality", profile.personality)} isRequired name="personality">
           <Label>性格</Label>
           <TextArea maxLength={1200} rows={3} />
         </TextField>
-        <TextField defaultValue={profile.avatarUrl ?? ""} name="avatarUrl" type="url">
+        <TextField defaultValue={kept(result, "avatarUrl", profile.avatarUrl ?? "")} name="avatarUrl" type="url">
           <Label>头像 URL</Label>
           <Input />
         </TextField>
-        <Select defaultSelectedKey={profile.visibility} name="visibility">
+        <Select defaultSelectedKey={kept(result, "visibility", profile.visibility)} name="visibility">
           <Label>可见性</Label>
           <Select.Trigger>
             <Select.Value />
@@ -381,7 +381,7 @@ function ProfileEditForm({ profile }: { profile: ReaderProfile }) {
             </ListBox>
           </Select.Popover>
         </Select>
-        <TextField defaultValue={profile.description} isRequired name="description">
+        <TextField defaultValue={kept(result, "description", profile.description)} isRequired name="description">
           <Label>身份背景</Label>
           <TextArea maxLength={2000} rows={3} />
         </TextField>
@@ -422,24 +422,24 @@ function StoryEditForm({ detail, profiles }: { detail: StoryDetail; profiles: Re
             <h3>故事卡片</h3>
           </div>
           <div className="form-grid">
-            <TextField defaultValue={detail.story.title} isRequired name="title">
+            <TextField defaultValue={kept(result, "title", detail.story.title)} isRequired name="title">
               <Label>标题</Label>
               <Input maxLength={80} />
             </TextField>
-            <TextField defaultValue={detail.story.genre} isRequired name="genre">
+            <TextField defaultValue={kept(result, "genre", detail.story.genre)} isRequired name="genre">
               <Label>类型</Label>
               <Input maxLength={40} />
             </TextField>
           </div>
-          <TextField defaultValue={detail.story.tagline} isRequired name="tagline">
+          <TextField defaultValue={kept(result, "tagline", detail.story.tagline)} isRequired name="tagline">
             <Label>一句话钩子</Label>
             <Input maxLength={160} />
           </TextField>
-          <TextField defaultValue={detail.story.coverUrl ?? ""} name="coverUrl" type="url">
+          <TextField defaultValue={kept(result, "coverUrl", detail.story.coverUrl ?? "")} name="coverUrl" type="url">
             <Label>封面图 URL</Label>
             <Input />
           </TextField>
-          <Select defaultSelectedKey={detail.story.visibility} name="visibility">
+          <Select defaultSelectedKey={kept(result, "visibility", detail.story.visibility)} name="visibility">
             <Label>可见性</Label>
             <Select.Trigger>
               <Select.Value />
@@ -459,21 +459,29 @@ function StoryEditForm({ detail, profiles }: { detail: StoryDetail; profiles: Re
             <span className="eyebrow">世界入口</span>
             <h3>开场设定</h3>
           </div>
-          <TextField defaultValue={detail.world.premise} isRequired name="premise">
+          <TextField defaultValue={kept(result, "premise", detail.world.premise)} isRequired name="premise">
             <Label>世界前提</Label>
             <TextArea maxLength={4000} rows={4} />
           </TextField>
           <div className="form-grid">
-            <TextField defaultValue={openingLocation?.name ?? ""} isRequired name="openingLocationName">
+            <TextField
+              defaultValue={kept(result, "openingLocationName", openingLocation?.name ?? "")}
+              isRequired
+              name="openingLocationName"
+            >
               <Label>起点地点</Label>
               <Input maxLength={80} />
             </TextField>
-            <TextField defaultValue={openingLocation?.description ?? ""} isRequired name="openingLocationDescription">
+            <TextField
+              defaultValue={kept(result, "openingLocationDescription", openingLocation?.description ?? "")}
+              isRequired
+              name="openingLocationDescription"
+            >
               <Label>起点场景</Label>
               <TextArea maxLength={1000} rows={3} />
             </TextField>
           </div>
-          <TextField defaultValue={detail.world.rules.join("\n")} name="worldRules">
+          <TextField defaultValue={kept(result, "worldRules", detail.world.rules.join("\n"))} name="worldRules">
             <Label>世界规则</Label>
             <TextArea maxLength={4000} rows={3} />
           </TextField>
@@ -485,7 +493,7 @@ function StoryEditForm({ detail, profiles }: { detail: StoryDetail; profiles: Re
             <h3>AI 与阅读节奏</h3>
           </div>
           <div className="story-setting-grid">
-            <Select defaultSelectedKey={detail.story.experienceMode} name="experienceMode">
+            <Select defaultSelectedKey={kept(result, "experienceMode", detail.story.experienceMode)} name="experienceMode">
               <Label>入戏体验</Label>
               <Select.Trigger>
                 <Select.Value />
@@ -499,7 +507,10 @@ function StoryEditForm({ detail, profiles }: { detail: StoryDetail; profiles: Re
                 </ListBox>
               </Select.Popover>
             </Select>
-            <Select defaultSelectedKey={detail.story.defaultSegmentLength} name="defaultSegmentLength">
+            <Select
+              defaultSelectedKey={kept(result, "defaultSegmentLength", detail.story.defaultSegmentLength)}
+              name="defaultSegmentLength"
+            >
               <Label>生成长度</Label>
               <Select.Trigger>
                 <Select.Value />
@@ -513,7 +524,7 @@ function StoryEditForm({ detail, profiles }: { detail: StoryDetail; profiles: Re
                 </ListBox>
               </Select.Popover>
             </Select>
-            <Select defaultSelectedKey={detail.story.aiFreedom} name="aiFreedom">
+            <Select defaultSelectedKey={kept(result, "aiFreedom", detail.story.aiFreedom)} name="aiFreedom">
               <Label>AI 自由度</Label>
               <Select.Trigger>
                 <Select.Value />
@@ -527,7 +538,7 @@ function StoryEditForm({ detail, profiles }: { detail: StoryDetail; profiles: Re
                 </ListBox>
               </Select.Popover>
             </Select>
-            <ReadingThemeSelect selected={detail.story.readingTheme} />
+            <ReadingThemeSelect selected={parseReadingTheme(kept(result, "readingTheme", detail.story.readingTheme))} />
           </div>
         </section>
         <div className="management-actions">

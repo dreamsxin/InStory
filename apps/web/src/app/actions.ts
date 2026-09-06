@@ -77,7 +77,7 @@ export async function updateReaderProfileAction(_state: FormResult, formData: Fo
       visibility
     });
   } catch (error) {
-    return failed(error, "保存角色失败，请稍后重试。");
+    return { ...failed(error, "保存角色失败，请稍后重试。"), values: submittedValues(formData) };
   }
 
   revalidatePath("/");
@@ -189,7 +189,7 @@ export async function updateStoryAction(_state: FormResult, formData: FormData):
       defaultSegmentLength: defaultSegmentLength as "short" | "standard" | "long"
     });
   } catch (error) {
-    return failed(error, "保存故事失败，请稍后重试。");
+    return { ...failed(error, "保存故事失败，请稍后重试。"), values: submittedValues(formData) };
   }
 
   revalidatePath("/");

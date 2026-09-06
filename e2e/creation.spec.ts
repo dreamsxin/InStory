@@ -63,6 +63,43 @@ test.describe("creation console", () => {
     await expect(panel.getByLabel("世界前提")).toHaveValue("一座只在月落后出现的市集，交易的是记忆。");
   });
 
+  test("keeps this round's edits when saving an existing story fails", async ({ page, request }) => {
+    await signIn(page, request, "e2e-edit-story@example.com");
+    await page.goto("/");
+    await page.locator(".app-topbar").getByRole("button", { name: "创作" }).click();
+
+    const storyId = `e2e-tide-archive-${Date.now()}`;
+    const panel = page.locator(".create-story-panel");
+    await panel.getByLabel("故事 ID").fill(storyId);
+    await panel.getByLabel("标题").fill("潮汐档案");
+    await panel.getByLabel("类型").fill("悬疑");
+    await panel.getByLabel("一句话钩子").fill("退潮后，档案室多了一份卷宗。");
+    await panel.getByLabel("世界前提").fill("一座靠潮水记事的港城。");
+    await panel.getByLabel("起点地点").fill("潮汐档案室");
+    await panel.getByLabel("起点场景").fill("盐味顺着窗缝进来，桌上摊着一份没有署名的卷宗。");
+    await panel.getByRole("button", { name: "创建故事" }).click();
+    await expect(panel.locator(".form-feedback")).toHaveClass(/is-ok/);
+
+    const editor = page.locator(".story-management-list .management-details");
+    await editor.locator("summary").click();
+    await editor.getByLabel("标题").fill("潮汐档案 · 修订");
+    await editor.getByLabel("世界前提").fill("一座靠潮水记事的港城，涨潮时没人敢翻旧卷宗。");
+
+    // Removing the story out from under the open form is the cheapest way to make
+    // the save fail for real, rather than mocking the action.
+    const removed = await page.request.delete(`${API_BASE}/api/me/stories/${storyId}`);
+    expect(removed.ok()).toBe(true);
+
+    await editor.getByRole("button", { name: "保存故事" }).click();
+
+    // The failure used to re-render the form from the stored values, quietly
+    // throwing away the wording the author had just written.
+    const feedback = editor.locator(".form-feedback");
+    await expect(feedback).toHaveClass(/is-error/);
+    await expect(editor.getByLabel("标题")).toHaveValue("潮汐档案 · 修订");
+    await expect(editor.getByLabel("世界前提")).toHaveValue("一座靠潮水记事的港城，涨潮时没人敢翻旧卷宗。");
+  });
+
   test("reports a saved reader profile in place", async ({ page, request }) => {
     await signIn(page, request, "e2e-create-profile@example.com");
     await page.goto("/");
