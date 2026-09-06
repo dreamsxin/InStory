@@ -7,6 +7,7 @@ import type {
   UpdateStoryRequest,
   WorldProfile
 } from "@instory/shared";
+import { DEFAULT_READING_THEME } from "@instory/shared";
 import type { AppDatabase } from "./app-database.js";
 
 export interface StorySeedData {
@@ -117,6 +118,7 @@ export class StoryStore {
       tagline: input.tagline,
       genre: input.genre,
       coverUrl: input.coverUrl ?? null,
+      readingTheme: input.readingTheme ?? DEFAULT_READING_THEME,
       aiFreedom: input.aiFreedom,
       experienceMode: input.experienceMode,
       defaultSegmentLength: input.defaultSegmentLength
@@ -172,6 +174,7 @@ export class StoryStore {
       tagline: input.tagline,
       genre: input.genre,
       coverUrl: input.coverUrl ?? null,
+      readingTheme: input.readingTheme ?? current.story.readingTheme,
       aiFreedom: input.aiFreedom,
       experienceMode: input.experienceMode,
       defaultSegmentLength: input.defaultSegmentLength
@@ -277,6 +280,8 @@ function normalizeStorySummary(story: StorySummary): StorySummary {
     visibility: story.visibility ?? (story.ownerId === null ? "public" : "private"),
     coverUrl: story.coverUrl ?? null,
     experienceMode: story.experienceMode ?? "coauthored",
-    defaultSegmentLength: story.defaultSegmentLength ?? "standard"
+    defaultSegmentLength: story.defaultSegmentLength ?? "standard",
+    // Stories written before themes existed keep the plain book page.
+    readingTheme: story.readingTheme ?? DEFAULT_READING_THEME
   };
 }

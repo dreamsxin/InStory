@@ -5,6 +5,8 @@ import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { ReaderProfile, ReaderSessionListItem, StoryDetail, StorySummary } from "@instory/shared";
 import { BrandMark } from "@/components/brand-mark";
+import { ReadingThemeSelect } from "@/components/reading-theme-select";
+import { DEFAULT_READING_THEME } from "@/lib/reading-themes";
 import { StoryLauncher } from "@/components/story-launcher";
 import { createSession } from "@/lib/api";
 import {
@@ -500,6 +502,7 @@ function StoryEditForm({ detail, profiles }: { detail: StoryDetail; profiles: Re
                 </ListBox>
               </Select.Popover>
             </Select>
+            <ReadingThemeSelect selected={detail.story.readingTheme} />
           </div>
         </section>
         <div className="management-actions">
@@ -734,6 +737,7 @@ function CreateStoryPanel({ profiles }: { profiles: ReaderProfile[] }) {
                   </ListBox>
                 </Select.Popover>
               </Select>
+              <ReadingThemeSelect selected={DEFAULT_READING_THEME} />
             </div>
           </section>
           <Button type="submit">创建故事</Button>
@@ -841,6 +845,7 @@ function createSessionStoryFallback(session: ReaderSessionListItem): StorySummar
     tagline: "继续上次的入戏进度",
     genre: "故事",
     coverUrl: null,
+    readingTheme: DEFAULT_READING_THEME,
     aiFreedom: "medium",
     experienceMode: "coauthored",
     defaultSegmentLength: "standard"

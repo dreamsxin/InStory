@@ -51,6 +51,17 @@ test.describe("app-like shell", () => {
 
     expect(await documentScrolls(page)).toBe(false);
     expect(await overflowY(page, ".reader-scroll")).toBe("auto");
+
+    // The seeded story is 悬疑, so it reads inside the gothic frame. The frame has
+    // to sit on the scroll window itself, otherwise it would only be visible at
+    // the very top and bottom of the whole transcript.
+    await expect(page.locator(".reader-shell")).toHaveAttribute("data-reading-theme", "gothic-mystery");
+    const frame = await page.locator(".reader-scroll").evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { width: style.borderTopWidth, source: style.borderImageSource };
+    });
+    expect(Number.parseFloat(frame.width)).toBeGreaterThan(0);
+    expect(frame.source).toContain("data:image/svg+xml");
   });
 
   test("the home screen scrolls its tab panel, not the page", async ({ page, request }) => {

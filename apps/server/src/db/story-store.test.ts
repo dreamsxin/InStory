@@ -22,6 +22,7 @@ describe("StoryStore", () => {
 
       const detail = store.findStory("rain-mansion");
       expect(detail?.story.visibility).toBe("public");
+      expect(detail?.story.readingTheme).toBe("gothic-mystery");
       expect(detail?.world.locations).toHaveLength(5);
       expect(detail?.characters).toHaveLength(3);
       expect(detail?.anchors).toHaveLength(5);
@@ -51,6 +52,27 @@ describe("StoryStore", () => {
     }
   });
 
+  it("gives stories written before themes existed the plain book page", () => {
+    const dir = mkdtempSync(join(tmpdir(), "instory-story-store-"));
+    const database = new AppDatabase(join(dir, "story.sqlite"));
+    const store = new StoryStore(database);
+
+    try {
+      const seed = loadSeed();
+      // Payloads already in SQLite predate readingTheme, so reads must not hand
+      // the reader an undefined theme and end up with no frame at all.
+      const legacy = { ...seed.stories[0]! } as Record<string, unknown>;
+      delete legacy.readingTheme;
+      store.seedIfEmpty({ ...seed, stories: [legacy as unknown as (typeof seed.stories)[number]] });
+
+      expect(store.findStory("rain-mansion")?.story.readingTheme).toBe("classic");
+      expect(store.listStories()[0]?.readingTheme).toBe("classic");
+    } finally {
+      database.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("updates story summary payload without changing related configuration", () => {
     const dir = mkdtempSync(join(tmpdir(), "instory-story-store-"));
     const database = new AppDatabase(join(dir, "story.sqlite"));
@@ -64,6 +86,7 @@ describe("StoryStore", () => {
         tagline: "新的故事标语",
         genre: "悬疑测试",
         coverUrl: "https://example.com/cover.png",
+        readingTheme: "eastern-ink",
         visibility: "public",
         aiFreedom: "high",
         experienceMode: "scripted",
@@ -75,6 +98,7 @@ describe("StoryStore", () => {
         visibility: "public",
         title: "雨夜旧宅：修订版",
         coverUrl: "https://example.com/cover.png",
+        readingTheme: "eastern-ink",
         aiFreedom: "high",
         experienceMode: "scripted",
         defaultSegmentLength: "long"
@@ -106,6 +130,7 @@ describe("StoryStore", () => {
         tagline: "你醒来时，门外的人已经知道了你的名字。",
         genre: "悬疑",
         coverUrl: null,
+        readingTheme: "gothic-mystery",
         visibility: "private",
         aiFreedom: "medium",
         experienceMode: "coauthored",

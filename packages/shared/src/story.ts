@@ -40,6 +40,17 @@ export type SegmentLengthPreset = "short" | "standard" | "long";
 
 export type Visibility = "private" | "public";
 
+/**
+ * The visual dress of the reading surface. A story picks one so its pages feel
+ * like they belong to its world: gilded filigree for western fantasy, ink and
+ * rice paper for eastern tales, and so on. Purely presentational — the web app
+ * owns the labels and the frames, keyed by these ids (see lib/reading-themes.ts
+ * and the [data-reading-theme] blocks in styles.css).
+ */
+export type ReadingTheme = "classic" | "western-fantasy" | "eastern-ink" | "gothic-mystery" | "cyber-frontier";
+
+export const DEFAULT_READING_THEME: ReadingTheme = "classic";
+
 export interface StorySummary {
   id: string;
   ownerId: string | null;
@@ -48,6 +59,7 @@ export interface StorySummary {
   tagline: string;
   genre: string;
   coverUrl: string | null;
+  readingTheme: ReadingTheme;
   aiFreedom: "low" | "medium" | "high";
   experienceMode: ExperienceMode;
   defaultSegmentLength: SegmentLengthPreset;
@@ -59,6 +71,7 @@ export interface CreateStoryRequest {
   tagline: string;
   genre: string;
   coverUrl?: string | null;
+  readingTheme?: ReadingTheme;
   premise: string;
   openingLocationName: string;
   openingLocationDescription: string;
@@ -76,6 +89,7 @@ export interface UpdateStoryRequest {
   tagline: string;
   genre: string;
   coverUrl?: string | null;
+  readingTheme?: ReadingTheme;
   premise: string;
   openingLocationName: string;
   openingLocationDescription: string;

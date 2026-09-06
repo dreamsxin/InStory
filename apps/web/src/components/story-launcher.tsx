@@ -4,6 +4,7 @@ import { Button, Card, Chip, Label, ListBox, Select } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import type { ReaderProfile, ReaderSessionListItem, StorySummary } from "@instory/shared";
 import { createSession } from "@/lib/api";
+import { readingThemeLabel } from "@/lib/reading-themes";
 import { useState } from "react";
 
 export function StoryLauncher({
@@ -53,6 +54,7 @@ export function StoryLauncher({
           <Chip size="sm" variant="soft">AI 自由度 {story.aiFreedom}</Chip>
           <Chip size="sm" variant="soft">{experienceModeLabel(story.experienceMode)}</Chip>
           <Chip size="sm" variant="soft">{segmentLengthLabel(story.defaultSegmentLength)}</Chip>
+          <Chip size="sm" variant="soft">{readingThemeLabel(story.readingTheme)}</Chip>
         </div>
         {existingSession ? (
           <div className="tag-row compact">

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { parseReadingTheme } from "@/lib/reading-themes";
 import {
   createReaderProfile,
   createStory,
@@ -88,6 +89,7 @@ export async function createStoryAction(formData: FormData) {
     tagline,
     genre,
     coverUrl: coverUrl || null,
+    readingTheme: parseReadingTheme(formData.get("readingTheme")),
     premise,
     openingLocationName,
     openingLocationDescription,
@@ -131,6 +133,7 @@ export async function updateStoryAction(formData: FormData) {
     tagline,
     genre,
     coverUrl: coverUrl || null,
+    readingTheme: parseReadingTheme(formData.get("readingTheme")),
     premise,
     openingLocationName,
     openingLocationDescription,

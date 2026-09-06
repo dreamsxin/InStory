@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Card, Chip } from "@heroui/react";
-import type { RiskLevel, SessionTurn, StorySession, TurnQuota, WorldState } from "@instory/shared";
+import type { ReadingTheme, RiskLevel, SessionTurn, StorySession, TurnQuota, WorldState } from "@instory/shared";
 import {
   createTurn,
   getOlderTurns,
@@ -22,10 +22,12 @@ type ReaderPanel = "status" | "memory" | "action" | null;
 export function ReaderClient({
   initialHistory,
   initialSession,
+  readingTheme,
   storyTitle
 }: {
   initialHistory: SessionHistoryInfo;
   initialSession: StorySession;
+  readingTheme: ReadingTheme;
   storyTitle: string;
 }) {
   const router = useRouter();
@@ -180,7 +182,7 @@ export function ReaderClient({
   }
 
   return (
-    <main className="reader-shell reader-shell-focus h-dvh w-full overflow-hidden">
+    <main className="reader-shell reader-shell-focus h-dvh w-full overflow-hidden" data-reading-theme={readingTheme}>
       <section className="reader reader-stage h-dvh w-full min-w-0 p-0 sm:p-4 md:p-8">
         <div className={`topbar reader-topbar${chromeVisible ? "" : " reader-chrome-hidden"}`}>
           <div className="brand-row">

@@ -194,6 +194,7 @@ export default async function AdminPage({
                 genre={item.story.genre}
                 key={item.story.id}
                 locationsCount={item.world.locations.length}
+                readingTheme={item.story.readingTheme}
                 storyId={item.story.id}
                 tagline={item.story.tagline}
                 title={item.story.title}

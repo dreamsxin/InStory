@@ -1,8 +1,9 @@
 "use client";
 
 import { Button, Checkbox, Input, Label, ListBox, Select, TextField } from "@heroui/react";
-import type { ExperienceMode, SegmentLengthPreset } from "@instory/shared";
+import type { ExperienceMode, ReadingTheme, SegmentLengthPreset } from "@instory/shared";
 
+import { ReadingThemeSelect } from "@/components/reading-theme-select";
 import { updateModelConfigAction, updateStorySummaryAction, verifyModelConfigAction } from "@/app/admin/actions";
 
 type ModelProvider = "mock" | "openai-compatible";
@@ -72,6 +73,7 @@ export function StorySummaryForm({
   coverUrl,
   genre,
   locationsCount,
+  readingTheme,
   storyId,
   tagline,
   title,
@@ -85,6 +87,7 @@ export function StorySummaryForm({
   coverUrl: string | null;
   genre: string;
   locationsCount: number;
+  readingTheme: ReadingTheme;
   storyId: string;
   tagline: string;
   title: string;
@@ -164,6 +167,7 @@ export function StorySummaryForm({
           </ListBox>
         </Select.Popover>
       </Select>
+      <ReadingThemeSelect selected={readingTheme} />
       <div className="story-editor-meta">
         <span>{locationsCount} 地点</span>
         <span>{charactersCount} 角色</span>

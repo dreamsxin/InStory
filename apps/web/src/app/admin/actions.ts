@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { parseReadingTheme } from "@/lib/reading-themes";
 import {
   resolveAdminModerationEvent,
   updateAdminModelConfig,
@@ -89,6 +90,7 @@ export async function updateStorySummaryAction(formData: FormData) {
     tagline,
     genre,
     coverUrl: coverUrl || null,
+    readingTheme: parseReadingTheme(formData.get("readingTheme")),
     visibility,
     aiFreedom: aiFreedom as "low" | "medium" | "high",
     experienceMode: experienceMode as "scripted" | "coauthored" | "improvised",

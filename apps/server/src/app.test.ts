@@ -496,6 +496,7 @@ describe("server API", () => {
         tagline: "你在雨声里改写旧宅命运。",
         genre: "悬疑互动",
         coverUrl: "https://example.com/rain-cover.png",
+        readingTheme: "western-fantasy",
         visibility: "public",
         aiFreedom: "high",
         experienceMode: "scripted",
@@ -513,6 +514,7 @@ describe("server API", () => {
         tagline: "你在雨声里改写旧宅命运。",
         genre: "悬疑互动",
         coverUrl: "https://example.com/rain-cover.png",
+        readingTheme: "western-fantasy",
         aiFreedom: "high",
         experienceMode: "scripted",
         defaultSegmentLength: "long"

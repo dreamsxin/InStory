@@ -731,6 +731,148 @@ a {
   padding-bottom: 6px;
 }
 
+/* ---------------------------------------------------------------------------
+ * Per-story reading themes.
+ *
+ * A story carries a readingTheme id; the reader puts it on the shell as
+ * [data-reading-theme] and everything below is pure CSS. Each theme only sets
+ * variables, so the reader's layout is written once and a new theme costs one
+ * block here plus one entry in READING_THEMES.
+ *
+ * The frame lives on .reader-scroll, not on .reading-surface: the surface is as
+ * tall as the whole transcript, so a border there would sit far above and below
+ * the viewport. .reader-scroll is the scrolling window itself, so its border
+ * stays put while the text moves inside it — which is what a book frame does.
+ * ------------------------------------------------------------------------- */
+.reader-shell {
+  --page-shell: transparent;
+  --page-backdrop: transparent;
+  --page-paper: var(--panel);
+  --page-ink: var(--text);
+  --page-muted: var(--muted);
+  --page-edge: var(--line);
+  --page-accent: var(--accent);
+  --page-chrome: var(--surface);
+  --page-frame: none;
+  --page-frame-width: 0px;
+  --page-frame-radius: 0px;
+  --page-title-font: inherit;
+  --page-body-font: inherit;
+
+  background: var(--page-shell);
+}
+
+.reader-scroll {
+  border: var(--page-frame-width) solid transparent;
+  border-image: var(--page-frame);
+  border-radius: var(--page-frame-radius);
+  background: var(--page-backdrop);
+}
+
+/* Themed stories paint their own paper; untouched ones keep the shared card. */
+.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .turn {
+  border-color: var(--page-edge);
+  background: var(--page-paper);
+  color: var(--page-ink);
+  font-family: var(--page-body-font);
+}
+
+.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .dialogue {
+  border-left-color: var(--page-accent);
+  color: var(--page-ink);
+}
+
+.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .reader-topbar {
+  border-color: var(--page-edge);
+  background: var(--page-chrome);
+}
+
+.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .reader-topbar .brand h1 {
+  color: var(--page-ink);
+  font-family: var(--page-title-font);
+}
+
+.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .reader-topbar .muted,
+.reader-shell[data-reading-theme]:not([data-reading-theme="classic"]) .turn .muted {
+  color: var(--page-muted);
+}
+
+/* 西方幻想：羊皮纸底、烫金卷草四角与菱形花边。 */
+.reader-shell[data-reading-theme="western-fantasy"] {
+  --page-shell: #efe3c8;
+  --page-backdrop: radial-gradient(circle at 50% 0%, #fbf3e0, #f1e3c4 70%);
+  --page-paper: rgba(255, 252, 244, 0.96);
+  --page-ink: #33291c;
+  --page-muted: #7a6a4f;
+  --page-edge: #ddc79f;
+  --page-accent: #9a6a1f;
+  --page-chrome: rgba(250, 242, 226, 0.94);
+  --page-frame-width: 26px;
+  --page-frame-radius: 6px;
+  --page-title-font: Georgia, "Songti SC", "Noto Serif SC", serif;
+  --page-body-font: Georgia, "Songti SC", "Noto Serif SC", serif;
+  --page-frame: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg fill='none' stroke='%23b98a3f' stroke-width='2'%3E%3Crect x='7' y='7' width='106' height='106'/%3E%3Crect x='14' y='14' width='92' height='92' stroke-width='1'/%3E%3Cpath d='M7 42C7 23 23 7 42 7'/%3E%3Cpath d='M113 42C113 23 97 7 78 7'/%3E%3Cpath d='M7 78C7 97 23 113 42 113'/%3E%3Cpath d='M113 78C113 97 97 113 78 113'/%3E%3Ccircle cx='25' cy='25' r='4'/%3E%3Ccircle cx='95' cy='25' r='4'/%3E%3Ccircle cx='25' cy='95' r='4'/%3E%3Ccircle cx='95' cy='95' r='4'/%3E%3C/g%3E%3Cg fill='%23b98a3f'%3E%3Cpath d='M60 2l8 9-8 9-8-9z'/%3E%3Cpath d='M60 118l8-9-8-9-8 9z'/%3E%3Cpath d='M2 60l9 8 9-8-9-8z'/%3E%3Cpath d='M118 60l-9 8-9-8 9-8z'/%3E%3C/g%3E%3C/svg%3E")
+    40 / 26px / 0 round;
+}
+
+/* 东方水墨：宣纸底、朱红回纹角。 */
+.reader-shell[data-reading-theme="eastern-ink"] {
+  --page-shell: #eae6dc;
+  --page-backdrop: linear-gradient(180deg, #f7f4ea, #eee9dc);
+  --page-paper: rgba(253, 251, 245, 0.96);
+  --page-ink: #2b2723;
+  --page-muted: #756f66;
+  --page-edge: #ded7c6;
+  --page-accent: #a33a33;
+  --page-chrome: rgba(249, 246, 238, 0.94);
+  --page-frame-width: 20px;
+  --page-frame-radius: 2px;
+  --page-title-font: "Songti SC", "Noto Serif SC", STSong, serif;
+  --page-body-font: "Songti SC", "Noto Serif SC", STSong, serif;
+  --page-frame: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg fill='none' stroke='%23a33a33' stroke-width='1.5'%3E%3Crect x='9' y='9' width='102' height='102'/%3E%3Cpath d='M16 44V16H44'/%3E%3Cpath d='M24 44V24H44'/%3E%3Cpath d='M104 44V16H76'/%3E%3Cpath d='M96 44V24H76'/%3E%3Cpath d='M16 76V104H44'/%3E%3Cpath d='M24 76V96H44'/%3E%3Cpath d='M104 76V104H76'/%3E%3Cpath d='M96 76V96H76'/%3E%3C/g%3E%3Cg fill='%23a33a33'%3E%3Cpath d='M60 11l5 5-5 5-5-5z'/%3E%3Cpath d='M60 109l5-5-5-5-5 5z'/%3E%3Cpath d='M11 60l5 5 5-5-5-5z'/%3E%3Cpath d='M109 60l-5 5-5-5 5-5z'/%3E%3C/g%3E%3C/svg%3E")
+    40 / 20px / 0 round;
+}
+
+/* 哥特悬疑：暗夜纸面、铁艺切角与尖顶。 */
+.reader-shell[data-reading-theme="gothic-mystery"] {
+  --page-shell: #16151a;
+  --page-backdrop: linear-gradient(180deg, #1f1d26, #141319);
+  --page-paper: rgba(33, 31, 40, 0.94);
+  --page-ink: #e7e0d4;
+  --page-muted: #a49b8d;
+  --page-edge: #3b3746;
+  --page-accent: #b0453f;
+  --page-chrome: rgba(28, 26, 34, 0.92);
+  --page-frame-width: 22px;
+  --page-frame-radius: 2px;
+  --page-title-font: Georgia, "Songti SC", serif;
+  --page-body-font: Georgia, "Songti SC", "Noto Serif SC", serif;
+  --page-frame: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg fill='none' stroke='%236f6680' stroke-width='2'%3E%3Cpath d='M8 46V20L20 8h26'/%3E%3Cpath d='M112 46V20L100 8H74'/%3E%3Cpath d='M8 74v26l12 12h26'/%3E%3Cpath d='M112 74v26l-12 12H74'/%3E%3Cpath d='M8 46v28'/%3E%3Cpath d='M112 46v28'/%3E%3Cpath d='M46 8h28'/%3E%3Cpath d='M46 112h28'/%3E%3Cpath d='M15 46v28'/%3E%3Cpath d='M105 46v28'/%3E%3Cpath d='M46 15h28'/%3E%3Cpath d='M46 105h28'/%3E%3C/g%3E%3Cg fill='%23b0453f'%3E%3Cpath d='M60 1l6 13H54z'/%3E%3Cpath d='M60 119l6-13H54z'/%3E%3Cpath d='M1 60l13 6V54z'/%3E%3Cpath d='M119 60l-13 6V54z'/%3E%3C/g%3E%3C/svg%3E")
+    40 / 22px / 0 round;
+}
+
+/* 赛博未来：冷蓝面板、切角括号与刻度描边。 */
+.reader-shell[data-reading-theme="cyber-frontier"] {
+  --page-shell: #0a1017;
+  --page-backdrop: linear-gradient(180deg, #101b27, #0a1017);
+  --page-paper: rgba(17, 28, 40, 0.92);
+  --page-ink: #dce9f5;
+  --page-muted: #7f97ad;
+  --page-edge: #1f3548;
+  --page-accent: #3fbfe0;
+  --page-chrome: rgba(13, 21, 31, 0.9);
+  --page-frame-width: 18px;
+  --page-frame-radius: 0px;
+  --page-title-font: "Segoe UI", Inter, system-ui, sans-serif;
+  --page-body-font: inherit;
+  --page-frame: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg fill='none' stroke='%233fbfe0' stroke-width='2'%3E%3Cpath d='M6 44V18L18 6h26'/%3E%3Cpath d='M114 44V18L102 6H76'/%3E%3Cpath d='M6 76v26l12 12h26'/%3E%3Cpath d='M114 76v26l-12 12H76'/%3E%3Cpath d='M44 6h32' stroke-dasharray='4 8'/%3E%3Cpath d='M44 114h32' stroke-dasharray='4 8'/%3E%3Cpath d='M6 44v32' stroke-dasharray='4 8'/%3E%3Cpath d='M114 44v32' stroke-dasharray='4 8'/%3E%3C/g%3E%3Cg fill='%233fbfe0'%3E%3Crect x='22' y='22' width='5' height='5'/%3E%3Crect x='93' y='22' width='5' height='5'/%3E%3Crect x='22' y='93' width='5' height='5'/%3E%3Crect x='93' y='93' width='5' height='5'/%3E%3C/g%3E%3C/svg%3E")
+    40 / 18px / 0 round;
+}
+
+
+
+
+
 /**
  * One fixed column on the right holding the context panel above the tool dock.
  * Keeping them in the same flex context is what guarantees they cannot overlap:

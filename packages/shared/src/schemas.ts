@@ -2,6 +2,15 @@ import { z } from "zod";
 
 export const visibilitySchema = z.enum(["private", "public"]);
 
+/** Keep in step with ReadingTheme and the [data-reading-theme] frames in styles.css. */
+export const readingThemeSchema = z.enum([
+  "classic",
+  "western-fantasy",
+  "eastern-ink",
+  "gothic-mystery",
+  "cyber-frontier"
+]);
+
 export const registerRequestSchema = z.object({
   email: z.string().email().max(200),
   displayName: z.string().min(1).max(40),
@@ -102,6 +111,7 @@ export const storySummarySchema = z.object({
   tagline: z.string().min(1),
   genre: z.string().min(1),
   coverUrl: z.string().max(2000).nullable(),
+  readingTheme: readingThemeSchema.default("classic"),
   aiFreedom: z.enum(["low", "medium", "high"]),
   experienceMode: z.enum(["scripted", "coauthored", "improvised"]),
   defaultSegmentLength: z.enum(["short", "standard", "long"])
