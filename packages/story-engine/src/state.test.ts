@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { NarrativeResult, StorySession, WorldState } from "@instory/shared";
-import { applyStateDelta, createInitialState, createTimelineNode, shouldCreateTimelineNode } from "./state.js";
+import {
+  applyStateDelta,
+  createInitialState,
+  createTimelineNode,
+  deriveIntervention,
+  shouldCreateTimelineNode
+} from "./state.js";
 
 describe("story state engine", () => {
   it("creates a story-agnostic default opening state", () => {
@@ -168,7 +174,89 @@ describe("story state engine", () => {
 
     expect(node.summary).toBe(longNarration.slice(0, 36));
   });
+
+  describe("deriveIntervention", () => {
+    const read = "read_continue" as const;
+
+    it("reads a crisis out of a sharp jump in fear", () => {
+      const cue = deriveIntervention({
+        result: createNarrativeResult(),
+        previous: createState({ emotion: { fear: 2 } }),
+        next: createState({ emotion: { fear: 6 } }),
+        inputType: read
+      });
+
+      expect(cue).toMatchObject({ kind: "crisis" });
+    });
+
+    it("reads a relationship shift in either direction", () => {
+      const warmed = deriveIntervention({
+        result: createNarrativeResult(),
+        previous: createState({ relations: { lu_qinghe: 0 } }),
+        next: createState({ relations: { lu_qinghe: 3 } }),
+        inputType: read
+      });
+      const cooled = deriveIntervention({
+        result: createNarrativeResult(),
+        previous: createState({ relations: { lu_qinghe: 1 } }),
+        next: createState({ relations: { lu_qinghe: -2 } }),
+        inputType: read
+      });
+
+      expect(warmed).toMatchObject({ kind: "relationship_shift" });
+      expect(cooled).toMatchObject({ kind: "relationship_shift" });
+    });
+
+    it("names the clue it found, trimmed to fit one line", () => {
+      const cue = deriveIntervention({
+        result: createNarrativeResult({
+          cluesAdded: ["门外的脚步声在同一块砖上停了三次，像在数什么，又像在确认屋里还有几个人醒着"]
+        }),
+        previous: createState(),
+        next: createState(),
+        inputType: read
+      });
+
+      expect(cue?.kind).toBe("clue_found");
+      expect(cue?.prompt).toContain("门外的脚步声");
+      expect(cue?.prompt).toContain("…");
+    });
+
+    it("treats a change of scene as a turning point", () => {
+      const cue = deriveIntervention({
+        result: createNarrativeResult({ cluesAdded: [] }),
+        previous: createState({ scene: "雨夜醒来" }),
+        next: createState({ scene: "地窖入口" }),
+        inputType: read
+      });
+
+      expect(cue).toMatchObject({ kind: "turning_point" });
+    });
+
+    it("stays silent when the passage changed nothing worth stopping for", () => {
+      expect(
+        deriveIntervention({
+          result: createNarrativeResult({ cluesAdded: [] }),
+          previous: createState(),
+          next: createState(),
+          inputType: read
+        })
+      ).toBeNull();
+    });
+
+    it("stays silent on a passage that answered the reader's own action", () => {
+      expect(
+        deriveIntervention({
+          result: createNarrativeResult({ cluesAdded: ["一枚不属于这里的铜钱"] }),
+          previous: createState({ emotion: { fear: 1 } }),
+          next: createState({ emotion: { fear: 9 } }),
+          inputType: "free_text"
+        })
+      ).toBeNull();
+    });
+  });
 });
+
 
 function createState(overrides: Partial<WorldState> = {}): WorldState {
   return {

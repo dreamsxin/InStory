@@ -14,7 +14,13 @@ import {
   updateStoryCharacterRequestSchema,
   updateStoryRequestSchema
 } from "@instory/shared";
-import { applyStateDelta, createInitialState, createTimelineNode, shouldCreateTimelineNode } from "@instory/story-engine";
+import {
+  applyStateDelta,
+  createInitialState,
+  createTimelineNode,
+  deriveIntervention,
+  shouldCreateTimelineNode
+} from "@instory/story-engine";
 import type {
   AuthUser,
   CharacterProfile,
@@ -200,7 +206,17 @@ function commitTurn(params: {
     dialogues: result.dialogues,
     choices: result.choices,
     stateSnapshot: nextState,
-    intervention: result.intervention ?? null,
+    // The model marks a key node when it sees one; when it stays silent the state
+    // it just changed is read instead, so the feature does not rest on its
+    // diligence.
+    intervention:
+      result.intervention ??
+      deriveIntervention({
+        result,
+        previous: session.state,
+        next: nextState,
+        inputType: params.inputType
+      }),
     createdAt: now
   };
 

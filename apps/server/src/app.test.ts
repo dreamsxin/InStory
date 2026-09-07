@@ -9,6 +9,13 @@ import type {
   StoryDetail,
   StorySession
 } from "@instory/shared";
+import { MockNarrativeProvider } from "@instory/ai-orchestrator";
+import type {
+  GenerateNarrativeInput,
+  LLMProvider,
+  NarrativeGeneration,
+  NarrativeStreamEvent
+} from "@instory/ai-orchestrator";
 import { buildApp } from "./app.js";
 import { StoryCatalog } from "./data/story-catalog.js";
 import { AppDatabase } from "./db/app-database.js";
@@ -1923,5 +1930,85 @@ describe("session history windowing", () => {
     expect(reported.json<{ event: { turnId: string | null } }>().event.turnId).toBe(oldestTurnId);
   });
 });
+
+/**
+ * A model that never fills in `intervention`. Before the server derived one, such
+ * a model left the reader with no key nodes at all and nothing looked broken.
+ */
+class UnmarkedProvider implements LLMProvider {
+  private readonly inner = new MockNarrativeProvider();
+
+  async generateNarrative(input: GenerateNarrativeInput): Promise<NarrativeGeneration> {
+    const generation = await this.inner.generateNarrative(input);
+    return { ...generation, result: { ...generation.result, intervention: null } };
+  }
+
+  async *streamNarrative(input: GenerateNarrativeInput): AsyncGenerator<NarrativeStreamEvent> {
+    for await (const event of this.inner.streamNarrative(input)) {
+      yield event.type === "complete"
+        ? { ...event, result: { ...event.result, intervention: null } }
+        : event;
+    }
+  }
+}
+
+class UnmarkedRuntime extends ModelRuntime {
+  override getProvider(): LLMProvider {
+    return new UnmarkedProvider();
+  }
+}
+
+describe("key nodes when the model marks none", () => {
+  let silentApp: TestApp;
+  let silentDatabase: AppDatabase;
+  let silentDir: string;
+
+  beforeEach(async () => {
+    silentDir = mkdtempSync(join(tmpdir(), "instory-cue-"));
+    silentDatabase = new AppDatabase(join(silentDir, "api.sqlite"));
+    silentApp = await buildApp({
+      sessionStore: new SessionStore(silentDatabase),
+      readerProfileStore: new ReaderProfileStore(silentDatabase),
+      storyCatalog: new StoryCatalog(silentDatabase),
+      userStore: new UserStore(silentDatabase),
+      usageStore: new UsageStore(silentDatabase),
+      moderationStore: new ModerationStore(silentDatabase),
+      modelRuntime: new UnmarkedRuntime(new ModelConfigStore(silentDatabase), {
+        provider: "mock",
+        updatedAt: "2026-05-20T00:00:00.000Z"
+      }),
+      allowLegacyAnonymousUser: true,
+      logger: false
+    });
+  });
+
+  afterEach(async () => {
+    await silentApp?.close();
+    silentDatabase?.close();
+    rmSync(silentDir, { recursive: true, force: true });
+  });
+
+  it("reads the node out of the state the passage changed", async () => {
+    const created = await silentApp.inject({
+      method: "POST",
+      url: "/api/stories/rain-mansion/sessions",
+      payload: { entryMode: "existing_character", characterId: "lu_qinghe" }
+    });
+    const sessionId = created.json<CreateSessionResponse>().session.id;
+
+    const read = await silentApp.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/turns`,
+      payload: { inputType: "read_continue", content: "继续阅读" }
+    });
+
+    expect(read.statusCode).toBe(200);
+    // The mock's delta nudges fear and alertness by one - below the crisis
+    // threshold - and adds a clue, so a found clue is what the state honestly says
+    // happened.
+    expect(read.json<CreateTurnResponse>().turn.intervention).toMatchObject({ kind: "clue_found" });
+  });
+});
+
 
 
