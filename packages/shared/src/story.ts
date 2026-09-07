@@ -131,13 +131,29 @@ export interface UpdateStoryCharacterRequest {
 }
 
 
+export type StoryAnchorType = "required" | "optional" | "forbidden" | "ending";
+
 export interface StoryAnchor {
   id: string;
   storyId: string;
   title: string;
-  type: "required" | "optional" | "forbidden" | "ending";
+  type: StoryAnchorType;
   description: string;
 }
+
+/**
+ * The plot anchors of one story, replaced as a whole. Ids are the server's to
+ * assign: an author reorders and rewrites these freely, and stable ids would only
+ * invite a diffing protocol that buys nothing here.
+ */
+export interface UpdateStoryAnchorsRequest {
+  anchors: Array<{
+    title: string;
+    type: StoryAnchorType;
+    description: string;
+  }>;
+}
+
 
 export interface WorldProfile {
   storyId: string;

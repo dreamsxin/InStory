@@ -693,6 +693,40 @@ a {
 }
 
 
+/* Plot anchors: the author's hard constraints on the AI, edited as a small table. */
+.anchors-editor {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.anchors-editor > div p {
+  margin: 4px 0 0;
+}
+
+.anchors-form {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.anchor-row {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed var(--line);
+}
+
+.anchor-row:last-of-type {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
 /* The in-story re-set of the cast: one card per actor, below the story fields. */
 .cast-editor {
   display: grid;

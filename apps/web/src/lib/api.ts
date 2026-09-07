@@ -7,10 +7,12 @@ import type {
   ReaderProfile,
   ReaderSessionListItem,
   SessionTurn,
+  StoryAnchor,
   StoryDetail,
   StorySession,
   StorySummary,
   TurnQuota,
+  UpdateStoryAnchorsRequest,
   UpdateStoryCharacterRequest,
   UpdateStoryRequest
 } from "@instory/shared";
@@ -355,6 +357,28 @@ export async function updateMyStoryCharacter(
 
   const data = (await response.json()) as { character: CharacterProfile };
   return data.character;
+}
+
+/** Replaces the plot anchors of the author's own story. */
+export async function updateMyStoryAnchors(
+  storyId: string,
+  input: UpdateStoryAnchorsRequest
+): Promise<StoryAnchor[]> {
+  const response = await apiFetch(`/api/me/stories/${storyId}/anchors`, {
+    method: "PUT",
+    body: JSON.stringify(input)
+  });
+
+  if (response.status === 401) {
+    throw new UnauthenticatedError();
+  }
+
+  if (!response.ok) {
+    throw new Error("保存剧情锚点失败");
+  }
+
+  const data = (await response.json()) as { anchors: StoryAnchor[] };
+  return data.anchors;
 }
 
 export async function deleteMyStory(storyId: string): Promise<void> {

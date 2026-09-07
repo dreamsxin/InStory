@@ -11,6 +11,7 @@ import {
   loginRequestSchema,
   registerRequestSchema,
   storySummarySchema,
+  updateStoryAnchorsRequestSchema,
   updateStoryCharacterRequestSchema,
   updateStoryRequestSchema
 } from "@instory/shared";
@@ -829,6 +830,26 @@ export async function buildApp(options: BuildAppOptions) {
     }
 
     return { character };
+  });
+
+  /** The story's plot anchors, replaced as a whole set. */
+  app.put("/api/me/stories/:storyId/anchors", async (request, reply) => {
+    const { storyId } = request.params as { storyId: string };
+    const parsed = updateStoryAnchorsRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
+    }
+
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
+    }
+
+    const anchors = options.storyCatalog.replaceOwnedAnchors(storyId, request.authUser.id, parsed.data);
+    if (!anchors) {
+      return reply.code(404).send({ error: "Story not found" });
+    }
+
+    return { anchors };
   });
 
   app.delete("/api/me/stories/:storyId", async (request, reply) => {

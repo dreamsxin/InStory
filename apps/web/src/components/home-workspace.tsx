@@ -3,7 +3,14 @@
 import { Avatar, Button, Card, Chip, Input, Label, ListBox, Select, TextArea, TextField } from "@heroui/react";
 import { useActionState, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import type { CharacterProfile, ReaderProfile, ReaderSessionListItem, StoryDetail, StorySummary } from "@instory/shared";
+import type {
+  CharacterProfile,
+  ReaderProfile,
+  ReaderSessionListItem,
+  StoryAnchor,
+  StoryDetail,
+  StorySummary
+} from "@instory/shared";
 import { BrandMark } from "@/components/brand-mark";
 import { ReadingThemeSelect } from "@/components/reading-theme-select";
 import { DEFAULT_READING_THEME, parseReadingTheme } from "@/lib/reading-themes";
@@ -17,6 +24,7 @@ import {
   deleteStoryAction,
   updateReaderProfileAction,
   updateStoryAction,
+  updateStoryAnchorsAction,
   updateStoryCharacterAction
 } from "@/app/actions";
 import { IDLE_FORM, kept, submitted, type FormResult } from "@/lib/form-result";
@@ -581,6 +589,16 @@ function StoryEditForm({
           <FormFeedback result={result} />
         </div>
       </form>
+      <section className="anchors-editor">
+        <div>
+          <span className="eyebrow">Anchors</span>
+          <h3>剧情锚点</h3>
+          <p className="muted">
+            这是你对 AI 唯一的硬约束：必须发生的、禁止提前发生的、可以用来收尾的。写下来之后每一段生成都要照着走。
+          </p>
+        </div>
+        <AnchorsEditForm detail={detail} />
+      </section>
       {detail.characters.length ? (
         <section className="cast-editor">
           <div>
@@ -608,6 +626,120 @@ function StoryEditForm({
       </form>
     </div>
   );
+}
+
+/**
+ * The plot anchors of one story: what must happen, what must not, and how it can
+ * end. The rows live in client state rather than as repeated form fields, so
+ * adding and removing one cannot shift a description onto the wrong anchor, and a
+ * failed save leaves the table exactly as the author left it.
+ */
+function AnchorsEditForm({ detail }: { detail: StoryDetail }) {
+  const [result, action, pending] = useActionState(updateStoryAnchorsAction, IDLE_FORM);
+  const [rows, setRows] = useState<AnchorDraft[]>(() =>
+    detail.anchors.map((anchor, index) => ({
+      key: `${anchor.id}_${index}`,
+      title: anchor.title,
+      type: anchor.type,
+      description: anchor.description
+    }))
+  );
+  const [nextKey, setNextKey] = useState(0);
+
+  function update(key: string, patch: Partial<AnchorDraft>) {
+    setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+  }
+
+  return (
+    <form className="profile-form embedded anchors-form" action={action}>
+      <input name="storyId" type="hidden" value={detail.story.id} />
+      <input
+        name="anchors"
+        type="hidden"
+        value={JSON.stringify(
+          rows.map((row) => ({ title: row.title, type: row.type, description: row.description }))
+        )}
+      />
+      {rows.length ? (
+        rows.map((row, index) => (
+          <div className="anchor-row" key={row.key}>
+            <div className="form-grid">
+              <TextField value={row.title} onChange={(title) => update(row.key, { title })}>
+                <Label>锚点 {index + 1}</Label>
+                <Input maxLength={80} placeholder="尸体被发现" />
+              </TextField>
+              <Select
+                selectedKey={row.type}
+                onSelectionChange={(key) =>
+                  update(row.key, { type: parseAnchorType(key) })
+                }
+              >
+                <Label>约束方式</Label>
+                <Select.Trigger>
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    <ListBox.Item id="required" textValue="必须发生">必须发生<ListBox.ItemIndicator /></ListBox.Item>
+                    <ListBox.Item id="optional" textValue="可以发生">可以发生<ListBox.ItemIndicator /></ListBox.Item>
+                    <ListBox.Item id="forbidden" textValue="禁止提前发生">禁止提前发生<ListBox.ItemIndicator /></ListBox.Item>
+                    <ListBox.Item id="ending" textValue="可作为结局">可作为结局<ListBox.ItemIndicator /></ListBox.Item>
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+            </div>
+            <TextField value={row.description} onChange={(description) => update(row.key, { description })}>
+              <Label>说明</Label>
+              <TextArea maxLength={2000} placeholder="写清这件事的条件和后果，AI 会按它推进或回避。" rows={2} />
+            </TextField>
+            <Button
+              className="danger-button"
+              size="sm"
+              type="button"
+              variant="outline"
+              onPress={() => setRows((current) => current.filter((item) => item.key !== row.key))}
+            >
+              删除这条
+            </Button>
+          </div>
+        ))
+      ) : (
+        <p className="muted">还没有锚点。AI 只受世界规则约束，剧情会往哪走不好说。</p>
+      )}
+      <div className="management-actions">
+        <Button
+          size="sm"
+          type="button"
+          variant="outline"
+          onPress={() => {
+            setRows((current) => [
+              ...current,
+              { key: `draft_${nextKey}`, title: "", type: "required", description: "" }
+            ]);
+            setNextKey((key) => key + 1);
+          }}
+        >
+          添加锚点
+        </Button>
+        <Button isDisabled={pending} type="submit">
+          {pending ? "保存中…" : "保存锚点"}
+        </Button>
+        <FormFeedback result={result} />
+      </div>
+    </form>
+  );
+}
+
+interface AnchorDraft {
+  key: string;
+  title: string;
+  type: StoryAnchor["type"];
+  description: string;
+}
+
+function parseAnchorType(key: unknown): StoryAnchor["type"] {
+  return key === "optional" || key === "forbidden" || key === "ending" ? key : "required";
 }
 
 function CharacterEditForm({ character }: { character: CharacterProfile }) {

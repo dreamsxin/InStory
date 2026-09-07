@@ -179,6 +179,19 @@ export const storyAnchorSchema = z.object({
   description: z.string().min(1)
 });
 
+export const updateStoryAnchorsRequestSchema = z.object({
+  anchors: z
+    .array(
+      z.object({
+        title: z.string().min(1).max(80),
+        type: z.enum(["required", "optional", "forbidden", "ending"]),
+        description: z.string().min(1).max(2000)
+      })
+    )
+    .max(20)
+});
+
+
 export const worldProfileSchema = z.object({
   storyId: z.string().min(1),
   premise: z.string().min(1),

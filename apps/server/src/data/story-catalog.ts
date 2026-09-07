@@ -10,6 +10,7 @@ import type {
   StoryAnchor,
   StoryDetail,
   StorySummary,
+  UpdateStoryAnchorsRequest,
   UpdateStoryCharacterRequest,
   UpdateStoryRequest,
   WorldProfile
@@ -81,6 +82,10 @@ export class StoryCatalog {
     input: UpdateStoryCharacterRequest
   ): CharacterProfile | null {
     return this.store.updateOwnedCharacter(storyId, characterId, ownerId, input);
+  }
+
+  replaceOwnedAnchors(storyId: string, ownerId: string, input: UpdateStoryAnchorsRequest): StoryAnchor[] | null {
+    return this.store.replaceOwnedAnchors(storyId, ownerId, input);
   }
 }
 

@@ -4,6 +4,7 @@ import type {
   StoryAnchor,
   StoryDetail,
   StorySummary,
+  UpdateStoryAnchorsRequest,
   UpdateStoryCharacterRequest,
   UpdateStoryRequest,
   WorldProfile
@@ -275,6 +276,47 @@ export class StoryStore {
       .run(JSON.stringify(updated), characterId);
     return updated;
   }
+
+  /**
+   * Replaces the story's plot anchors. Whole-set replacement rather than per-row
+   * edits: an author rewrites and reorders these together, and the ids only ever
+   * served to key the rows.
+   */
+  replaceOwnedAnchors(
+    storyId: string,
+    ownerId: string,
+    input: UpdateStoryAnchorsRequest
+  ): StoryAnchor[] | null {
+    const story = this.findStorySummary(storyId);
+    if (!story || story.ownerId !== ownerId) {
+      return null;
+    }
+
+    const anchors: StoryAnchor[] = input.anchors.map((anchor, index) => ({
+      id: `${storyId}-anchor-${index + 1}`,
+      storyId,
+      title: anchor.title,
+      type: anchor.type,
+      description: anchor.description
+    }));
+
+    this.database.db.exec("BEGIN");
+    try {
+      this.database.db.prepare("DELETE FROM story_anchors WHERE story_id = ?").run(storyId);
+      for (const anchor of anchors) {
+        this.database.db
+          .prepare("INSERT INTO story_anchors (id, story_id, payload) VALUES (?, ?, ?)")
+          .run(anchor.id, storyId, JSON.stringify(anchor));
+      }
+      this.database.db.exec("COMMIT");
+    } catch (error) {
+      this.database.db.exec("ROLLBACK");
+      throw error;
+    }
+
+    return anchors;
+  }
+
 
 
   countStories(): number {

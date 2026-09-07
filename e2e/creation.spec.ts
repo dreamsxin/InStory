@@ -187,6 +187,44 @@ test.describe("creation console", () => {
     await expect(profileEditor.getByLabel("身份背景")).toHaveValue("旧书店店主，认识城里所有夜归人。");
   });
 
+  test("gives a story plot anchors, which it had no way to have before", async ({ page, request }) => {
+    await signIn(page, request, "e2e-anchors@example.com");
+    await page.goto("/");
+    await page.locator(".app-topbar").getByRole("button", { name: "创作" }).click();
+
+    const panel = page.locator(".create-story-panel");
+    await panel.getByLabel("故事 ID").fill(`e2e-salt-road-${Date.now()}`);
+    await panel.getByLabel("标题").fill("盐路");
+    await panel.getByLabel("类型").fill("公路奇谈");
+    await panel.getByLabel("一句话钩子").fill("这条路只在退潮时出现。");
+    await panel.getByLabel("世界前提").fill("一条横穿盐滩的路，走完要三天。");
+    await panel.getByLabel("起点地点").fill("盐滩起点");
+    await panel.getByLabel("起点场景").fill("车停在路口，前面全是白。");
+    await panel.getByRole("button", { name: "创建故事" }).click();
+    await expect(panel.locator(".form-feedback")).toHaveClass(/is-ok/);
+
+    const editor = page.locator(".story-management-list .management-details");
+    await editor.locator("summary").click();
+
+    // A story created from the console always had zero anchors: the field existed,
+    // reached the prompt, and had no way in.
+    const anchors = editor.locator(".anchors-form");
+    await expect(anchors).toContainText("还没有锚点");
+
+    await anchors.getByRole("button", { name: "添加锚点" }).click();
+    await anchors.getByLabel("锚点 1").fill("潮水回来");
+    await anchors.getByLabel("说明").fill("第三天日落前潮水必须回来，路要被淹掉。");
+    await anchors.getByRole("button", { name: "保存锚点" }).click();
+    await expect(anchors.locator(".form-feedback")).toHaveClass(/is-ok/);
+    await expect(anchors.locator(".form-feedback")).toContainText("1 条");
+
+    await page.goto("/");
+    await page.locator(".app-topbar").getByRole("button", { name: "创作" }).click();
+    const reopened = page.locator(".story-management-list .management-details");
+    await reopened.locator("summary").click();
+    await expect(reopened.locator(".anchors-form").getByLabel("锚点 1")).toHaveValue("潮水回来");
+  });
+
   test("reports a saved reader profile in place", async ({ page, request }) => {
     await signIn(page, request, "e2e-create-profile@example.com");
     await page.goto("/");

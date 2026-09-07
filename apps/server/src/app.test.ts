@@ -6,6 +6,7 @@ import type {
   CreateSessionResponse,
   CreateTurnResponse,
   SessionTurn,
+  StoryAnchor,
   StoryDetail,
   StorySession
 } from "@instory/shared";
@@ -837,6 +838,46 @@ describe("server API", () => {
       }
     });
     expect(seedCast.statusCode).toBe(404);
+
+    // Plot anchors used to be seed-only: a story an author created always had none,
+    // so the one hard constraint on the AI was unreachable from the console.
+    const anchored = await app.inject({
+      method: "PUT",
+      url: "/api/me/stories/moon-market/anchors",
+      payload: {
+        anchors: [
+          { title: "名字被换走", type: "required", description: "读者必须发现自己的名字已经被交易过。" },
+          { title: "提前离场", type: "forbidden", description: "天亮之前不能走出市集。" }
+        ]
+      }
+    });
+    expect(anchored.statusCode).toBe(200);
+    expect(anchored.json<{ anchors: StoryAnchor[] }>().anchors).toMatchObject([
+      { id: "moon-market-anchor-1", storyId: "moon-market", type: "required" },
+      { id: "moon-market-anchor-2", storyId: "moon-market", type: "forbidden" }
+    ]);
+
+    const withAnchors = await app.inject({ method: "GET", url: "/api/stories/moon-market" });
+    expect(withAnchors.json<StoryDetail>().anchors).toHaveLength(2);
+
+    // The set is replaced, not appended to.
+    const replaced = await app.inject({
+      method: "PUT",
+      url: "/api/me/stories/moon-market/anchors",
+      payload: {
+        anchors: [{ title: "带着别人的名字离开", type: "ending", description: "读者用另一个名字走出市集。" }]
+      }
+    });
+    expect(replaced.statusCode).toBe(200);
+    expect(replaced.json<{ anchors: StoryAnchor[] }>().anchors).toHaveLength(1);
+
+    const seedAnchors = await app.inject({
+      method: "PUT",
+      url: "/api/me/stories/rain-mansion/anchors",
+      payload: { anchors: [] }
+    });
+    expect(seedAnchors.statusCode).toBe(404);
+
 
 
     const duplicate = await app.inject({

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { parseReadingTheme } from "@/lib/reading-themes";
 import type { FormResult } from "@/lib/form-result";
+import type { UpdateStoryAnchorsRequest } from "@instory/shared";
 import {
   createReaderProfile,
   createStory,
@@ -10,6 +11,7 @@ import {
   deleteReaderProfile,
   deleteSession,
   updateMyStory,
+  updateMyStoryAnchors,
   updateMyStoryCharacter,
   updateReaderProfile
 } from "@/lib/api";
@@ -229,6 +231,40 @@ export async function updateStoryCharacterAction(_state: FormResult, formData: F
 
   revalidatePath("/");
   return { status: "ok", message: `演员「${name}」已保存。` };
+}
+
+/**
+ * Replaces the story's plot anchors. The rows arrive as one JSON field because the
+ * editor keeps them in client state: repeated form fields would have to be
+ * re-aligned by index on every add and remove, and one bad index would silently
+ * attach a description to the wrong anchor.
+ */
+export async function updateStoryAnchorsAction(_state: FormResult, formData: FormData): Promise<FormResult> {
+  const storyId = String(formData.get("storyId") ?? "").trim();
+
+  let anchors: UpdateStoryAnchorsRequest["anchors"];
+  try {
+    anchors = JSON.parse(String(formData.get("anchors") ?? "[]")) as UpdateStoryAnchorsRequest["anchors"];
+  } catch {
+    return { status: "error", message: "锚点内容无法解析，请刷新后重试。" };
+  }
+
+  const filled = anchors.filter((anchor) => anchor.title.trim() && anchor.description.trim());
+  if (filled.length !== anchors.length) {
+    return { status: "error", message: "每条锚点都要有标题和说明。" };
+  }
+
+  try {
+    await updateMyStoryAnchors(storyId, { anchors: filled });
+  } catch (error) {
+    return failed(error, "保存剧情锚点失败，请稍后重试。");
+  }
+
+  revalidatePath("/");
+  return {
+    status: "ok",
+    message: filled.length ? `已保存 ${filled.length} 条剧情锚点。` : "已清空剧情锚点。"
+  };
 }
 
 export async function deleteStoryAction(formData: FormData) {
