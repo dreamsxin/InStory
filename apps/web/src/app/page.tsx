@@ -4,6 +4,7 @@ import { HomeWorkspace } from "@/components/home-workspace";
 import {
   getCurrentUser,
   listMyStoryDetails,
+  listMyStoryInsights,
   listReaderProfiles,
   listReaderSessions,
   listStories
@@ -15,11 +16,12 @@ export default async function HomePage() {
     redirect("/login");
   }
 
-  const [stories, profiles, myStoryDetails, sessions] = await Promise.all([
+  const [stories, profiles, myStoryDetails, sessions, storyInsights] = await Promise.all([
     listStories(),
     listReaderProfiles(),
     listMyStoryDetails(),
-    listReaderSessions()
+    listReaderSessions(),
+    listMyStoryInsights()
   ]);
 
   return (
@@ -29,6 +31,7 @@ export default async function HomePage() {
       profiles={profiles}
       sessions={sessions}
       stories={stories}
+      storyInsights={storyInsights}
     />
   );
 }

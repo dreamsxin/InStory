@@ -8,6 +8,7 @@ import type {
   SessionTurn,
   StoryAnchor,
   StoryDetail,
+  StoryReadingInsight,
   StorySession
 } from "@instory/shared";
 import { MockNarrativeProvider } from "@instory/ai-orchestrator";
@@ -1714,7 +1715,93 @@ describe("authentication", () => {
     expect(signedIn.json<{ user: { role: string } }>().user.role).toBe("admin");
     expect(listedUserStore.findById(reader.id)?.role).toBe("admin");
   });
+
+  it("shows an author how far readers got, and does not count their own trials", async () => {
+    await buildAuthApp(false);
+    const author = await register("insight-author@example.com", "作者");
+    const reader = await register("insight-reader@example.com", "读者");
+    const asAuthor = { authorization: `Bearer ${author}` };
+    const asReader = { authorization: `Bearer ${reader}` };
+
+    const created = await authApp.inject({
+      method: "POST",
+      url: "/api/stories",
+      headers: asAuthor,
+      payload: {
+        id: "tide-archive",
+        title: "潮汐档案",
+        tagline: "退潮后，档案室多了一份卷宗。",
+        genre: "悬疑",
+        coverUrl: null,
+        premise: "一座靠潮水记事的港城。",
+        openingLocationName: "潮汐档案室",
+        openingLocationDescription: "盐味顺着窗缝进来。",
+        worldRules: [],
+        visibility: "public",
+        aiFreedom: "medium",
+        experienceMode: "coauthored",
+        defaultSegmentLength: "standard"
+      }
+    });
+    expect(created.statusCode).toBe(201);
+
+    // The author checking their own opening must not read as an audience.
+    const trial = await authApp.inject({
+      method: "POST",
+      url: "/api/stories/tide-archive/sessions",
+      headers: asAuthor,
+      payload: { entryMode: "existing_character", characterId: null }
+    });
+    expect(trial.statusCode).toBe(200);
+
+    const beforeReaders = await authApp.inject({
+      method: "GET",
+      url: "/api/me/story-insights",
+      headers: asAuthor
+    });
+    expect(beforeReaders.statusCode).toBe(200);
+    expect(beforeReaders.json<{ insights: StoryReadingInsight[] }>().insights).toMatchObject([
+      { storyId: "tide-archive", readers: 0, sessions: 0, turns: 0, lastReadAt: null }
+    ]);
+
+    const readerSession = await authApp.inject({
+      method: "POST",
+      url: "/api/stories/tide-archive/sessions",
+      headers: asReader,
+      payload: { entryMode: "existing_character", characterId: null }
+    });
+    const sessionId = readerSession.json<CreateSessionResponse>().session.id;
+    const advanced = await authApp.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/turns`,
+      headers: asReader,
+      payload: { inputType: "read_continue", content: "继续阅读" }
+    });
+    expect(advanced.statusCode).toBe(200);
+
+    const afterReaders = await authApp.inject({
+      method: "GET",
+      url: "/api/me/story-insights",
+      headers: asAuthor
+    });
+    const insight = afterReaders.json<{ insights: StoryReadingInsight[] }>().insights[0];
+    expect(insight).toMatchObject({ storyId: "tide-archive", readers: 1, sessions: 1 });
+    // Opening turn plus the one the reader spent.
+    expect(insight?.turns).toBe(2);
+    expect(insight?.deepestTurns).toBe(2);
+    expect(insight?.lastReadAt).not.toBeNull();
+
+    // A reader has no business seeing another author's numbers, and has none of
+    // their own.
+    const readerInsights = await authApp.inject({
+      method: "GET",
+      url: "/api/me/story-insights",
+      headers: asReader
+    });
+    expect(readerInsights.json<{ insights: StoryReadingInsight[] }>().insights).toEqual([]);
+  });
 });
+
 
 describe("abuse limits", () => {
   let limitApp: TestApp;

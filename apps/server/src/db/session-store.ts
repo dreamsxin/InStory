@@ -1,4 +1,11 @@
-import type { ReaderRole, SessionTurn, StorySession, TimelineNode, WorldState } from "@instory/shared";
+import type {
+  ReaderRole,
+  SessionTurn,
+  StoryReadingInsight,
+  StorySession,
+  TimelineNode,
+  WorldState
+} from "@instory/shared";
 import type { AppDatabase } from "./app-database.js";
 
 export interface SessionListItem {
@@ -236,6 +243,58 @@ export class SessionStore {
   get databasePath(): string {
     return this.database.databasePath;
   }
+
+  /**
+   * How far the given stories carried readers. Aggregates only, and the author's own
+   * sessions are excluded: counting their own trials as readers would make every
+   * unread story look like it had an audience, which is the one thing this number
+   * exists to answer honestly. Stories with no reader at all are returned as zeros
+   * rather than omitted, so the caller does not have to tell "no readers" apart
+   * from "no row".
+   */
+  summarizeStories(storyIds: string[], excludeUserId: string): StoryReadingInsight[] {
+    const empty = (storyId: string): StoryReadingInsight => ({
+      storyId,
+      readers: 0,
+      sessions: 0,
+      turns: 0,
+      deepestTurns: 0,
+      lastReadAt: null
+    });
+
+    if (storyIds.length === 0) {
+      return [];
+    }
+
+    const placeholders = storyIds.map(() => "?").join(", ");
+    const rows = this.database.db
+      .prepare(
+        `SELECT story_id AS storyId,
+                COUNT(DISTINCT user_id) AS readers,
+                COUNT(*) AS sessions,
+                COALESCE(SUM(turn_count), 0) AS turns,
+                COALESCE(MAX(turn_count), 0) AS deepestTurns,
+                MAX(updated_at) AS lastReadAt
+         FROM reader_sessions
+         WHERE story_id IN (${placeholders}) AND user_id <> ?
+         GROUP BY story_id`
+      )
+      .all(...storyIds, excludeUserId) as Array<{
+      storyId: string;
+      readers: number;
+      sessions: number;
+      turns: number;
+      deepestTurns: number;
+      lastReadAt: string | null;
+    }>;
+
+    const byStoryId = new Map(rows.map((row) => [row.storyId, row]));
+    return storyIds.map((storyId) => {
+      const row = byStoryId.get(storyId);
+      return row ? { ...row, lastReadAt: row.lastReadAt ?? null } : empty(storyId);
+    });
+  }
+
 
   /** Total turns in a session, read from the denormalised counter. */
   countTurns(sessionId: string): number {

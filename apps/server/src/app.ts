@@ -749,6 +749,18 @@ export async function buildApp(options: BuildAppOptions) {
     return { stories: options.storyCatalog.listStoriesByOwner(request.authUser.id) };
   });
 
+  /** How far the caller's own stories have carried other readers. Aggregates only. */
+  app.get("/api/me/story-insights", async (request, reply) => {
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
+    }
+
+    const storyIds = options.storyCatalog.listStoriesByOwner(request.authUser.id).map((story) => story.id);
+
+    return { insights: options.sessionStore.summarizeStories(storyIds, request.authUser.id) };
+  });
+
+
   app.get("/api/me/sessions", async (request, reply) => {
     if (!request.authUser) {
       return reply.code(401).send({ error: "请先登录" });

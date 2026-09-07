@@ -225,6 +225,59 @@ test.describe("creation console", () => {
     await expect(reopened.locator(".anchors-form").getByLabel("锚点 1")).toHaveValue("潮水回来");
   });
 
+  test("tells the author whether anyone has read the story", async ({ page, request }) => {
+    await signIn(page, request, "e2e-insight-author@example.com");
+    await page.goto("/");
+    await page.locator(".app-topbar").getByRole("button", { name: "创作" }).click();
+
+    const storyId = `e2e-lantern-ferry-${Date.now()}`;
+    const panel = page.locator(".create-story-panel");
+    await panel.getByLabel("故事 ID").fill(storyId);
+    await panel.getByLabel("标题").fill("提灯渡");
+    await panel.getByLabel("类型").fill("民俗奇谈");
+    await panel.getByLabel("一句话钩子").fill("船只在有人提灯时才靠岸。");
+    await panel.getByLabel("世界前提").fill("一条只在夜里摆渡的河。");
+    await panel.getByLabel("起点地点").fill("渡口");
+    await panel.getByLabel("起点场景").fill("你提着灯站在水边，对岸什么也看不见。");
+    await panel.getByRole("button", { name: "创建故事" }).click();
+    await expect(panel.locator(".form-feedback")).toHaveClass(/is-ok/);
+
+    // A brand new story has to say so, not show four zeros.
+    const row = page.locator(".story-management-list .management-details");
+    await expect(row.locator(".story-insight")).toHaveText("还没有人读过");
+
+    // Publish it, so the second account is reading something it is meant to see.
+    await row.locator("summary").click();
+    await row.getByLabel("可见性").click();
+    await page.getByRole("option", { name: "公开到故事探索" }).click();
+    await row.getByRole("button", { name: "保存故事" }).click();
+    await expect(row.locator(".management-edit .form-feedback").first()).toHaveClass(/is-ok/);
+
+    // Someone else reads one passage of it.
+    const registered = await request.post(`${API_BASE}/api/auth/register`, {
+      data: { email: `e2e-insight-reader-${Date.now()}@example.com`, displayName: "E2E 读者", password: PASSWORD }
+    });
+    const readerToken = (await registered.json()).token as string;
+    const asReader = { authorization: `Bearer ${readerToken}` };
+    const session = await request.post(`${API_BASE}/api/stories/${storyId}/sessions`, {
+      headers: asReader,
+      data: { entryMode: "existing_character", characterId: null }
+    });
+    const sessionId = (await session.json()).session.id as string;
+    const advanced = await request.post(`${API_BASE}/api/sessions/${sessionId}/turns`, {
+      headers: asReader,
+      data: { inputType: "read_continue", content: "继续阅读" }
+    });
+    expect(advanced.ok()).toBe(true);
+
+    // The author had no way to know any of this until now.
+    await page.goto("/");
+    await page.locator(".app-topbar").getByRole("button", { name: "创作" }).click();
+    const insight = page.locator(".story-management-list .management-details .story-insight");
+    await expect(insight).toContainText("1 位读者");
+    await expect(insight).toContainText("最深 2 回合");
+  });
+
   test("reports a saved reader profile in place", async ({ page, request }) => {
     await signIn(page, request, "e2e-create-profile@example.com");
     await page.goto("/");

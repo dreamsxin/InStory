@@ -9,6 +9,7 @@ import type {
   ReaderSessionListItem,
   StoryAnchor,
   StoryDetail,
+  StoryReadingInsight,
   StorySummary
 } from "@instory/shared";
 import { BrandMark } from "@/components/brand-mark";
@@ -45,7 +46,8 @@ export function HomeWorkspace({
   myStoryDetails,
   profiles,
   sessions,
-  stories
+  stories,
+  storyInsights
 }: {
   /** Rendered on the server and placed in the top bar, so it stays put while the
    *  content scrolls instead of adding height above the shell. */
@@ -54,6 +56,7 @@ export function HomeWorkspace({
   profiles: ReaderProfile[];
   sessions: ReaderSessionListItem[];
   stories: StorySummary[];
+  storyInsights: StoryReadingInsight[];
 }) {
   const [activeTab, setActiveTab] = useState<HomeTab>("stories");
 
@@ -112,7 +115,12 @@ export function HomeWorkspace({
         {activeTab === "stories" ? <StoriesView profiles={profiles} sessions={sessions} stories={stories} /> : null}
         {activeTab === "continue" ? <ContinueView sessions={sessions} /> : null}
         {activeTab === "create" ? (
-          <CreateView myStoryDetails={myStoryDetails} profiles={profiles} sessions={sessions} />
+          <CreateView
+            myStoryDetails={myStoryDetails}
+            profiles={profiles}
+            sessions={sessions}
+            storyInsights={storyInsights}
+          />
         ) : null}
       </section>
 
@@ -241,11 +249,13 @@ function ContinueStoryCard({ session }: { session: ReaderSessionListItem }) {
 function CreateView({
   myStoryDetails,
   profiles,
-  sessions
+  sessions,
+  storyInsights
 }: {
   myStoryDetails: StoryDetail[];
   profiles: ReaderProfile[];
   sessions: ReaderSessionListItem[];
+  storyInsights: StoryReadingInsight[];
 }) {
   const [createTab, setCreateTab] = useState<CreateTab>("stories");
 
@@ -277,7 +287,12 @@ function CreateView({
       {createTab === "profiles" ? (
         <CreatorProfilesPanel profiles={profiles} />
       ) : (
-        <CreatorStoriesPanel myStoryDetails={myStoryDetails} profiles={profiles} sessions={sessions} />
+        <CreatorStoriesPanel
+          myStoryDetails={myStoryDetails}
+          profiles={profiles}
+          sessions={sessions}
+          storyInsights={storyInsights}
+        />
       )}
     </div>
   );
@@ -323,16 +338,46 @@ function CreatorProfilesPanel({ profiles }: { profiles: ReaderProfile[] }) {
   );
 }
 
+/**
+ * What the story has done with readers, on the row the author already looks at.
+ * A story nobody has opened says so plainly rather than showing four zeros: the
+ * author's own trials are excluded upstream, so zero really means zero.
+ */
+function ReadingInsightLine({ insight }: { insight?: StoryReadingInsight }) {
+  if (!insight || insight.sessions === 0) {
+    return <span className="story-insight muted">还没有人读过</span>;
+  }
+
+  return (
+    <span className="story-insight">
+      {insight.readers} 位读者 · {insight.sessions} 段进度 · 共 {insight.turns} 回合 · 最深{" "}
+      {insight.deepestTurns} 回合
+      {insight.lastReadAt ? ` · 最近 ${formatReadDate(insight.lastReadAt)}` : ""}
+    </span>
+  );
+}
+
+/** Date only: the hour a stranger read at is more precision than an author needs. */
+function formatReadDate(value: string): string {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? value
+    : `${parsed.getMonth() + 1} 月 ${parsed.getDate()} 日`;
+}
+
 function CreatorStoriesPanel({
   myStoryDetails,
   profiles,
-  sessions
+  sessions,
+  storyInsights
 }: {
   myStoryDetails: StoryDetail[];
   profiles: ReaderProfile[];
   sessions: ReaderSessionListItem[];
+  storyInsights: StoryReadingInsight[];
 }) {
   const sessionsByStoryId = new Map(sessions.map((session) => [session.storyId, session]));
+  const insightsByStoryId = new Map(storyInsights.map((insight) => [insight.storyId, insight]));
 
   return (
     <div className="creator-layer">
@@ -352,6 +397,7 @@ function CreatorStoriesPanel({
                     <div>
                       <strong>{detail.story.title}</strong>
                       <p>{detail.story.tagline}</p>
+                      <ReadingInsightLine insight={insightsByStoryId.get(detail.story.id)} />
                     </div>
                     <div className="story-management-chips">
                       <Chip size="sm" variant="soft">{detail.story.genre}</Chip>

@@ -316,6 +316,26 @@ export interface ReaderSessionListItem {
   updatedAt: string;
 }
 
+/**
+ * What one of the author's stories has actually done with readers. Aggregates
+ * only: an author sees how far their story carried people, never who those people
+ * are or what they wrote. The author's own trial sessions are left out, so a story
+ * nobody else has opened honestly reads as zero.
+ */
+export interface StoryReadingInsight {
+  storyId: string;
+  /** Distinct accounts other than the author. */
+  readers: number;
+  /** Reading progress cards, which can exceed the reader count. */
+  sessions: number;
+  /** Turns spent across all of those sessions. */
+  turns: number;
+  /** The furthest any single session got, in turns. */
+  deepestTurns: number;
+  /** When the story was last read, or null if it never was. */
+  lastReadAt: string | null;
+}
+
 export interface CreateSessionRequest {
   entryMode: EntryMode;
   characterId?: string | null;

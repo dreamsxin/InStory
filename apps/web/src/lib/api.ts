@@ -9,6 +9,7 @@ import type {
   SessionTurn,
   StoryAnchor,
   StoryDetail,
+  StoryReadingInsight,
   StorySession,
   StorySummary,
   TurnQuota,
@@ -184,6 +185,23 @@ export async function listMyStoryDetails(): Promise<StoryDetail[]> {
   const stories = await listMyStories();
   return Promise.all(stories.map((story) => getStoryDetail(story.id)));
 }
+
+/** Reader counts for the author's own stories. Empty when they have no stories. */
+export async function listMyStoryInsights(): Promise<StoryReadingInsight[]> {
+  const response = await apiFetch("/api/me/story-insights");
+
+  if (response.status === 401) {
+    throw new UnauthenticatedError();
+  }
+
+  if (!response.ok) {
+    throw new Error("读取故事阅读情况失败");
+  }
+
+  const data = (await response.json()) as { insights: StoryReadingInsight[] };
+  return data.insights;
+}
+
 
 export async function createSession(storyId: string, readerProfileId?: string | null): Promise<CreateSessionResponse> {
   const response = await apiFetch(`/api/stories/${storyId}/sessions`, {
