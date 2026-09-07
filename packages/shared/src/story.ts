@@ -212,12 +212,39 @@ export interface StateDelta {
   flags?: Record<string, boolean>;
 }
 
+/**
+ * Why a passage stopped at a place where the reader may want to step in. Six
+ * situations, from §5.3 of the interaction design: an actor asks the reader
+ * something, a clue surfaces, a crisis closes in, the route forks, a relationship
+ * shifts, or the chapter turns.
+ */
+export type InterventionKind =
+  | "npc_question"
+  | "clue_found"
+  | "crisis"
+  | "fork"
+  | "relationship_shift"
+  | "turning_point";
+
+/**
+ * A low-interruption invitation attached to a passage. Absent on passages that
+ * are just story: the reader is never made to answer, and continuing reading is
+ * always a valid response.
+ */
+export interface InterventionCue {
+  kind: InterventionKind;
+  /** One line, in the story's voice, naming what is on offer. */
+  prompt: string;
+}
+
 export interface NarrativeResult {
   narration: string;
   dialogues: StoryDialogue[];
   choices: StoryChoice[];
   stateDelta: StateDelta;
   memoryEvents: string[];
+  /** Null on an ordinary passage; set only at a key node. */
+  intervention: InterventionCue | null;
 }
 
 export interface SessionTurn {
@@ -229,8 +256,11 @@ export interface SessionTurn {
   dialogues: StoryDialogue[];
   choices: StoryChoice[];
   stateSnapshot: WorldState;
+  /** Null on an ordinary passage; set only at a key node. */
+  intervention: InterventionCue | null;
   createdAt: string;
 }
+
 
 export interface TimelineNode {
   id: string;

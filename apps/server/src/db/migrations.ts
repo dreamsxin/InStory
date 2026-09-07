@@ -281,6 +281,16 @@ export const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_moderation_events_user
       ON moderation_events(user_id, created_at DESC);
     `
+  },
+  {
+    id: 8,
+    name: "add_turn_intervention",
+    up: `
+      -- A passage may end at a key node (§5.3): an actor asks something, a clue
+      -- surfaces, a crisis closes in. Nullable because most passages are just
+      -- story, and every turn written before this column was just story too.
+      ALTER TABLE session_turns ADD COLUMN intervention TEXT;
+    `
   }
 ];
 

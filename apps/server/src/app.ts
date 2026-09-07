@@ -200,6 +200,7 @@ function commitTurn(params: {
     dialogues: result.dialogues,
     choices: result.choices,
     stateSnapshot: nextState,
+    intervention: result.intervention ?? null,
     createdAt: now
   };
 
@@ -296,6 +297,9 @@ function buildOpeningScene(params: {
       }
     ],
     stateSnapshot: state,
+    // The opening is just the story starting; the invitation to step in belongs to
+    // the passages that follow, not to the first screen.
+    intervention: null,
     createdAt: now
   };
 

@@ -176,6 +176,7 @@ function createVerificationSession(): StorySession {
           }
         ],
         stateSnapshot: state,
+        intervention: null,
         createdAt: "2026-05-20T00:00:00.000Z"
       }
     ],

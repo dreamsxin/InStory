@@ -262,7 +262,7 @@ export class SessionStore {
     const rows = this.database.db
       .prepare(
         `SELECT id, input_type AS inputType, input, narration, dialogues, choices,
-                state_snapshot AS stateSnapshot, created_at AS createdAt
+                state_snapshot AS stateSnapshot, intervention, created_at AS createdAt
          FROM session_turns
          WHERE session_id = ? AND seq < ?
          ORDER BY seq DESC
@@ -277,6 +277,7 @@ export class SessionStore {
       dialogues: string;
       choices: string;
       stateSnapshot: string;
+      intervention: string | null;
       createdAt: string;
     }>;
 
@@ -311,14 +312,14 @@ export class SessionStore {
         ? this.database.db
             .prepare(
               `SELECT id, input_type AS inputType, input, narration, dialogues, choices,
-                      state_snapshot AS stateSnapshot, created_at AS createdAt
+                      state_snapshot AS stateSnapshot, intervention, created_at AS createdAt
                FROM session_turns WHERE session_id = ? AND id = ?`
             )
             .get(sessionId, turnId)
         : this.database.db
             .prepare(
               `SELECT id, input_type AS inputType, input, narration, dialogues, choices,
-                      state_snapshot AS stateSnapshot, created_at AS createdAt
+                      state_snapshot AS stateSnapshot, intervention, created_at AS createdAt
                FROM session_turns WHERE session_id = ? ORDER BY seq DESC LIMIT 1`
             )
             .get(sessionId)
@@ -331,6 +332,7 @@ export class SessionStore {
           dialogues: string;
           choices: string;
           stateSnapshot: string;
+          intervention: string | null;
           createdAt: string;
         }
       | undefined;
@@ -349,8 +351,8 @@ export class SessionStore {
     this.database.db
       .prepare(
         `INSERT INTO session_turns
-           (session_id, id, seq, input_type, input, narration, dialogues, choices, state_snapshot, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           (session_id, id, seq, input_type, input, narration, dialogues, choices, state_snapshot, intervention, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(session_id, id) DO UPDATE SET
            seq = excluded.seq,
            input_type = excluded.input_type,
@@ -359,6 +361,7 @@ export class SessionStore {
            dialogues = excluded.dialogues,
            choices = excluded.choices,
            state_snapshot = excluded.state_snapshot,
+           intervention = excluded.intervention,
            created_at = excluded.created_at`
       )
       .run(
@@ -371,6 +374,9 @@ export class SessionStore {
         JSON.stringify(turn.dialogues),
         JSON.stringify(turn.choices),
         JSON.stringify(turn.stateSnapshot),
+        // NULL rather than "null": an ordinary passage has no cue, and the column
+        // should say so without a reader having to parse it.
+        turn.intervention ? JSON.stringify(turn.intervention) : null,
         turn.createdAt
       );
   }
@@ -409,14 +415,14 @@ export class SessionStore {
         ? this.database.db
             .prepare(
               `SELECT id, input_type AS inputType, input, narration, dialogues, choices,
-                      state_snapshot AS stateSnapshot, created_at AS createdAt
+                      state_snapshot AS stateSnapshot, intervention, created_at AS createdAt
                FROM session_turns WHERE session_id = ? ORDER BY seq`
             )
             .all(sessionId)
         : this.database.db
             .prepare(
               `SELECT id, input_type AS inputType, input, narration, dialogues, choices,
-                      state_snapshot AS stateSnapshot, created_at AS createdAt
+                      state_snapshot AS stateSnapshot, intervention, created_at AS createdAt
                FROM session_turns WHERE session_id = ? ORDER BY seq DESC LIMIT ?`
             )
             .all(sessionId, Math.max(0, recent))
@@ -429,6 +435,7 @@ export class SessionStore {
       dialogues: string;
       choices: string;
       stateSnapshot: string;
+      intervention: string | null;
       createdAt: string;
     }>;
 
@@ -445,6 +452,7 @@ export class SessionStore {
       dialogues: string;
       choices: string;
       stateSnapshot: string;
+      intervention: string | null;
       createdAt: string;
     }
   ): SessionTurn {
@@ -457,6 +465,7 @@ export class SessionStore {
       dialogues: JSON.parse(row.dialogues) as SessionTurn["dialogues"],
       choices: JSON.parse(row.choices) as SessionTurn["choices"],
       stateSnapshot: JSON.parse(row.stateSnapshot) as WorldState,
+      intervention: row.intervention ? (JSON.parse(row.intervention) as SessionTurn["intervention"]) : null,
       createdAt: row.createdAt
     };
   }

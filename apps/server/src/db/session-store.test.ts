@@ -313,6 +313,7 @@ function createTurn(id: string, createdAt: string): SessionTurn {
     dialogues: [{ speaker: "陆清河", text: "别出声。" }],
     choices: [{ id: "c1", text: "继续观察", risk: "low" }],
     stateSnapshot: createState(),
+    intervention: null,
     createdAt
   };
 }

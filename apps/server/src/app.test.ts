@@ -923,6 +923,35 @@ describe("server API", () => {
     expect(response.statusCode).toBe(400);
   });
 
+  it("marks a read passage as a key node and keeps that mark on reload", async () => {
+    const created = await createSession();
+
+    // The opening is just the story starting, so it carries no invitation.
+    expect(created.openingTurn.intervention).toBeNull();
+
+    const read = await app.inject({
+      method: "POST",
+      url: `/api/sessions/${created.session.id}/turns`,
+      payload: { inputType: "read_continue", content: "继续阅读" }
+    });
+    expect(read.statusCode).toBe(200);
+    expect(read.json<CreateTurnResponse>().turn.intervention).toMatchObject({ kind: "clue_found" });
+
+    // A turn that answered the reader's own action does not put the invitation
+    // straight back in front of them.
+    const acted = await app.inject({
+      method: "POST",
+      url: `/api/sessions/${created.session.id}/turns`,
+      payload: { inputType: "free_text", content: "我压低声音追问真相" }
+    });
+    expect(acted.statusCode).toBe(200);
+    expect(acted.json<CreateTurnResponse>().turn.intervention).toBeNull();
+
+    const reloaded = await app.inject({ method: "GET", url: `/api/sessions/${created.session.id}` });
+    const turns = reloaded.json<{ session: StorySession }>().session.turns;
+    expect(turns.map((turn) => turn.intervention?.kind ?? null)).toEqual([null, "clue_found", null]);
+  });
+
   it("verifies the active admin model provider", async () => {
     const response = await app.inject({
       method: "POST",

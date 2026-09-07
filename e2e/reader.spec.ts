@@ -96,6 +96,32 @@ test.describe("reader", () => {
     await expect(quota).toBeVisible();
   });
 
+  test("marks a key node in the transcript and opens 入戏 from it", async ({ page, request }) => {
+    const { token } = await signInViaApi(page, request, "e2e-cue@example.com", "E2E 节点");
+    const sessionId = await startSession(request, token);
+
+    await page.goto(`/story/${sessionId}`);
+    // The opening is just the story starting: no invitation yet.
+    await expect(page.locator(".intervention-cue")).toHaveCount(0);
+
+    await page.getByRole("button", { name: /继续阅读/ }).click();
+    await expect(page.locator(".turn-streaming")).toBeHidden();
+
+    // Every passage used to look identical, so the reader had no way to tell where
+    // stepping in would actually change something.
+    const cue = page.locator(".intervention-cue");
+    await expect(cue).toHaveCount(1);
+    await expect(cue).toHaveAttribute("data-kind", "clue_found");
+    await expect(cue).toContainText("你发现了线索");
+
+    await cue.getByRole("button", { name: "入戏参与" }).click();
+    await expect(page.locator(".action-panel")).toBeVisible();
+
+    // The mark belongs to the passage, so it is still there after a reload.
+    await page.reload();
+    await expect(page.locator(".intervention-cue")).toHaveCount(1);
+  });
+
   test("lays the action panel out as one titled sheet and submits free text", async ({
     page,
     request

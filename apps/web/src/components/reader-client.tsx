@@ -1,7 +1,15 @@
 "use client";
 
 import { Button, Card, Chip } from "@heroui/react";
-import type { ReadingTheme, RiskLevel, SessionTurn, StorySession, TurnQuota, WorldState } from "@instory/shared";
+import type {
+  InterventionCue,
+  ReadingTheme,
+  RiskLevel,
+  SessionTurn,
+  StorySession,
+  TurnQuota,
+  WorldState
+} from "@instory/shared";
 import {
   createTurn,
   getOlderTurns,
@@ -234,7 +242,12 @@ export function ReaderClient({
               return (
                 <Fragment key={turn.id}>
                   {scene ? <SceneDivider label={scene} /> : null}
-                  <TurnView turn={turn} />
+                  <TurnView
+                    turn={turn}
+                    onStepIn={
+                      index === session.turns.length - 1 ? () => setActivePanel("action") : undefined
+                    }
+                  />
                 </Fragment>
               );
             })}
@@ -364,7 +377,7 @@ function panelTitle(panel: Exclude<ReaderPanel, null>) {
   return panel === "status" ? "当前状态" : panel === "memory" ? "存档记忆" : "入戏行动";
 }
 
-function TurnView({ turn }: { turn: SessionTurn }) {
+function TurnView({ turn, onStepIn }: { turn: SessionTurn; onStepIn?: () => void }) {
   const paragraphs = turn.narration
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.trim())
@@ -382,9 +395,49 @@ function TurnView({ turn }: { turn: SessionTurn }) {
           <strong>{dialogue.speaker}</strong>：{dialogue.text}
         </p>
       ))}
+      {turn.intervention ? <InterventionCueView cue={turn.intervention} onStepIn={onStepIn} /> : null}
     </article>
   );
 }
+
+/**
+ * A key node (§5.3), marked in the transcript where it happened. It never blocks:
+ * reading on is always allowed, and the bar below the transcript keeps 继续阅读, so
+ * this only adds the one thing that was missing - the invitation, and why it is
+ * being offered here. Past cues keep the label and lose the button, because
+ * stepping into a scene that has already moved on is not on offer.
+ */
+function InterventionCueView({ cue, onStepIn }: { cue: InterventionCue; onStepIn?: () => void }) {
+  return (
+    <aside className="intervention-cue" data-kind={cue.kind}>
+      <span className="intervention-cue-kind">{interventionKindLabel(cue.kind)}</span>
+      <p className="intervention-cue-prompt">{cue.prompt}</p>
+      {onStepIn ? (
+        <Button className="intervention-cue-action" size="sm" variant="outline" onPress={onStepIn}>
+          入戏参与
+        </Button>
+      ) : null}
+    </aside>
+  );
+}
+
+function interventionKindLabel(kind: InterventionCue["kind"]): string {
+  switch (kind) {
+    case "npc_question":
+      return "有人在等你回答";
+    case "clue_found":
+      return "你发现了线索";
+    case "crisis":
+      return "危机逼近";
+    case "fork":
+      return "路线出现分歧";
+    case "relationship_shift":
+      return "关系发生变化";
+    default:
+      return "剧情转折";
+  }
+}
+
 
 /**
  * The place a passage happens in, but only when it is news. Printing the location

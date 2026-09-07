@@ -105,7 +105,16 @@ export class MockNarrativeProvider implements LLMProvider {
         isReadSegment
           ? `${stage}，故事按上一幕线索自然推进，并获得线索：${clue}。`
           : `${stage}，玩家选择「${input.userInput}」，并获得线索：${clue}。`
-      ]
+      ],
+      // A read passage ends where the clue surfaces, which is one of the §5.3 key
+      // nodes. A passage that answered the reader's own action does not: they just
+      // acted, so putting the invitation back in front of them is noise.
+      intervention: isReadSegment
+        ? {
+            kind: "clue_found",
+            prompt: `${hostName}的视线在那件被磨白的东西上停了一下。你可以继续读下去，也可以现在就问。`
+          }
+        : null
     };
   }
 }

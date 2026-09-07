@@ -73,6 +73,11 @@ export const createTurnRequestSchema = z.object({
   choiceId: z.string().nullish()
 });
 
+export const interventionCueSchema = z.object({
+  kind: z.enum(["npc_question", "clue_found", "crisis", "fork", "relationship_shift", "turning_point"]),
+  prompt: z.string().min(1).max(400)
+});
+
 export const narrativeResultSchema = z.object({
   narration: z.string().min(1),
   dialogues: z.array(
@@ -100,7 +105,10 @@ export const narrativeResultSchema = z.object({
     cluesAdded: z.array(z.string()).optional(),
     flags: z.record(z.string(), z.boolean()).optional()
   }),
-  memoryEvents: z.array(z.string())
+  memoryEvents: z.array(z.string()),
+  // A malformed cue must not cost the reader the whole passage, so anything the
+  // model gets wrong here degrades to "no cue" instead of failing validation.
+  intervention: interventionCueSchema.nullable().catch(null).default(null)
 });
 
 export const storySummarySchema = z.object({
