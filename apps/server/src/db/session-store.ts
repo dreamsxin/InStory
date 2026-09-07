@@ -240,9 +240,18 @@ export class SessionStore {
     }));
   }
 
+  /** Whether the reader already has a session in the story. */
+  hasSessionForStory(userId: string, storyId: string): boolean {
+    const row = this.database.db
+      .prepare("SELECT 1 AS present FROM reader_sessions WHERE user_id = ? AND story_id = ? LIMIT 1")
+      .get(userId, storyId) as { present: number } | undefined;
+    return row !== undefined;
+  }
+
   get databasePath(): string {
     return this.database.databasePath;
   }
+
 
   /**
    * How far the given stories carried readers. Aggregates only, and the author's own

@@ -1800,7 +1800,113 @@ describe("authentication", () => {
     });
     expect(readerInsights.json<{ insights: StoryReadingInsight[] }>().insights).toEqual([]);
   });
+
+  it("keeps a private story private, and keeps a reader who is already inside", async () => {
+    await buildAuthApp(false);
+    const author = await register("private-author@example.com", "作者");
+    const reader = await register("private-reader@example.com", "读者");
+    const asAuthor = { authorization: `Bearer ${author}` };
+    const asReader = { authorization: `Bearer ${reader}` };
+    const storyPayload = {
+      title: "闭门记",
+      tagline: "门后的事不外传。",
+      genre: "悬疑",
+      coverUrl: null,
+      premise: "一座不对外开放的宅子。",
+      openingLocationName: "前厅",
+      openingLocationDescription: "灯只点了一盏。",
+      worldRules: [],
+      aiFreedom: "medium" as const,
+      experienceMode: "coauthored" as const,
+      defaultSegmentLength: "standard" as const
+    };
+
+    const created = await authApp.inject({
+      method: "POST",
+      url: "/api/stories",
+      headers: asAuthor,
+      payload: { id: "closed-door", visibility: "private", ...storyPayload }
+    });
+    expect(created.statusCode).toBe(201);
+
+    // Knowing the id used to be enough to read the whole world, cast and anchors,
+    // and to start reading it.
+    const peeked = await authApp.inject({
+      method: "GET",
+      url: "/api/stories/closed-door",
+      headers: asReader
+    });
+    expect(peeked.statusCode).toBe(404);
+
+    const started = await authApp.inject({
+      method: "POST",
+      url: "/api/stories/closed-door/sessions",
+      headers: asReader,
+      payload: { entryMode: "existing_character", characterId: null }
+    });
+    expect(started.statusCode).toBe(404);
+
+    // 404, not 403: a private story should not confirm that the id exists.
+    expect(peeked.json<{ error: string }>().error).toBe("Story not found");
+
+    // The author still reads their own.
+    const ownRead = await authApp.inject({
+      method: "GET",
+      url: "/api/stories/closed-door",
+      headers: asAuthor
+    });
+    expect(ownRead.statusCode).toBe(200);
+
+    // A reader who started while it was public keeps reading after it is hidden:
+    // they are already inside, and the reader page needs the story's title and theme.
+    const openStory = await authApp.inject({
+      method: "POST",
+      url: "/api/stories",
+      headers: asAuthor,
+      payload: { id: "open-door", visibility: "public", ...storyPayload }
+    });
+    expect(openStory.statusCode).toBe(201);
+
+    const session = await authApp.inject({
+      method: "POST",
+      url: "/api/stories/open-door/sessions",
+      headers: asReader,
+      payload: { entryMode: "existing_character", characterId: null }
+    });
+    expect(session.statusCode).toBe(200);
+
+    const hidden = await authApp.inject({
+      method: "PUT",
+      url: "/api/me/stories/open-door",
+      headers: asAuthor,
+      payload: { visibility: "private", ...storyPayload }
+    });
+    expect(hidden.statusCode).toBe(200);
+
+    const stillReadable = await authApp.inject({
+      method: "GET",
+      url: "/api/stories/open-door",
+      headers: asReader
+    });
+    expect(stillReadable.statusCode).toBe(200);
+
+    // But it is off the shelf, and nobody new can start it.
+    const publicList = await authApp.inject({ method: "GET", url: "/api/stories" });
+    expect(publicList.json<{ stories: Array<{ id: string }> }>().stories).not.toContainEqual(
+      expect.objectContaining({ id: "open-door" })
+    );
+
+    const latecomer = await register("private-latecomer@example.com", "后来者");
+    const blocked = await authApp.inject({
+      method: "POST",
+      url: "/api/stories/open-door/sessions",
+      headers: { authorization: `Bearer ${latecomer}` },
+      payload: { entryMode: "existing_character", characterId: null }
+    });
+    expect(blocked.statusCode).toBe(404);
+  });
 });
+
 
 
 describe("abuse limits", () => {

@@ -34,6 +34,7 @@ import type {
   SessionTurn,
   StoryDetail,
   StorySession,
+  StorySummary,
   TimelineNode,
   TurnInputType,
   TurnQuota,
@@ -250,6 +251,25 @@ function commitTurn(params: {
     timelineNode,
     quota: params.quota
   };
+}
+
+/**
+ * Who may read a story's world, cast and anchors: anyone for a public story, the
+ * author for their own, and a reader who already has a session in it — hiding a
+ * story afterwards should not break the reading of someone already inside it.
+ */
+function canReadStory(
+  story: StorySummary,
+  userId: string | undefined,
+  sessionStore: SessionStore
+): boolean {
+  if (story.visibility === "public") {
+    return true;
+  }
+  if (!userId) {
+    return false;
+  }
+  return story.ownerId === userId || sessionStore.hasSessionForStory(userId, story.id);
 }
 
 /** Turn quota is counted from recorded successful generations, not from turn ids. */
@@ -910,12 +930,15 @@ export async function buildApp(options: BuildAppOptions) {
     const { storyId } = request.params as { storyId: string };
     const storyDetail = options.storyCatalog.findStory(storyId);
 
-    if (!storyDetail) {
+    // 404 rather than 403 when it is not the caller's to read: a private story
+    // should not confirm that the id exists.
+    if (!storyDetail || !canReadStory(storyDetail.story, request.authUser?.id, options.sessionStore)) {
       return reply.code(404).send({ error: "Story not found" });
     }
 
     return storyDetail;
   });
+
 
   app.get("/api/reader/profiles", async (request, reply) => {
     if (!request.authUser) {
@@ -986,6 +1009,13 @@ export async function buildApp(options: BuildAppOptions) {
 
     if (!request.authUser) {
       return reply.code(401).send({ error: "请先登录" });
+    }
+
+    // Starting a story is only for a public one or the author's own. Continuing an
+    // existing session goes through /api/sessions/:id, which is owner-checked, so a
+    // reader who already started keeps reading even if the author hides the story.
+    if (storyDetail.story.visibility !== "public" && storyDetail.story.ownerId !== request.authUser.id) {
+      return reply.code(404).send({ error: "Story not found" });
     }
 
     const parsed = createSessionRequestSchema.safeParse(request.body);
