@@ -186,6 +186,18 @@ export async function listMyStoryDetails(): Promise<StoryDetail[]> {
   return Promise.all(stories.map((story) => getStoryDetail(story.id)));
 }
 
+/** Reader counts for the public shelf. Safe for any signed-in reader to see. */
+export async function listStoryInsights(): Promise<StoryReadingInsight[]> {
+  const response = await apiFetch("/api/stories/insights");
+
+  if (!response.ok) {
+    throw new Error("读取故事阅读情况失败");
+  }
+
+  const data = (await response.json()) as { insights: StoryReadingInsight[] };
+  return data.insights;
+}
+
 /** Reader counts for the author's own stories. Empty when they have no stories. */
 export async function listMyStoryInsights(): Promise<StoryReadingInsight[]> {
   const response = await apiFetch("/api/me/story-insights");

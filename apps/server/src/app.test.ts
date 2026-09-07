@@ -1965,7 +1965,75 @@ describe("authentication", () => {
     });
     expect(cards[0]?.turnCount).toBe(1);
   });
+
+  it("puts real reader counts on the public shelf, and keeps private stories off it", async () => {
+    await buildAuthApp(false);
+    const author = await register("shelf-author@example.com", "作者");
+    const reader = await register("shelf-reader@example.com", "读者");
+    const asAuthor = { authorization: `Bearer ${author}` };
+    const asReader = { authorization: `Bearer ${reader}` };
+    const base = {
+      tagline: "有人在对岸等着。",
+      genre: "民俗奇谈",
+      coverUrl: null,
+      premise: "一条只在夜里摆渡的河。",
+      openingLocationName: "渡口",
+      openingLocationDescription: "灯还没点。",
+      worldRules: [],
+      aiFreedom: "medium" as const,
+      experienceMode: "coauthored" as const,
+      defaultSegmentLength: "standard" as const
+    };
+
+    for (const [id, title, visibility] of [
+      ["lantern-ferry", "提灯渡", "public"],
+      ["hidden-ferry", "暗渡", "private"]
+    ] as const) {
+      const created = await authApp.inject({
+        method: "POST",
+        url: "/api/stories",
+        headers: asAuthor,
+        payload: { id, title, visibility, ...base }
+      });
+      expect(created.statusCode).toBe(201);
+    }
+
+    // The author checking their own opening is not an audience.
+    await authApp.inject({
+      method: "POST",
+      url: "/api/stories/lantern-ferry/sessions",
+      headers: asAuthor,
+      payload: { entryMode: "existing_character", characterId: null }
+    });
+
+    const beforeReaders = await authApp.inject({ method: "GET", url: "/api/stories/insights" });
+    expect(beforeReaders.statusCode).toBe(200);
+    const beforeList = beforeReaders.json<{ insights: StoryReadingInsight[] }>().insights;
+    expect(beforeList).toContainEqual(expect.objectContaining({ storyId: "lantern-ferry", readers: 0 }));
+    // A private story is not on the shelf, so it has no business on the shelf's numbers.
+    expect(beforeList).not.toContainEqual(expect.objectContaining({ storyId: "hidden-ferry" }));
+
+    const session = await authApp.inject({
+      method: "POST",
+      url: "/api/stories/lantern-ferry/sessions",
+      headers: asReader,
+      payload: { entryMode: "existing_character", characterId: null }
+    });
+    const sessionId = session.json<CreateSessionResponse>().session.id;
+    await authApp.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/turns`,
+      headers: asReader,
+      payload: { inputType: "read_continue", content: "继续阅读" }
+    });
+
+    const afterReaders = await authApp.inject({ method: "GET", url: "/api/stories/insights" });
+    expect(afterReaders.json<{ insights: StoryReadingInsight[] }>().insights).toContainEqual(
+      expect.objectContaining({ storyId: "lantern-ferry", readers: 1, deepestTurns: 2 })
+    );
+  });
 });
+
 
 
 

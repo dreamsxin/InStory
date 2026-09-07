@@ -761,6 +761,22 @@ export async function buildApp(options: BuildAppOptions) {
     stories: options.storyCatalog.listPublicStories()
   }));
 
+  /**
+   * How far each public story has carried readers, for the explore shelf. Aggregates
+   * only, and each story's own author is excluded, so the number means "other people
+   * read this" rather than "the author opened it".
+   */
+  app.get("/api/stories/insights", async () => {
+    const stories = options.storyCatalog.listPublicStories();
+
+    return {
+      insights: options.sessionStore.summarizeStories(
+        stories.map((story) => ({ storyId: story.id, ownerId: story.ownerId }))
+      )
+    };
+  });
+
+
   app.get("/api/me/stories", async (request, reply) => {
     if (!request.authUser) {
       return reply.code(401).send({ error: "请先登录" });
@@ -775,9 +791,13 @@ export async function buildApp(options: BuildAppOptions) {
       return reply.code(401).send({ error: "请先登录" });
     }
 
-    const storyIds = options.storyCatalog.listStoriesByOwner(request.authUser.id).map((story) => story.id);
+    const stories = options.storyCatalog.listStoriesByOwner(request.authUser.id);
 
-    return { insights: options.sessionStore.summarizeStories(storyIds, request.authUser.id) };
+    return {
+      insights: options.sessionStore.summarizeStories(
+        stories.map((story) => ({ storyId: story.id, ownerId: story.ownerId }))
+      )
+    };
   });
 
 

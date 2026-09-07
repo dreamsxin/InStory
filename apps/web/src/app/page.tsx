@@ -7,7 +7,8 @@ import {
   listMyStoryInsights,
   listReaderProfiles,
   listReaderSessions,
-  listStories
+  listStories,
+  listStoryInsights
 } from "@/lib/api";
 
 export default async function HomePage() {
@@ -16,12 +17,13 @@ export default async function HomePage() {
     redirect("/login");
   }
 
-  const [stories, profiles, myStoryDetails, sessions, storyInsights] = await Promise.all([
+  const [stories, profiles, myStoryDetails, sessions, storyInsights, shelfInsights] = await Promise.all([
     listStories(),
     listReaderProfiles(),
     listMyStoryDetails(),
     listReaderSessions(),
-    listMyStoryInsights()
+    listMyStoryInsights(),
+    listStoryInsights()
   ]);
 
   return (
@@ -30,6 +32,7 @@ export default async function HomePage() {
       myStoryDetails={myStoryDetails}
       profiles={profiles}
       sessions={sessions}
+      shelfInsights={shelfInsights}
       stories={stories}
       storyInsights={storyInsights}
     />

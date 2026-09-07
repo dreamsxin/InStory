@@ -694,12 +694,15 @@ a {
 
 
 /* Reader counts on the author's own story row. */
-.story-insight {
+.story-insight,
+/* And on the explore card, where they answer "is this worth starting". */
+.story-read-count {
   display: block;
   margin-top: 6px;
   font-size: 12px;
   color: var(--muted);
 }
+
 
 /* Plot anchors: the author's hard constraints on the AI, edited as a small table. */
 .anchors-editor {

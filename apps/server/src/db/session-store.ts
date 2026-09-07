@@ -282,14 +282,17 @@ export class SessionStore {
 
 
   /**
-   * How far the given stories carried readers. Aggregates only, and the author's own
-   * sessions are excluded: counting their own trials as readers would make every
+   * How far the given stories carried readers. Aggregates only, and each story's own
+   * author is excluded: counting an author's trials as readers would make every
    * unread story look like it had an audience, which is the one thing this number
-   * exists to answer honestly. Stories with no reader at all are returned as zeros
-   * rather than omitted, so the caller does not have to tell "no readers" apart
-   * from "no row".
+   * exists to answer honestly. Stories with no reader at all come back as zeros
+   * rather than omitted, so the caller does not have to tell "no readers" apart from
+   * "no row".
+   *
+   * The exclusion is per story rather than one id for the whole query, because a
+   * public shelf mixes stories with different authors.
    */
-  summarizeStories(storyIds: string[], excludeUserId: string): StoryReadingInsight[] {
+  summarizeStories(entries: Array<{ storyId: string; ownerId: string | null }>): StoryReadingInsight[] {
     const empty = (storyId: string): StoryReadingInsight => ({
       storyId,
       readers: 0,
@@ -299,11 +302,14 @@ export class SessionStore {
       lastReadAt: null
     });
 
-    if (storyIds.length === 0) {
+    if (entries.length === 0) {
       return [];
     }
 
-    const placeholders = storyIds.map(() => "?").join(", ");
+    // No real user id is the empty string, so a story without an author excludes
+    // nobody.
+    const conditions = entries.map(() => "(story_id = ? AND user_id <> ?)").join(" OR ");
+    const params = entries.flatMap((entry) => [entry.storyId, entry.ownerId ?? ""]);
     const rows = this.database.db
       .prepare(
         `SELECT story_id AS storyId,
@@ -313,10 +319,10 @@ export class SessionStore {
                 COALESCE(MAX(turn_count), 0) AS deepestTurns,
                 MAX(updated_at) AS lastReadAt
          FROM reader_sessions
-         WHERE story_id IN (${placeholders}) AND user_id <> ?
+         WHERE ${conditions}
          GROUP BY story_id`
       )
-      .all(...storyIds, excludeUserId) as Array<{
+      .all(...params) as Array<{
       storyId: string;
       readers: number;
       sessions: number;
@@ -326,11 +332,12 @@ export class SessionStore {
     }>;
 
     const byStoryId = new Map(rows.map((row) => [row.storyId, row]));
-    return storyIds.map((storyId) => {
-      const row = byStoryId.get(storyId);
-      return row ? { ...row, lastReadAt: row.lastReadAt ?? null } : empty(storyId);
+    return entries.map((entry) => {
+      const row = byStoryId.get(entry.storyId);
+      return row ? { ...row, lastReadAt: row.lastReadAt ?? null } : empty(entry.storyId);
     });
   }
+
 
 
   /** Total turns in a session, read from the denormalised counter. */

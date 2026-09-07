@@ -157,6 +157,25 @@ test.describe("reader", () => {
     await expect(page.locator(".turn")).toHaveCount(2);
   });
 
+  test("shows on the shelf that other people have read a story", async ({ page, request }) => {
+    const { token } = await signInViaApi(page, request, "e2e-shelf@example.com", "E2E 书架");
+    const sessionId = await startSession(request, token);
+
+    // A card said nothing about whether the story was worth starting.
+    const advanced = await request.post(`${API_BASE}/api/sessions/${sessionId}/turns`, {
+      headers: { authorization: `Bearer ${token}` },
+      data: { inputType: "read_continue", content: "继续阅读" }
+    });
+    expect(advanced.ok()).toBe(true);
+
+    await page.goto("/");
+    const card = page.locator(".story-card", { hasText: "旧宅" }).first();
+    const readCount = card.locator(".story-read-count");
+    await expect(readCount).toContainText("位读者读过");
+    await expect(readCount).toContainText("最深读到");
+    await expect(readCount).not.toContainText("还没有人读过");
+  });
+
   test("names the story it is actually playing, and can hide the bar", async ({ page, request }) => {
     const { token } = await signInViaApi(page, request, "e2e-title@example.com", "E2E 标题");
     const sessionId = await startSession(request, token);

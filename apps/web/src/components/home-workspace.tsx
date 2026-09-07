@@ -46,6 +46,7 @@ export function HomeWorkspace({
   myStoryDetails,
   profiles,
   sessions,
+  shelfInsights,
   stories,
   storyInsights
 }: {
@@ -55,6 +56,8 @@ export function HomeWorkspace({
   myStoryDetails: StoryDetail[];
   profiles: ReaderProfile[];
   sessions: ReaderSessionListItem[];
+  /** Reader counts for the public shelf, so a story can show it has been read. */
+  shelfInsights: StoryReadingInsight[];
   stories: StorySummary[];
   storyInsights: StoryReadingInsight[];
 }) {
@@ -112,7 +115,14 @@ export function HomeWorkspace({
       </Card>
 
       <section className="mobile-tab-panel">
-        {activeTab === "stories" ? <StoriesView profiles={profiles} sessions={sessions} stories={stories} /> : null}
+        {activeTab === "stories" ? (
+          <StoriesView
+            insights={shelfInsights}
+            profiles={profiles}
+            sessions={sessions}
+            stories={stories}
+          />
+        ) : null}
         {activeTab === "continue" ? <ContinueView sessions={sessions} /> : null}
         {activeTab === "create" ? (
           <CreateView
@@ -142,15 +152,18 @@ export function HomeWorkspace({
 }
 
 function StoriesView({
+  insights,
   profiles,
   sessions,
   stories
 }: {
+  insights: StoryReadingInsight[];
   profiles: ReaderProfile[];
   sessions: ReaderSessionListItem[];
   stories: StorySummary[];
 }) {
   const sessionsByStoryId = new Map(sessions.map((session) => [session.storyId, session]));
+  const insightsByStoryId = new Map(insights.map((insight) => [insight.storyId, insight]));
 
   return (
     <div className="app-section">
@@ -163,7 +176,13 @@ function StoriesView({
       </div>
       <div className="story-grid">
         {stories.map((story) => (
-          <StoryLauncher existingSession={sessionsByStoryId.get(story.id)} key={story.id} profiles={profiles} story={story} />
+          <StoryLauncher
+            existingSession={sessionsByStoryId.get(story.id)}
+            insight={insightsByStoryId.get(story.id)}
+            key={story.id}
+            profiles={profiles}
+            story={story}
+          />
         ))}
       </div>
     </div>

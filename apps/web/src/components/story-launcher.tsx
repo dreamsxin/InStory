@@ -2,17 +2,20 @@
 
 import { Button, Card, Chip, Label, ListBox, Select } from "@heroui/react";
 import { useRouter } from "next/navigation";
-import type { ReaderProfile, ReaderSessionListItem, StorySummary } from "@instory/shared";
+import type { ReaderProfile, ReaderSessionListItem, StoryReadingInsight, StorySummary } from "@instory/shared";
 import { createSession } from "@/lib/api";
 import { readingThemeLabel } from "@/lib/reading-themes";
 import { useState } from "react";
 
 export function StoryLauncher({
   existingSession,
+  insight,
   profiles,
   story
 }: {
   existingSession?: ReaderSessionListItem;
+  /** Aggregate reader counts, or undefined before anyone has read anything. */
+  insight?: StoryReadingInsight;
   profiles: ReaderProfile[];
   story: StorySummary;
 }) {
@@ -56,6 +59,7 @@ export function StoryLauncher({
           <Chip size="sm" variant="soft">{segmentLengthLabel(story.defaultSegmentLength)}</Chip>
           <Chip size="sm" variant="soft">{readingThemeLabel(story.readingTheme)}</Chip>
         </div>
+        <ReadCountLine insight={insight} />
         {existingSession ? (
           <div className="tag-row compact">
             <Chip size="sm" variant="soft">继续身份：{existingSession.readerRoleName}</Chip>
@@ -98,6 +102,24 @@ export function StoryLauncher({
 }
 
 const DEFAULT_ROLE_KEY = "__default__";
+
+/**
+ * What other readers have done with this story. Aggregates only, and the author's
+ * own trials are excluded upstream, so a number here means real readers. Before
+ * this a card said nothing about whether the story was worth starting.
+ */
+function ReadCountLine({ insight }: { insight?: StoryReadingInsight }) {
+  if (!insight || insight.readers === 0) {
+    return <span className="story-read-count muted">还没有人读过</span>;
+  }
+
+  return (
+    <span className="story-read-count">
+      {insight.readers} 位读者读过 · 最深读到 {insight.deepestTurns} 回合
+    </span>
+  );
+}
+
 
 function experienceModeLabel(mode: StorySummary["experienceMode"]) {
   return mode === "scripted" ? "剧本入戏" : mode === "improvised" ? "即兴入戏" : "共演入戏";
