@@ -201,6 +201,38 @@ function ContinueView({ sessions }: { sessions: ReaderSessionListItem[] }) {
 function ContinueStoryCard({ session }: { session: ReaderSessionListItem }) {
   const story = session.story;
 
+  // The story is gone, so the only honest card says so. It used to disappear from
+  // the shelf without a word, which read as lost reading rather than a deleted story.
+  if (!story) {
+    return (
+      <Card className="story-card story-card-gone">
+        <div className="story-cover" aria-hidden="true">
+          <div className="story-cover-fallback">×</div>
+        </div>
+        <Card.Header className="story-card-header">
+          <h2>{session.storyTitle}</h2>
+          <p className="muted">作者已删除这个故事，这段阅读无法继续。</p>
+        </Card.Header>
+        <Card.Content className="story-card-content">
+          <div className="tag-row compact">
+            <Chip size="sm" variant="soft">身份：{session.readerRoleName}</Chip>
+            <Chip size="sm" variant="soft">读到 {session.turnCount} 回合</Chip>
+            <Chip size="sm" variant="soft">{formatUpdatedAt(session.updatedAt)}</Chip>
+          </div>
+          <p className="continue-summary">{session.latestSummary}</p>
+          <div className="continue-actions">
+            <form action={deleteSessionAction}>
+              <input name="sessionId" type="hidden" value={session.id} />
+              <Button className="danger-button" size="sm" type="submit" variant="outline">
+                移除这张卡片
+              </Button>
+            </form>
+          </div>
+        </Card.Content>
+      </Card>
+    );
+  }
+
   return (
     <Card className="story-card">
       <div className="story-cover" aria-hidden="true">

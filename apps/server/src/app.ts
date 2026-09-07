@@ -803,9 +803,6 @@ export async function buildApp(options: BuildAppOptions) {
       }
 
       const sessionItem = createReaderSessionListItem(overview, options);
-      if (!sessionItem) {
-        continue;
-      }
 
       seenStoryIds.add(sessionItem.storyId);
       sessions.push(sessionItem);
@@ -1062,7 +1059,7 @@ export async function buildApp(options: BuildAppOptions) {
 
     session.turns.push(openingTurn);
     session.timeline.push(openingNode);
-    options.sessionStore.create(session, request.authUser.id);
+    options.sessionStore.create(session, request.authUser.id, storyDetail.story.title);
 
     const response: CreateSessionResponse = {
       session,
@@ -1502,12 +1499,13 @@ export async function buildApp(options: BuildAppOptions) {
       updatedAt: now
     };
 
-    options.sessionStore.create(branch, request.authUser.id);
+    options.sessionStore.create(branch, request.authUser.id, options.sessionStore.findStoryTitle(sessionId) ?? "");
 
     return {
       session: branch
     };
   });
+
 
   app.post("/api/sessions/:sessionId/reset", async (request, reply) => {
     const { sessionId } = request.params as { sessionId: string };
@@ -1553,7 +1551,7 @@ export async function buildApp(options: BuildAppOptions) {
       updatedAt: now
     };
 
-    options.sessionStore.create(resetSession, request.authUser.id);
+    options.sessionStore.create(resetSession, request.authUser.id, storyDetail.story.title);
 
     return {
       session: resetSession
@@ -1593,19 +1591,22 @@ function createCastCharacters({
     }));
 }
 
+/**
+ * One reading progress card. A session whose story has been deleted still gets a
+ * card - with `story: null` and the title recorded when it was opened - because a
+ * card that quietly vanishes leaves the reader wondering what happened to their
+ * reading.
+ */
 function createReaderSessionListItem(
   overview: SessionOverview,
   options: BuildAppOptions
-): ReaderSessionListItem | null {
-  const story = options.storyCatalog.findStory(overview.storyId)?.story;
-  if (!story) {
-    return null;
-  }
+): ReaderSessionListItem {
+  const story = options.storyCatalog.findStory(overview.storyId)?.story ?? null;
 
   return {
     id: overview.id,
-    storyId: story.id,
-    storyTitle: story.title,
+    storyId: overview.storyId,
+    storyTitle: story?.title ?? overview.storyTitle,
     story,
     readerRoleName: overview.readerRoleName,
     latestSummary: overview.latestNarration ?? "刚刚进入故事。",
@@ -1614,6 +1615,7 @@ function createReaderSessionListItem(
     updatedAt: overview.updatedAt
   };
 }
+
 
 function createLengthGuide(storyDetail: StoryDetail | undefined) {
   const preset = storyDetail?.story.defaultSegmentLength ?? "standard";

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type {
   CreateSessionResponse,
   CreateTurnResponse,
+  ReaderSessionListItem,
   SessionTurn,
   StoryAnchor,
   StoryDetail,
@@ -1905,7 +1906,67 @@ describe("authentication", () => {
     });
     expect(blocked.statusCode).toBe(404);
   });
+
+  it("leaves a tombstone card when the author deletes a story someone was reading", async () => {
+    await buildAuthApp(false);
+    const author = await register("tombstone-author@example.com", "作者");
+    const reader = await register("tombstone-reader@example.com", "读者");
+    const asAuthor = { authorization: `Bearer ${author}` };
+    const asReader = { authorization: `Bearer ${reader}` };
+
+    const created = await authApp.inject({
+      method: "POST",
+      url: "/api/stories",
+      headers: asAuthor,
+      payload: {
+        id: "vanishing-inn",
+        title: "会消失的客栈",
+        tagline: "住一晚，第二天路就没了。",
+        genre: "奇谈",
+        coverUrl: null,
+        visibility: "public",
+        premise: "一间只在雨天存在的客栈。",
+        openingLocationName: "客栈门口",
+        openingLocationDescription: "雨水顺着招牌往下流。",
+        worldRules: [],
+        aiFreedom: "medium",
+        experienceMode: "coauthored",
+        defaultSegmentLength: "standard"
+      }
+    });
+    expect(created.statusCode).toBe(201);
+
+    const opened = await authApp.inject({
+      method: "POST",
+      url: "/api/stories/vanishing-inn/sessions",
+      headers: asReader,
+      payload: { entryMode: "existing_character", characterId: null }
+    });
+    expect(opened.statusCode).toBe(200);
+
+    const removed = await authApp.inject({
+      method: "DELETE",
+      url: "/api/me/stories/vanishing-inn",
+      headers: asAuthor
+    });
+    expect(removed.statusCode).toBe(204);
+
+    // The card used to vanish from the shelf without a word, which reads as lost
+    // reading rather than a deleted story.
+    const shelf = await authApp.inject({ method: "GET", url: "/api/me/sessions", headers: asReader });
+    const cards = shelf.json<{ sessions: ReaderSessionListItem[] }>().sessions;
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({
+      storyId: "vanishing-inn",
+      // The title is the one recorded when the reader opened it, since the story is
+      // no longer there to ask.
+      storyTitle: "会消失的客栈",
+      story: null
+    });
+    expect(cards[0]?.turnCount).toBe(1);
+  });
 });
+
 
 
 

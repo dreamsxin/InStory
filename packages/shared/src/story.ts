@@ -302,19 +302,22 @@ export interface StorySession {
 export interface ReaderSessionListItem {
   id: string;
   storyId: string;
+  /** Snapshotted when the reader opened it, so a deleted story still has a name. */
   storyTitle: string;
   /**
-   * The story as it is configured now. Always present: the server drops a session
-   * whose story no longer exists rather than shipping one without it, so nothing
-   * downstream has to invent a genre or an experience mode to fill the gap.
+   * The story as it is configured now, or null when the author has deleted it. Null
+   * makes the card a tombstone: it says the story is gone rather than quietly
+   * disappearing from the shelf, and nothing downstream invents a genre to fill the
+   * gap.
    */
-  story: StorySummary;
+  story: StorySummary | null;
   readerRoleName: string;
   latestSummary: string;
   turnCount: number;
   createdAt: string;
   updatedAt: string;
 }
+
 
 /**
  * What one of the author's stories has actually done with readers. Aggregates

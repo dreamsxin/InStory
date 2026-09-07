@@ -278,6 +278,47 @@ test.describe("creation console", () => {
     await expect(insight).toContainText("最深 2 回合");
   });
 
+  test("leaves a tombstone card instead of losing the reading silently", async ({ page, request }) => {
+    await signIn(page, request, "e2e-tombstone@example.com");
+    await page.goto("/");
+    await page.locator(".app-topbar").getByRole("button", { name: "创作" }).click();
+
+    const panel = page.locator(".create-story-panel");
+    await panel.getByLabel("故事 ID").fill(`e2e-vanishing-inn-${Date.now()}`);
+    await panel.getByLabel("标题").fill("会消失的客栈");
+    await panel.getByLabel("类型").fill("奇谈");
+    await panel.getByLabel("一句话钩子").fill("住一晚，第二天路就没了。");
+    await panel.getByLabel("世界前提").fill("一间只在雨天存在的客栈。");
+    await panel.getByLabel("起点地点").fill("客栈门口");
+    await panel.getByLabel("起点场景").fill("雨水顺着招牌往下流。");
+    await panel.getByRole("button", { name: "创建故事" }).click();
+    await expect(panel.locator(".form-feedback")).toHaveClass(/is-ok/);
+
+    const editor = page.locator(".story-management-list .management-details");
+    await editor.locator("summary").click();
+    await editor.getByRole("button", { name: "试玩故事" }).click();
+    await expect(page).toHaveURL(/\/story\//);
+
+    await page.goto("/");
+    await page.locator(".app-topbar").getByRole("button", { name: "创作" }).click();
+    const reopened = page.locator(".story-management-list .management-details");
+    await reopened.locator("summary").click();
+    page.once("dialog", (dialog) => void dialog.accept());
+    await reopened.getByRole("button", { name: "删除故事" }).click();
+    await expect(page.getByText("还没有自己创建的故事")).toBeVisible();
+
+    // The progress card used to disappear from the shelf without a word.
+    await page.locator(".app-topbar").getByRole("button", { name: "继续" }).click();
+    const gone = page.locator(".story-card-gone");
+    await expect(gone).toHaveCount(1);
+    await expect(gone).toContainText("会消失的客栈");
+    await expect(gone).toContainText("作者已删除这个故事");
+    await expect(gone.getByRole("link", { name: "继续阅读" })).toHaveCount(0);
+
+    await gone.getByRole("button", { name: "移除这张卡片" }).click();
+    await expect(page.getByText("还没有阅读进度")).toBeVisible();
+  });
+
   test("reports a saved reader profile in place", async ({ page, request }) => {
     await signIn(page, request, "e2e-create-profile@example.com");
     await page.goto("/");

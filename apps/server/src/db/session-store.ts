@@ -20,7 +20,13 @@ export interface SessionListItem {
 export interface SessionOverview extends SessionListItem {
   readerRoleName: string;
   latestNarration: string | null;
+  /**
+   * The story's title as it was when the reader opened it. Snapshotted on the
+   * session so a deleted story leaves a card the reader can still recognise.
+   */
+  storyTitle: string;
 }
+
 
 export interface AppendTurnInput {
   turn: SessionTurn;
@@ -54,16 +60,22 @@ export class SessionStore {
     this.database = database;
   }
 
-  /** Inserts a session together with its initial turns and timeline nodes. */
-  create(session: StorySession, userId: string): void {
+  /**
+   * Inserts a session together with its initial turns and timeline nodes. The story
+   * title is taken as given: it is a snapshot of what the reader opened, not a live
+   * reference, so it must not be re-read from the story later.
+   */
+  create(session: StorySession, userId: string, storyTitle: string): void {
     this.database.db.exec("BEGIN");
     try {
       this.database.db
         .prepare(
-          `INSERT INTO reader_sessions (id, story_id, user_id, reader_role, state, turn_count, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO reader_sessions
+             (id, story_id, story_title, user_id, reader_role, state, turn_count, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
              story_id = excluded.story_id,
+             story_title = excluded.story_title,
              user_id = excluded.user_id,
              reader_role = excluded.reader_role,
              state = excluded.state,
@@ -73,6 +85,7 @@ export class SessionStore {
         .run(
           session.id,
           session.storyId,
+          storyTitle,
           userId,
           JSON.stringify(session.readerRole),
           JSON.stringify(session.state),
@@ -207,7 +220,7 @@ export class SessionStore {
     const rows = this.database.db
       .prepare(
         `SELECT s.id, s.story_id AS storyId, s.created_at AS createdAt, s.updated_at AS updatedAt,
-                s.turn_count AS turnCount, s.reader_role AS readerRole,
+                s.turn_count AS turnCount, s.reader_role AS readerRole, s.story_title AS storyTitle,
                 (SELECT t.narration FROM session_turns t
                   WHERE t.session_id = s.id ORDER BY t.seq DESC LIMIT 1) AS latestNarration
          FROM reader_sessions s
@@ -226,6 +239,7 @@ export class SessionStore {
       updatedAt: string;
       turnCount: number;
       readerRole: string | null;
+      storyTitle: string | null;
       latestNarration: string | null;
     }>;
 
@@ -236,6 +250,7 @@ export class SessionStore {
       updatedAt: row.updatedAt,
       turnCount: row.turnCount,
       readerRoleName: (JSON.parse(row.readerRole ?? "{}") as Partial<ReaderRole>).name ?? "读者",
+      storyTitle: row.storyTitle ?? "已删除的故事",
       latestNarration: row.latestNarration
     }));
   }
@@ -247,6 +262,19 @@ export class SessionStore {
       .get(userId, storyId) as { present: number } | undefined;
     return row !== undefined;
   }
+
+  /**
+   * The story title recorded on a session. A branch or a restart inherits it from
+   * the session it came from: same reading, same recorded title, and no second
+   * lookup that could disagree with the first.
+   */
+  findStoryTitle(sessionId: string): string | null {
+    const row = this.database.db
+      .prepare("SELECT story_title AS storyTitle FROM reader_sessions WHERE id = ?")
+      .get(sessionId) as { storyTitle: string | null } | undefined;
+    return row?.storyTitle ?? null;
+  }
+
 
   get databasePath(): string {
     return this.database.databasePath;

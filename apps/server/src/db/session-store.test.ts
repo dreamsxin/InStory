@@ -11,7 +11,7 @@ const tempDirs: string[] = [];
 const OWNER_ID = "user_owner";
 
 function seed(store: SessionStore, session: StorySession, ownerId = OWNER_ID): void {
-  store.create(session, ownerId);
+  store.create(session, ownerId, "雨夜旧宅");
 }
 
 function createStore(): SessionStore {

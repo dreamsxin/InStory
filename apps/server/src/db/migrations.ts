@@ -291,6 +291,38 @@ export const migrations: Migration[] = [
       -- story, and every turn written before this column was just story too.
       ALTER TABLE session_turns ADD COLUMN intervention TEXT;
     `
+  },
+  {
+    id: 9,
+    name: "snapshot_story_title_on_sessions",
+    up: (db) => {
+      // A session recorded only the story id, so its title came from a join. When an
+      // author deleted a story the join found nothing and the reader's progress card
+      // silently disappeared. The title is what a reader recognises the reading by,
+      // so the session now keeps its own copy.
+      db.exec("ALTER TABLE reader_sessions ADD COLUMN story_title TEXT");
+
+      const rows = db.prepare("SELECT id, payload FROM stories").all() as Array<{
+        id: string;
+        payload: string;
+      }>;
+      const update = db.prepare("UPDATE reader_sessions SET story_title = ? WHERE story_id = ?");
+
+      for (const row of rows) {
+        try {
+          const title = (JSON.parse(row.payload) as { title?: unknown }).title;
+          if (typeof title === "string" && title.trim()) {
+            update.run(title, row.id);
+          }
+        } catch {
+          // A story whose payload will not parse leaves its sessions untitled rather
+          // than aborting the whole migration.
+        }
+      }
+
+      // Sessions whose story was already gone get the only honest label available.
+      db.exec("UPDATE reader_sessions SET story_title = '已删除的故事' WHERE story_title IS NULL");
+    }
   }
 ];
 
