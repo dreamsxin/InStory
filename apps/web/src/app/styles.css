@@ -863,6 +863,20 @@ a {
   padding-bottom: 6px;
 }
 
+/* Reader-owned typography. The shell carries defaults so the surface is readable
+   before any preference is loaded; the reader's saved choice arrives as inline
+   custom properties on the same element (see lib/reading-prefs.ts). */
+.reader-shell {
+  --reader-font-scale: 1;
+  --reader-line-height: 1.8;
+  --reader-measure: 760px;
+}
+
+.turns {
+  max-inline-size: var(--reader-measure);
+}
+
+
 /* ---------------------------------------------------------------------------
  * Per-story reading themes.
  *
@@ -1149,12 +1163,13 @@ a {
   max-width: 100%;
   overflow: hidden;
   padding: 20px;
-  line-height: 1.8;
+  line-height: var(--reader-line-height);
 }
 
 .reader-paragraph {
   display: block;
   min-width: 0;
+  font-size: calc(1rem * var(--reader-font-scale));
   inline-size: min(100%, calc(100vw - 40px));
   max-inline-size: min(100%, calc(100vw - 40px));
   white-space: normal;
@@ -1173,6 +1188,85 @@ a {
 
 .turn .dialogue {
   text-indent: 0;
+}
+
+/* A key node, marked where it happened. Quiet on purpose: it is an offer, not a
+   prompt the reader has to clear.
+
+   These three rules used to sit inside the narrow-screen media query by accident,
+   which both hid the cue's styling on desktop and spliced display:grid onto .turn
+   and .reader-paragraph on phones. */
+.intervention-cue {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  margin: 16px 0 4px;
+  padding: 12px 14px;
+  border: 1px dashed var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--panel) 88%, var(--accent));
+}
+
+.intervention-cue-kind {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+}
+
+.intervention-cue-prompt {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.7;
+}
+
+/* Reader-owned view settings. Plain buttons rather than a slider: three or four
+   named steps are easier to hit on a phone and cannot land on an unreadable value. */
+.display-panel .display-group {
+  margin: 14px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.display-panel legend {
+  padding: 0;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.display-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.display-option {
+  min-width: 56px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.display-option:hover {
+  border-color: color-mix(in oklab, var(--accent) 40%, var(--line));
+}
+
+.display-option.is-active {
+  border-color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 12%, var(--panel));
+  font-weight: 600;
+}
+
+.display-group-note {
+  margin: 8px 0 0;
+  font-size: 12px;
 }
 
 /* Where the story changes place. Both the hairlines and the plate come from the
@@ -1929,8 +2023,8 @@ a {
     max-width: 100%;
     border-radius: 0;
     padding: 22px max(34px, env(safe-area-inset-right)) 22px max(20px, env(safe-area-inset-left));
-    line-height: 1.88;
   }
+
 
   .reader-paragraph {
     inline-size: 100%;
@@ -1939,36 +2033,11 @@ a {
 
   .turn,
   .reader-paragraph,
-/* A key node, marked where it happened. Quiet on purpose: it is an offer, not a
-   prompt the reader has to clear. */
-.intervention-cue {
-  display: grid;
-  gap: 8px;
-  justify-items: start;
-  margin: 16px 0 4px;
-  padding: 12px 14px;
-  border: 1px dashed var(--line);
-  border-left: 3px solid var(--accent);
-  border-radius: 12px;
-  background: color-mix(in oklab, var(--panel) 88%, var(--accent));
-}
-
-.intervention-cue-kind {
-  font-size: 11px;
-  letter-spacing: 0.16em;
-  color: var(--muted);
-}
-
-.intervention-cue-prompt {
-  margin: 0;
-  color: var(--text);
-  line-height: 1.7;
-}
-
-.dialogue {
+  .dialogue {
     overflow-wrap: anywhere;
     word-break: break-all;
   }
+
 
   .reader-topbar {
     flex: 0 0 auto;
@@ -2205,14 +2274,14 @@ a {
 
   .turns {
     width: 100%;
-    max-width: 720px;
+    max-inline-size: min(var(--reader-measure), 720px);
     gap: 10px;
   }
 
   .turn {
     padding: 14px 16px;
-    line-height: 1.74;
   }
+
 
   .action-preset-grid {
     grid-template-columns: 1fr;

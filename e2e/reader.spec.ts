@@ -122,6 +122,31 @@ test.describe("reader", () => {
     await expect(page.locator(".intervention-cue")).toHaveCount(1);
   });
 
+  test("lets the reader change type size and keeps that choice after a reload", async ({
+    page,
+    request
+  }) => {
+    const { token } = await signInViaApi(page, request, "e2e-display@example.com", "E2E 版式");
+    const sessionId = await startSession(request, token);
+
+    await page.goto(`/story/${sessionId}`);
+    const paragraph = page.locator(".turn .reader-paragraph").first();
+    const fontSize = () =>
+      paragraph.evaluate((node) => Number.parseFloat(window.getComputedStyle(node).fontSize));
+    const before = await fontSize();
+
+    await page.getByRole("button", { name: "版式" }).click();
+    await page.getByRole("button", { name: "特大" }).click();
+
+    await expect.poll(fontSize).toBeGreaterThan(before);
+    const enlarged = await fontSize();
+
+    // Stored locally, so it survives leaving the page - a setting that resets is
+    // not a setting.
+    await page.reload();
+    await expect.poll(fontSize).toBeCloseTo(enlarged, 1);
+  });
+
   test("lays the action panel out as one titled sheet and submits free text", async ({
     page,
     request

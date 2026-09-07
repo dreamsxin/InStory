@@ -22,11 +22,21 @@ import {
   type SessionHistoryInfo
 } from "@/lib/api";
 import { BrandMark } from "@/components/brand-mark";
-import { useEffect, useRef, useState, Fragment } from "react";
+import {
+  DEFAULT_READING_PREFS,
+  FONT_SCALE_OPTIONS,
+  LINE_HEIGHT_OPTIONS,
+  loadReadingPrefs,
+  MEASURE_OPTIONS,
+  readingPrefsVars,
+  saveReadingPrefs,
+  type ReadingPrefs
+} from "@/lib/reading-prefs";
+import { useEffect, useRef, useState, Fragment, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-type ReaderPanel = "status" | "memory" | "action" | null;
+type ReaderPanel = "status" | "memory" | "action" | "display" | null;
 
 export function ReaderClient({
   initialHistory,
@@ -55,9 +65,26 @@ export function ReaderClient({
   const [history, setHistory] = useState(initialHistory);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Starts at the default and is replaced after mount: the server has no access to
+  // this reader's storage, so rendering their real choice on the first pass would
+  // hydrate against different markup.
+  const [prefs, setPrefs] = useState<ReadingPrefs>(DEFAULT_READING_PREFS);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const latestTurn = session.turns.at(-1);
+
+  useEffect(() => {
+    setPrefs(loadReadingPrefs());
+  }, []);
+
+  function changePrefs(update: Partial<ReadingPrefs>) {
+    setPrefs((current) => {
+      const next = { ...current, ...update };
+      saveReadingPrefs(next);
+      return next;
+    });
+  }
+
 
   // Follow the text while it is being written; text appearing below the fold is
   // text the reader never sees.
@@ -193,7 +220,11 @@ export function ReaderClient({
   }
 
   return (
-    <main className="reader-shell reader-shell-focus h-dvh w-full overflow-hidden" data-reading-theme={readingTheme}>
+    <main
+      className="reader-shell reader-shell-focus h-dvh w-full overflow-hidden"
+      data-reading-theme={readingTheme}
+      style={readingPrefsVars(prefs) as CSSProperties}
+    >
       <section className="reader reader-stage h-dvh w-full min-w-0 p-0 sm:p-4 md:p-8">
         <div className={`topbar reader-topbar${chromeVisible ? "" : " reader-chrome-hidden"}`}>
           <div className="brand-row">
@@ -219,7 +250,9 @@ export function ReaderClient({
           className="reader-scroll w-full min-w-0 flex-1 overflow-x-hidden overflow-y-auto"
           ref={scrollRef}
         >
-          <div className="turns reading-surface w-full min-w-0 sm:max-w-[760px]">
+          {/* Width comes from --reader-measure, not a fixed class, because how wide a
+              line may run is the reader's call. */}
+          <div className="turns reading-surface w-full min-w-0">
             {history.hasMore ? (
               <div className="older-turns-row">
                 <Button
@@ -305,6 +338,9 @@ export function ReaderClient({
                 onRewind={(timelineNodeId) => void rewindToNode(timelineNodeId)}
               />
             ) : null}
+            {activePanel === "display" ? (
+              <DisplayPanel prefs={prefs} onChange={changePrefs} />
+            ) : null}
             {activePanel === "action" && latestTurn ? (
               <ActionPanel
                 error={error}
@@ -329,6 +365,9 @@ export function ReaderClient({
           </Button>
           <Button className="w-full min-w-0 sm:w-auto" size="sm" variant={activePanel === "action" ? "secondary" : "outline"} onPress={() => setActivePanel((panel) => (panel === "action" ? null : "action"))}>
             行动
+          </Button>
+          <Button className="w-full min-w-0 sm:w-auto" size="sm" variant={activePanel === "display" ? "secondary" : "outline"} onPress={() => setActivePanel((panel) => (panel === "display" ? null : "display"))}>
+            版式
           </Button>
           <Button
             aria-pressed={!chromeVisible}
@@ -374,7 +413,91 @@ export function ReaderClient({
 }
 
 function panelTitle(panel: Exclude<ReaderPanel, null>) {
-  return panel === "status" ? "当前状态" : panel === "memory" ? "存档记忆" : "入戏行动";
+  switch (panel) {
+    case "status":
+      return "当前状态";
+    case "memory":
+      return "存档记忆";
+    case "display":
+      return "阅读版式";
+    default:
+      return "入戏行动";
+  }
+}
+
+/**
+ * The reader's own view settings. The story picks its framing; type size, line
+ * spacing and how wide a line runs are things only the person reading can judge,
+ * and until now they could not touch any of it. Saved locally, so the choice
+ * follows them from story to story on this device.
+ */
+function DisplayPanel({
+  onChange,
+  prefs
+}: {
+  onChange: (update: Partial<ReadingPrefs>) => void;
+  prefs: ReadingPrefs;
+}) {
+  return (
+    <Card className="panel display-panel">
+      <Card.Content>
+        <h2>阅读版式</h2>
+        <p className="muted">只影响你自己的阅读，会记在这台设备上。</p>
+
+        <fieldset className="display-group">
+          <legend>字号</legend>
+          <div className="display-options">
+            {FONT_SCALE_OPTIONS.map((option) => (
+              <button
+                aria-pressed={prefs.fontScale === option.id}
+                className={`display-option${prefs.fontScale === option.id ? " is-active" : ""}`}
+                key={option.id}
+                type="button"
+                onClick={() => onChange({ fontScale: option.id })}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="display-group">
+          <legend>行距</legend>
+          <div className="display-options">
+            {LINE_HEIGHT_OPTIONS.map((option) => (
+              <button
+                aria-pressed={prefs.lineHeight === option.id}
+                className={`display-option${prefs.lineHeight === option.id ? " is-active" : ""}`}
+                key={option.id}
+                type="button"
+                onClick={() => onChange({ lineHeight: option.id })}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="display-group">
+          <legend>行宽</legend>
+          <div className="display-options">
+            {MEASURE_OPTIONS.map((option) => (
+              <button
+                aria-pressed={prefs.measure === option.id}
+                className={`display-option${prefs.measure === option.id ? " is-active" : ""}`}
+                key={option.id}
+                type="button"
+                onClick={() => onChange({ measure: option.id })}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <p className="muted display-group-note">窄屏上正文本来就是满宽，行宽只在大屏生效。</p>
+        </fieldset>
+      </Card.Content>
+    </Card>
+  );
 }
 
 function TurnView({ turn, onStepIn }: { turn: SessionTurn; onStepIn?: () => void }) {

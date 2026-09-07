@@ -19,7 +19,7 @@ npm run dev:web            # Web  http://localhost:3000
 npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 schema
 ```
 
-最近一次全量结果：typecheck 通过；单测 server 155 / story-engine 12 / web 20；e2e 30 条通过。
+最近一次全量结果：typecheck 通过；单测 server 155 / story-engine 12 / web 26；e2e 31 条通过。
 
 ## 已实现
 
@@ -27,6 +27,7 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 - **阅读运行时**：`POST /api/sessions/:id/turns` 与 SSE 版 `/turns/stream`（逐字上屏、可中断）、存档时间线、`rewind` 分支、`reset` 重开、`DELETE /api/sessions/:id`、按窗口分页读取回合（`?turnLimit`、`/turns?before=`）、每日配额随会话读取一起返回。
 - **介入节点（§5.3）**：每回合带 `intervention`（六种 `kind` + 一句提示），存在 `session_turns.intervention`；模型不标时服务端按这一段真实改变的状态兜一个（`deriveIntervention`，只对 `read_continue` 生效）。
 - **创作**：故事四段表单、故事内演员重设（故事身份 / 与读者关系 / 秘密 / 当前目标 / 性格 / 禁止项）、剧情锚点整组替换、试玩区分「回到上次试玩」与「从开场重新试玩」、五套阅读装帧主题。
+- **阅读版式**：阅读器工具坞的 `版式` 面板让读者自己选字号、行距、行宽，存在本机 `localStorage`（`lib/reading-prefs.ts`），通过 `--reader-*` 自定义属性作用在正文上；装帧仍由作者定，版式归读者。
 - **反馈与社会证明**：`GET /api/me/story-insights`（作者看自己的故事被读到什么程度）与 `GET /api/stories/insights`（公开书架上的读者数与最深回合），共用同一份聚合。
 - **管理台**：运行状态、模型配置与 Provider 验证、用量、审核队列（解决 / 忽略）、故事配置、会话审计。
 - **AI 编排**：`MockNarrativeProvider` 与 `OpenAICompatibleProvider`（超时、分类重试退避、流式 narration 增量提取、输出 Zod 校验）。
@@ -71,6 +72,7 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 - **`"use server"` 文件只能导出 async function。** 共享的 `IDLE_FORM` 之类必须放在 `lib/form-result.ts`。
 - **表单失败要把用户输入还回去。** server action 失败后 React 会重挂表单，`values` + `defaultValue`（新建）或 `kept()`（编辑）是唯一能保住稿子的办法。
 - **破坏性操作先问一次**：删故事、删角色、删进度、重置会话、恢复存档。
+- **往 `styles.css` 加规则先看清缩进。** 文件末尾大半是媒体查询，块内规则缩进两格。曾经把 `.intervention-cue` 整段插进窄屏查询里，还夹断了一条选择器列表，结果桌面端没有样式、手机端给正文套上了 `display: grid`。新规则要么放在全局段落里，要么确认自己在哪个 `@media` 内。
 - **加一个字段的顺序**：`packages/shared`（类型 + zod）→ 需要落库就加迁移 → `*-store.ts` 读写与归一化 → `app.ts` 路由 → `apps/web/src/lib/api.ts` → 界面 → 服务端单测 + e2e → 文档。
 
 ## 本机排错
@@ -85,10 +87,9 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 
 1. **阅读预期**：卡片仍然不说这故事大概能读多久。锚点数量 + `defaultSegmentLength` 已经够给一个诚实的区间，比让读者盲开一个故事强。
 2. **`SessionSegment` 缓存与作者预设优先**：现在每次推进都实打实调模型。按 `ARCHITECTURE.md` §3.2 的三级优先级（预设 → 已生成 → 现生成）做，才对得起 `scripted` 这个模式名。
-3. **阅读设置**：字号、行距、深浅、滚动偏好。目前装帧是作者定的，读者一点都调不了。
-4. **首屏与空态**：新部署只有一个种子故事时书架很空，首页也不解释自己是什么。
-5. **按故事的成本视图**：`generation_usage` 里数据都有，管理台只给了总量，看不出是哪个故事在烧钱。
-6. **`路线分歧` 与 `NPC 发问` 两种节点**只能由模型识别（状态里读不出来），这是能力边界，不是遗漏；要做只能加一次轻量的判定调用。
+3. **首屏与空态**：新部署只有一个种子故事时书架很空，首页也不解释自己是什么。
+4. **按故事的成本视图**：`generation_usage` 里数据都有，管理台只给了总量，看不出是哪个故事在烧钱。
+5. **`路线分歧` 与 `NPC 发问` 两种节点**只能由模型识别（状态里读不出来），这是能力边界，不是遗漏；要做只能加一次轻量的判定调用。
 
 ## 已知问题
 
