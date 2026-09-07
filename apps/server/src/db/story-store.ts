@@ -4,6 +4,7 @@ import type {
   StoryAnchor,
   StoryDetail,
   StorySummary,
+  UpdateStoryCharacterRequest,
   UpdateStoryRequest,
   WorldProfile
 } from "@instory/shared";
@@ -236,8 +237,45 @@ export class StoryStore {
     const row = this.database.db.prepare("SELECT payload FROM characters WHERE id = ?").get(characterId) as
       | { payload: string }
       | undefined;
-    return row ? (JSON.parse(row.payload) as CharacterProfile) : null;
+    return row ? normalizeCharacter(JSON.parse(row.payload) as CharacterProfile) : null;
   }
+
+  /**
+   * Applies the author's in-story re-set to one actor. Returns null when the story
+   * is not theirs or the actor does not belong to it, so the route can answer 404
+   * without leaking whose story it is.
+   */
+  updateOwnedCharacter(
+    storyId: string,
+    characterId: string,
+    ownerId: string,
+    input: UpdateStoryCharacterRequest
+  ): CharacterProfile | null {
+    const story = this.findStorySummary(storyId);
+    if (!story || story.ownerId !== ownerId) {
+      return null;
+    }
+
+    const current = this.findCharacter(characterId);
+    if (!current || current.storyId !== storyId) {
+      return null;
+    }
+
+    const updated: CharacterProfile = {
+      ...current,
+      role: input.role,
+      relationToReader: input.relationToReader,
+      secret: input.secret,
+      personality: input.personality,
+      goals: input.goals,
+      constraints: input.constraints
+    };
+    this.database.db
+      .prepare("UPDATE characters SET payload = ? WHERE id = ?")
+      .run(JSON.stringify(updated), characterId);
+    return updated;
+  }
+
 
   countStories(): number {
     const row = this.database.db.prepare("SELECT COUNT(*) AS count FROM stories").get() as { count: number };
@@ -262,7 +300,7 @@ export class StoryStore {
     const rows = this.database.db.prepare("SELECT payload FROM characters WHERE story_id = ? ORDER BY id ASC").all(storyId) as Array<{
       payload: string;
     }>;
-    return rows.map((row) => JSON.parse(row.payload) as CharacterProfile);
+    return rows.map((row) => normalizeCharacter(JSON.parse(row.payload) as CharacterProfile));
   }
 
   private findAnchors(storyId: string): StoryAnchor[] {
@@ -271,6 +309,15 @@ export class StoryStore {
       .all(storyId) as Array<{ payload: string }>;
     return rows.map((row) => JSON.parse(row.payload) as StoryAnchor);
   }
+}
+
+function normalizeCharacter(character: CharacterProfile): CharacterProfile {
+  return {
+    ...character,
+    // Actors stored before the in-story re-set existed carry neither field.
+    relationToReader: character.relationToReader ?? "",
+    secret: character.secret ?? ""
+  };
 }
 
 function normalizeStorySummary(story: StorySummary): StorySummary {

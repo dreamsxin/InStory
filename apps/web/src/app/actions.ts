@@ -10,6 +10,7 @@ import {
   deleteReaderProfile,
   deleteSession,
   updateMyStory,
+  updateMyStoryCharacter,
   updateReaderProfile
 } from "@/lib/api";
 
@@ -31,6 +32,14 @@ function submittedValues(formData: FormData): Record<string, string> {
     }
   }
   return values;
+}
+
+/** One textarea, one item per line, blanks dropped. */
+function linesOf(value: FormDataEntryValue | null): string[] {
+  return String(value ?? "")
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 export async function createReaderProfileAction(_state: FormResult, formData: FormData): Promise<FormResult> {
@@ -194,6 +203,32 @@ export async function updateStoryAction(_state: FormResult, formData: FormData):
 
   revalidatePath("/");
   return { status: "ok", message: `《${title}》已保存。` };
+}
+
+/**
+ * The in-story re-set of one actor. Multi-line fields are one item per line, the
+ * same shape the world rules already use.
+ */
+export async function updateStoryCharacterAction(_state: FormResult, formData: FormData): Promise<FormResult> {
+  const storyId = String(formData.get("storyId") ?? "").trim();
+  const characterId = String(formData.get("characterId") ?? "").trim();
+  const name = String(formData.get("characterName") ?? "").trim();
+
+  try {
+    await updateMyStoryCharacter(storyId, characterId, {
+      role: String(formData.get("role") ?? "").trim(),
+      relationToReader: String(formData.get("relationToReader") ?? "").trim(),
+      secret: String(formData.get("secret") ?? "").trim(),
+      personality: linesOf(formData.get("personality")),
+      goals: linesOf(formData.get("goals")),
+      constraints: linesOf(formData.get("constraints"))
+    });
+  } catch (error) {
+    return { ...failed(error, "保存故事演员失败，请稍后重试。"), values: submittedValues(formData) };
+  }
+
+  revalidatePath("/");
+  return { status: "ok", message: `演员「${name}」已保存。` };
 }
 
 export async function deleteStoryAction(formData: FormData) {

@@ -1,5 +1,6 @@
 import type {
   AuthUser,
+  CharacterProfile,
   CreateStoryRequest,
   CreateSessionResponse,
   CreateTurnResponse,
@@ -10,6 +11,7 @@ import type {
   StorySession,
   StorySummary,
   TurnQuota,
+  UpdateStoryCharacterRequest,
   UpdateStoryRequest
 } from "@instory/shared";
 
@@ -330,6 +332,29 @@ export async function updateMyStory(storyId: string, input: UpdateStoryRequest):
 
   const data = (await response.json()) as { story: StoryDetail };
   return data.story;
+}
+
+/** Applies the author's in-story re-set to one actor of their own story. */
+export async function updateMyStoryCharacter(
+  storyId: string,
+  characterId: string,
+  input: UpdateStoryCharacterRequest
+): Promise<CharacterProfile> {
+  const response = await apiFetch(`/api/me/stories/${storyId}/characters/${characterId}`, {
+    method: "PUT",
+    body: JSON.stringify(input)
+  });
+
+  if (response.status === 401) {
+    throw new UnauthenticatedError();
+  }
+
+  if (!response.ok) {
+    throw new Error("保存故事演员失败");
+  }
+
+  const data = (await response.json()) as { character: CharacterProfile };
+  return data.character;
 }
 
 export async function deleteMyStory(storyId: string): Promise<void> {

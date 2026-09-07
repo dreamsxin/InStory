@@ -11,6 +11,7 @@ import {
   loginRequestSchema,
   registerRequestSchema,
   storySummarySchema,
+  updateStoryCharacterRequestSchema,
   updateStoryRequestSchema
 } from "@instory/shared";
 import { applyStateDelta, createInitialState, createTimelineNode, shouldCreateTimelineNode } from "@instory/story-engine";
@@ -785,6 +786,31 @@ export async function buildApp(options: BuildAppOptions) {
     return { story };
   });
 
+  /** The in-story re-set of one actor: identity, stance towards the reader, secret, goals. */
+  app.put("/api/me/stories/:storyId/characters/:characterId", async (request, reply) => {
+    const { storyId, characterId } = request.params as { storyId: string; characterId: string };
+    const parsed = updateStoryCharacterRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
+    }
+
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
+    }
+
+    const character = options.storyCatalog.updateOwnedCharacter(
+      storyId,
+      characterId,
+      request.authUser.id,
+      parsed.data
+    );
+    if (!character) {
+      return reply.code(404).send({ error: "Character not found" });
+    }
+
+    return { character };
+  });
+
   app.delete("/api/me/stories/:storyId", async (request, reply) => {
     const { storyId } = request.params as { storyId: string };
     if (!request.authUser) {
@@ -1474,6 +1500,10 @@ function createCastCharacters({
       storyId,
       name: profile.name,
       role: profile.description,
+      // Left blank on purpose: the author sets these per story from the console,
+      // and an invented stance or secret would be worse than none.
+      relationToReader: "",
+      secret: "",
       personality: splitProfileText(profile.personality),
       goals: ["参与故事互动", "根据自身设定回应读者行动"],
       constraints: splitProfileText(profile.description)

@@ -132,6 +132,61 @@ test.describe("creation console", () => {
     await expect(reopened.getByRole("button", { name: "从开场重新试玩" })).toBeVisible();
   });
 
+  test("re-sets an actor inside one story without touching the profile", async ({ page, request }) => {
+    await signIn(page, request, "e2e-recast-story@example.com");
+    await page.goto("/");
+    await page.locator(".app-topbar").getByRole("button", { name: "创作" }).click();
+
+    await page.getByRole("button", { name: "角色库" }).click();
+    const profilePanel = page.locator(".create-profile-panel");
+    await profilePanel.getByLabel("名称").fill("柳明河");
+    await profilePanel.getByLabel("性格").fill("温和，习惯先听完再答。");
+    await profilePanel.getByLabel("身份背景").fill("旧书店店主，认识城里所有夜归人。");
+    await profilePanel.getByRole("button", { name: "创建入戏角色" }).click();
+    await expect(profilePanel.locator(".form-feedback")).toHaveClass(/is-ok/);
+
+    await page.getByRole("button", { name: "故事工作台" }).click();
+    const storyPanel = page.locator(".create-story-panel");
+    await storyPanel.getByLabel("故事 ID").fill(`e2e-night-shop-${Date.now()}`);
+    await storyPanel.getByLabel("标题").fill("夜市旧书店");
+    await storyPanel.getByLabel("类型").fill("都市奇谈");
+    await storyPanel.getByLabel("一句话钩子").fill("有些书只在打烊后才上架。");
+    await storyPanel.getByLabel("世界前提").fill("一间只在深夜营业的书店，卖的是别人的记忆。");
+    await storyPanel.getByLabel("起点地点").fill("书店后间");
+    await storyPanel.getByLabel("起点场景").fill("门帘一响，柜台后的人抬起头，像在等你很久了。");
+    await storyPanel.locator('input[name="castProfileIds"]').first().check();
+    await storyPanel.getByRole("button", { name: "创建故事" }).click();
+    await expect(storyPanel.locator(".form-feedback")).toHaveClass(/is-ok/);
+
+    const editor = page.locator(".story-management-list .management-details");
+    await editor.locator("summary").click();
+    const cast = editor.locator(".cast-form");
+    await expect(cast.locator(".cast-name")).toHaveText("柳明河");
+
+    // The whole point of the re-set: the same character can be someone else here.
+    await cast.getByLabel("故事身份").fill("替人保管记忆的书店老板");
+    await cast.getByLabel("与读者的关系").fill("欠你一本没还的书");
+    await cast.getByLabel("秘密（读者看不到，AI 只能暗示）").fill("你上次卖掉的记忆还在他手里");
+    await cast.getByLabel("当前目标（每行一条）").fill("拖到打烊\n不让你翻后间的架子");
+    await cast.getByRole("button", { name: "保存演员" }).click();
+    await expect(cast.locator(".form-feedback")).toHaveClass(/is-ok/);
+
+    await page.goto("/");
+    await page.locator(".app-topbar").getByRole("button", { name: "创作" }).click();
+    const reopened = page.locator(".story-management-list .management-details");
+    await reopened.locator("summary").click();
+    await expect(reopened.locator(".cast-form").getByLabel("与读者的关系")).toHaveValue("欠你一本没还的书");
+    await expect(reopened.locator(".cast-form").getByLabel("当前目标（每行一条）")).toHaveValue(
+      "拖到打烊\n不让你翻后间的架子"
+    );
+
+    // The profile it was snapshotted from must be untouched.
+    await page.getByRole("button", { name: "角色库" }).click();
+    const profileEditor = page.locator(".profile-list .management-details");
+    await profileEditor.locator("summary").click();
+    await expect(profileEditor.getByLabel("身份背景")).toHaveValue("旧书店店主，认识城里所有夜归人。");
+  });
+
   test("reports a saved reader profile in place", async ({ page, request }) => {
     await signIn(page, request, "e2e-create-profile@example.com");
     await page.goto("/");

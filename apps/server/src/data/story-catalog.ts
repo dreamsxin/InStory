@@ -10,6 +10,7 @@ import type {
   StoryAnchor,
   StoryDetail,
   StorySummary,
+  UpdateStoryCharacterRequest,
   UpdateStoryRequest,
   WorldProfile
 } from "@instory/shared";
@@ -71,6 +72,15 @@ export class StoryCatalog {
 
   findCharacter(characterId: string): CharacterProfile | null {
     return this.store.findCharacter(characterId);
+  }
+
+  updateOwnedCharacter(
+    storyId: string,
+    characterId: string,
+    ownerId: string,
+    input: UpdateStoryCharacterRequest
+  ): CharacterProfile | null {
+    return this.store.updateOwnedCharacter(storyId, characterId, ownerId, input);
   }
 }
 

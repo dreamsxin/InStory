@@ -99,15 +99,37 @@ export interface UpdateStoryRequest {
   defaultSegmentLength: SegmentLengthPreset;
 }
 
+/**
+ * One actor inside a story. Created as a snapshot of the author's reader profile,
+ * then re-set per story: the same character can be a friend in one story and the
+ * one keeping a secret in the next, so these fields belong to the story and never
+ * travel back to the profile.
+ */
 export interface CharacterProfile {
   id: string;
   storyId: string;
   name: string;
+  /** Who this actor is inside this story. */
   role: string;
+  /** How the actor stands towards the reader when the story opens. */
+  relationToReader: string;
+  /** Known to the AI and withheld from the reader until the story reveals it. */
+  secret: string;
   personality: string[];
   goals: string[];
   constraints: string[];
 }
+
+/** The in-story re-set an author can apply to one actor. Name stays as created. */
+export interface UpdateStoryCharacterRequest {
+  role: string;
+  relationToReader: string;
+  secret: string;
+  personality: string[];
+  goals: string[];
+  constraints: string[];
+}
+
 
 export interface StoryAnchor {
   id: string;

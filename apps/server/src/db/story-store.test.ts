@@ -174,6 +174,8 @@ describe("StoryStore", () => {
           storyId: "moon-market",
           name: "林向晚",
           role: "被卷入市集的法医",
+          relationToReader: "把你当成唯一还能说真话的人",
+          secret: "她自己的名字已经卖掉了一半",
           personality: ["冷静", "敏锐"],
           goals: ["找到名字"],
           constraints: ["不会轻易相信陌生人"]

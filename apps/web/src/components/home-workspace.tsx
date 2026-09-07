@@ -3,7 +3,7 @@
 import { Avatar, Button, Card, Chip, Input, Label, ListBox, Select, TextArea, TextField } from "@heroui/react";
 import { useActionState, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import type { ReaderProfile, ReaderSessionListItem, StoryDetail, StorySummary } from "@instory/shared";
+import type { CharacterProfile, ReaderProfile, ReaderSessionListItem, StoryDetail, StorySummary } from "@instory/shared";
 import { BrandMark } from "@/components/brand-mark";
 import { ReadingThemeSelect } from "@/components/reading-theme-select";
 import { DEFAULT_READING_THEME, parseReadingTheme } from "@/lib/reading-themes";
@@ -16,7 +16,8 @@ import {
   deleteSessionAction,
   deleteStoryAction,
   updateReaderProfileAction,
-  updateStoryAction
+  updateStoryAction,
+  updateStoryCharacterAction
 } from "@/app/actions";
 import { IDLE_FORM, kept, submitted, type FormResult } from "@/lib/form-result";
 
@@ -580,6 +581,20 @@ function StoryEditForm({
           <FormFeedback result={result} />
         </div>
       </form>
+      {detail.characters.length ? (
+        <section className="cast-editor">
+          <div>
+            <span className="eyebrow">Cast</span>
+            <h3>故事演员</h3>
+            <p className="muted">
+              这些设定只属于这个故事。同一个角色可以在别的故事里是完全不同的人，改这里不会动你的角色库。
+            </p>
+          </div>
+          {detail.characters.map((character) => (
+            <CharacterEditForm character={character} key={character.id} />
+          ))}
+        </section>
+      ) : null}
       <form
         action={deleteStoryAction}
         onSubmit={(event) => {
@@ -592,6 +607,56 @@ function StoryEditForm({
         <Button className="danger-button" type="submit" variant="outline">删除故事</Button>
       </form>
     </div>
+  );
+}
+
+function CharacterEditForm({ character }: { character: CharacterProfile }) {
+  const [result, action, pending] = useActionState(updateStoryCharacterAction, IDLE_FORM);
+
+  return (
+    <form className="profile-form embedded cast-form" action={action}>
+      <input name="storyId" type="hidden" value={character.storyId} />
+      <input name="characterId" type="hidden" value={character.id} />
+      <input name="characterName" type="hidden" value={character.name} />
+      <strong className="cast-name">{character.name}</strong>
+      <TextField defaultValue={kept(result, "role", character.role)} isRequired name="role">
+        <Label>故事身份</Label>
+        <TextArea maxLength={2000} rows={2} />
+      </TextField>
+      <div className="form-grid">
+        <TextField
+          defaultValue={kept(result, "relationToReader", character.relationToReader)}
+          name="relationToReader"
+        >
+          <Label>与读者的关系</Label>
+          <TextArea maxLength={2000} rows={2} />
+        </TextField>
+        <TextField defaultValue={kept(result, "secret", character.secret)} name="secret">
+          <Label>秘密（读者看不到，AI 只能暗示）</Label>
+          <TextArea maxLength={2000} rows={2} />
+        </TextField>
+      </div>
+      <div className="form-grid">
+        <TextField defaultValue={kept(result, "goals", character.goals.join("\n"))} name="goals">
+          <Label>当前目标（每行一条）</Label>
+          <TextArea maxLength={2000} rows={3} />
+        </TextField>
+        <TextField defaultValue={kept(result, "personality", character.personality.join("\n"))} name="personality">
+          <Label>性格（每行一条）</Label>
+          <TextArea maxLength={2000} rows={3} />
+        </TextField>
+      </div>
+      <TextField defaultValue={kept(result, "constraints", character.constraints.join("\n"))} name="constraints">
+        <Label>不能做的事（每行一条）</Label>
+        <TextArea maxLength={2000} rows={3} />
+      </TextField>
+      <div className="management-actions">
+        <Button isDisabled={pending} type="submit">
+          {pending ? "保存中…" : "保存演员"}
+        </Button>
+        <FormFeedback result={result} />
+      </div>
+    </form>
   );
 }
 

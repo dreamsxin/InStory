@@ -787,6 +787,51 @@ describe("server API", () => {
     });
     expect(updateSeedStory.statusCode).toBe(404);
 
+    // The in-story re-set: who the actor is here, how they stand towards the
+    // reader, and what they are hiding - none of it touches the reader profile
+    // the actor was snapshotted from.
+    const castId = loaded.json<StoryDetail>().characters[0]?.id ?? "";
+    const recast = await app.inject({
+      method: "PUT",
+      url: `/api/me/stories/moon-market/characters/${castId}`,
+      payload: {
+        role: "替人保管名字的市集掌柜",
+        relationToReader: "认得你，却装作第一次见面",
+        secret: "她卖掉的第一个名字是你的",
+        personality: ["冷静", "话少"],
+        goals: ["拖住你直到子夜过去"],
+        constraints: ["不能主动说出交易规则"]
+      }
+    });
+    expect(recast.statusCode).toBe(200);
+    expect(recast.json<{ character: { role: string; relationToReader: string; secret: string } }>().character).toMatchObject({
+      role: "替人保管名字的市集掌柜",
+      relationToReader: "认得你，却装作第一次见面",
+      secret: "她卖掉的第一个名字是你的"
+    });
+
+    const afterRecast = await app.inject({ method: "GET", url: "/api/stories/moon-market" });
+    expect(afterRecast.json<StoryDetail>().characters[0]).toMatchObject({
+      name: "林向晚",
+      secret: "她卖掉的第一个名字是你的",
+      goals: ["拖住你直到子夜过去"]
+    });
+
+    const seedCast = await app.inject({
+      method: "PUT",
+      url: `/api/me/stories/rain-mansion/characters/${castId}`,
+      payload: {
+        role: "不能修改",
+        relationToReader: "",
+        secret: "",
+        personality: [],
+        goals: [],
+        constraints: []
+      }
+    });
+    expect(seedCast.statusCode).toBe(404);
+
+
     const duplicate = await app.inject({
       method: "POST",
       url: "/api/stories",

@@ -144,10 +144,24 @@ export const characterProfileSchema = z.object({
   storyId: z.string().min(1),
   name: z.string().min(1),
   role: z.string().min(1),
+  // Defaulted, not required: stories created before the in-story re-set existed
+  // have stored payloads without these two fields.
+  relationToReader: z.string().default(""),
+  secret: z.string().default(""),
   personality: z.array(z.string()),
   goals: z.array(z.string()),
   constraints: z.array(z.string())
 });
+
+export const updateStoryCharacterRequestSchema = z.object({
+  role: z.string().min(1).max(2000),
+  relationToReader: z.string().max(2000),
+  secret: z.string().max(2000),
+  personality: z.array(z.string().max(400)).max(20),
+  goals: z.array(z.string().max(400)).max(20),
+  constraints: z.array(z.string().max(400)).max(20)
+});
+
 
 export const storyAnchorSchema = z.object({
   id: z.string().min(1),

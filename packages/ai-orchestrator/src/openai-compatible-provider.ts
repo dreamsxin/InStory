@@ -307,6 +307,7 @@ function buildSystemPrompt(): string {
     "当 intent 是 read_segment 时，这是读者点击“继续阅读”，不是角色说话或行动；不要复述 userInput，不要写成聊天回复，要按最近剧情、故事世界和锚点自然写下一段小说。",
     "当 intent 是 reader_action 时，才把 userInput 当成读者角色的明确行动或台词处理。",
     "优先遵守 story.world、story.characters 和 story.anchors；required 锚点要逐步推进，forbidden 锚点禁止提前发生。",
+    "story.characters[].relationToReader 是该演员对读者的既有态度，要体现在语气和行动上；secret 只有你知道，禁止直接写出或让演员自述，只能通过行为、回避和细节逐步透露。",
     "必须严格参考 lengthGuide。narration 应接近 lengthGuide.targetWords，并拆成 lengthGuide.paragraphs 个自然段；段落之间用换行分隔。",
     "每次 narration 应形成一个完整小说小节，有开端、推进、可观察细节、人物反应、状态变化和段末悬念；禁止只回应一句话，禁止像聊天一样短答。",
     "dialogues 只放关键对白，不能替代 narration 的正文长度。",
