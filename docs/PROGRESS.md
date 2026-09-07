@@ -1,140 +1,104 @@
 # InStory 项目进度
 
-## 2026-05-20
+> 给下一次接手的人：先读「当前现状」和「工程约定」，再看「下一步」。
+> 历史逐条记录压在最后，只作为溯源用，不要当成现状。
 
-### 已完成
+## 当前现状（2026-09-07）
 
-- 建立 Node.js / TypeScript monorepo。
-- 新增 `apps/server` Fastify 服务端骨架。
-- 新增 `apps/web` Next.js Web 客户端骨架。
-- 新增 `packages/shared` 共享领域类型与请求校验。
-- 新增 `packages/story-engine` 叙事状态机基础能力。
-- 新增 `packages/ai-orchestrator` Mock AI 叙事供应商。
-- 实现 MVP API：
-  - `GET /api/health`
-  - `GET /api/stories`
-  - `GET /api/stories/:storyId`
-  - `POST /api/stories/:storyId/sessions`
-  - `GET /api/sessions/:sessionId`
-  - `POST /api/sessions/:sessionId/turns`
-  - `POST /api/sessions/:sessionId/rewind`
-- 实现 Web MVP：
-  - 故事列表
-  - 创建会话
-  - 阅读器
-  - 智能选项
-  - 自由输入
-  - 状态面板
-  - 记忆书签展示
-- README 增加开发启动说明。
-- 新增 OpenAI-compatible `LLMProvider`。
-- 服务端支持通过环境变量在 Mock AI 和 OpenAI-compatible 模型之间切换。
-- 新增 `.env.example`。
-- 为 `story-engine` 增加状态机单元测试，覆盖初始状态、状态差异合并、去重、时间线节点判定和摘要回退。
-- 修正 workspace 测试脚本，允许暂未添加测试的应用包通过 `npm run test`。
-- 接入 SQLite 会话存储，读者会话、回合、状态快照和时间线以 JSON payload 形式持久化到本地数据库。
-- 新增 `SessionStore` 单元测试，覆盖保存、读取和更新。
-- 将故事、世界、角色、剧情锚点从服务端入口硬编码迁移到 `stories.seed.json`。
-- 新增 `StoryCatalog` 仓库层和测试，用 Zod 校验示例故事种子数据。
-- `GET /api/stories/:storyId` 返回完整故事详情，包括 world、characters、anchors。
-- 抽出服务端 `buildApp`，将路由注册与进程启动解耦，便于测试和后续部署。
-- 新增服务端 API 测试，覆盖健康检查、故事详情、创建会话、推进回合、读取会话、回溯分支和错误响应。
-- MVP 规划新增“极简管理后台 / AI 叙事系统控制台”，用于模型配置查看、运行状态、故事配置查看、会话审计和审核占位。
-- 新增 Admin API：
-  - `GET /api/admin/status`
-  - `GET /api/admin/models`
-  - `GET /api/admin/stories`
-  - `GET /api/admin/sessions`
-  - `GET /api/admin/sessions/:sessionId`
-  - `GET /api/admin/moderation/events`
-- Admin API 支持 `ADMIN_TOKEN` Bearer 鉴权，本地未设置 token 时允许访问。
-- `SessionStore` 增加会话统计和最近会话列表能力。
-- Admin API 测试覆盖状态、模型配置、故事配置、会话审计、审核占位和鉴权。
-- 新增 Web `/admin` 极简只读控制台，展示运行状态、模型配置、存储路径、故事配置、最近会话和审核事件占位。
-- 新增 InStory 图标资产，用作 Web favicon、客户端品牌 logo 和 512px 备用图标。
-- 新增共享 `AppDatabase` SQLite 连接层。
-- 新增 `StoryStore`，将 stories、worlds、characters、story_anchors 写入 SQLite 表。
-- `StoryCatalog` 改为从 SQLite 读取故事配置，并在空库时从 `stories.seed.json` 自动导入。
-- 新增 `StoryStore` 单元测试。
-- 新增 `docs/PRODUCT_PLAN.md`，将 README 中的产品规划内容迁入独立文档。
-- README 收敛为开源项目入口，仅保留项目概览、当前状态、技术栈、代码结构、文档导航和开发启动说明。
-- 新增 `npm run verify:llm`，用于验证 Mock 或 OpenAI-compatible `LLMProvider` 的端到端叙事输出 schema。
-- 管理后台支持保存正式 OpenAI-compatible Provider 配置，包含 Provider、Base URL、Model 和 API Key。
-- 模型配置写入 SQLite，运行时立即重建 `LLMProvider`，API Key 不通过 Admin API 回显。
-- 管理后台新增“验证当前 Provider”按钮，调用 `POST /api/admin/models/verify` 执行最小叙事生成并校验输出 schema。
-- OpenAI-compatible Provider 支持根地址或完整 `/chat/completions` 地址，并兼容真实模型把 `memoryEvents` 返回为对象数组的情况。
-- 作者工具 MVP 起步：管理后台支持编辑故事基础配置，新增 `PUT /api/admin/stories/:storyId`，可更新标题、标语、类型和 AI 自由度。
-- 产品规划和架构调整为“连续阅读 + 随时入戏”的交互模型，新增我的角色、关键介入节点和阅读/入戏双模式。
-- 新增 `docs/INTERACTION_DESIGN.md`，定义首页、我的角色、角色选择、阅读器、入戏按钮、关键介入节点和创作入口的 MVP 交互基线。
-- 新增 `docs/ADR-UI-STACK.md`，确定 HeroUI 作为基础交互组件库，并明确阅读器等核心体验组件保持自定义。
-- 新增“我的角色”服务端基础能力：`ReaderProfile` 共享类型、SQLite `reader_profiles` 存储、`GET/POST /api/reader/profiles`，创建会话时可通过 `readerProfileId` 注入用户角色上下文。
-- Web 客户端完成 HeroUI 基础依赖接入，先引入样式与组件包，核心阅读体验仍保持自定义。
-- 首页升级为“故事世界 + 我的角色”工作台，支持创建我的角色，并在进入故事前选择入戏身份。
-- 参考 HeroUI demos 的 Card、Avatar、Chip、Drawer、Modal、Tabs、Table 等交互模式，统一客户端与管理后台为现代 App 工作台视觉：粘性导航、Hero 状态区、卡片阴影、圆角控件、输入焦点态和后台快捷导航。
-- 客户端首页改为 App 式分区导航，移动端使用底部 Tab，平板/桌面使用顶部导航；角色创建从故事列表中拆出到独立“角色/创作”视图。
-- 阅读器新增专注阅读交互，点击正文区域或悬浮按钮可切换顶部栏、侧栏和输入区显示，手机端保留恢复入口。
-- 继续分析 HeroUI docs 组件布局，参考其桌面侧栏、移动抽屉、紧凑 header、横向 tabs 和单滚动容器模式，将客户端首页进一步改成移动端 App shell。
-- 检索并评估开源阅读器库，结论是 MVP 不引入 EPUB 阅读器库，继续自定义互动小说阅读器，后续外部书籍导入阶段再评估 `epub.js`、`react-reader` 或 Readium Web。
-- 手机端首页改为固定高度 App 布局，顶部显示当前主功能，底部导航显示主/副标签，故事、角色、继续、创作各自独立滚动。
-- 手机端阅读器改为沉浸式正文滚动，状态侧栏在可见 chrome 下以底部浮层呈现，输入区固定在底部，隐藏 chrome 后保留悬浮恢复入口。
-- 根据 `D:\work\heroui\skills` 和本地 demos 修正 HeroUI v3 用法：不使用 Provider，采用 `Card.Header/Card.Content`、`TextField + Label + Input/TextArea`、`Select + ListBox.Item` 等复合组件模式，并补齐 Tailwind v4 / `@heroui/styles` 样式管线。
-- 移动端 UI 完成截图回归：手机竖屏首页、手机横屏首页、手机竖屏阅读器、手机横屏阅读器均已检查；阅读器手机端默认进入专注阅读，保留智能选项和“显示菜单”入口。
-- 阅读器交互调整为“阅读推进优先”：默认显示 `继续阅读` 主按钮，智能选项和自由输入收进 `入戏行动` 面板，`状态` 与 `记忆` 改为工具坞按需展开，降低每回合强制选择带来的阅读打断。
-- 明确产品与架构策略：HeroUI 只作为组件库，不承担阅读器 App Shell 自适应；阅读内容优先使用作者预设与已生成缓存，AI 只在个性化补写、分支缺失和入戏回写时介入；作者工具后续需要支持生成长度配置。
-- 产品规划新增作品级“入戏体验模式”：`剧本入戏`、`共演入戏`、`即兴入戏`，用于控制作者预设、AI 补写和临场自由度的权重。
-- MVP 范围重新收敛：完整验证 `共演入戏` 主路径，`剧本入戏` 和 `即兴入戏` 先作为配置字段与策略占位；优先实现 `SessionSegment`、`read_segment`、默认生成长度和会话隔离存储。
-- 产品规划明确 UGC 是核心方向，但 MVP 不实现积分、审核和收益，优先验证用户创作与入戏体验。
-- 文档补充故事创建字段：故事 ID、标题、标语、类型、封面图、世界前提、起点场景、世界规则、入戏体验模式、默认生成长度和 AI 自由度。
-- 新增 `CreateStoryRequest` 共享契约和 `POST /api/stories`，支持通过客户端创作入口创建最小故事。
-- `StoryStore` 支持在 SQLite 中创建故事摘要和世界起点配置，角色与锚点后续扩展。
-- 客户端 `创作` 导航新增故事创建表单；管理台不再作为普通用户创作入口。
-- 创作界面文案明确区分“入戏角色”和“故事世界”；故事新增封面图 URL，故事卡片展示封面或默认封面兜底。
-- 客户端创作入口调整为用户控制台，分为 `角色库` 和 `故事工作台`；创建故事时可选择已有角色作为故事演员，服务端复制为故事内角色快照。
-- 明确 `故事` 导航是公共探索入口，`创作` 导航是用户控制台，包含 `我的故事` 和 `我的角色`；管理员后台继续只承担模型、审计和治理能力。
-- 故事新增 `ownerId` 归属字段和 `GET /api/me/stories`，用户侧可以查看自己创建的故事。
-- 创建故事时服务端写入当前用户归属，并只允许选择当前用户自己的角色作为故事演员。
-- 完善用户侧管理能力：`我的角色` 支持编辑和删除，`我的故事` 支持展开式编辑展示信息、世界入口、体验参数并支持删除。
-- 新增用户侧管理 API：`PUT/DELETE /api/reader/profiles/:profileId`、`PUT/DELETE /api/me/stories/:storyId`，均按当前用户归属限制操作范围。
-- 客户端主导航移除独立 `角色` 入口，角色管理收敛到 `创作 -> 角色库`；角色不作为独立聊天产品入口。
-- 故事和角色新增 `visibility` 可见性字段；用户新建内容默认仅自己可见，公开故事才进入 `故事` 探索入口。
-- `我的故事` 展开管理新增试玩入口，作者可选择入戏角色直接进入阅读器检查故事开场。
-- 删除故事和删除角色增加二次确认，降低误触破坏内容的风险。
-- 客户端工作台桌面宽度调整为 100% 自适应，创作控制台在大屏下获得更宽的双栏编辑空间；移动端底部导航改为按 Tab 数量自适应。
-- `继续阅读` 从占位改为最近会话列表，新增 `GET /api/me/sessions`，可从首页继续进入看过的故事。
-- `继续阅读` 调整为按故事聚合，一个故事只显示一条最新阅读记录，并复用进入故事的封面卡片展示样式。
-- 首页故事卡检测到已有阅读进度时优先恢复历史会话，避免重复新建会话导致历史对话无法延续。
-- 修正阅读推进生成策略：`继续阅读` 改用 `read_continue` 意图，不再把提示句当作用户台词保存；AI Provider 请求开始携带故事世界、角色和剧情锚点上下文。
-- `雨夜旧宅` 示例故事补充阶段推进规则，避免只围绕开场循环生成，强化“小说小节”而不是聊天回复的体验。
-- 修正公共故事过滤逻辑：探索页只展示 `visibility=public` 的故事，系统模板也遵守可见性；`雨夜旧宅` 明确为公开平台模板故事。
-- 优化 `雨夜旧宅` 种子故事，补充六幕推进、后院枯井、书房、账房周砚和书房对质锚点，提升模板故事的可演示性。
-- 阅读器记忆书签新增“回到这里”，读者可回退到之前的选择/记忆节点并创建新的分支会话，原会话历史保留。
-- 入戏行动面板改为固定动作优先，始终展示“观察、询问、检查、行动”四类稳定入口，AI 生成选项降级为“本幕建议”。
-- 阅读器记忆面板调整为游戏式“存档记忆”，支持恢复指定存档为新分支，并新增“重置会话”从当前故事和身份重新开局。
-- OpenAI-compatible Provider 增加请求超时保护，默认 45 秒，可通过 `LLM_TIMEOUT_MS` 调整；前端推进故事失败时展示服务端错误细节。
-- 重新审阅产品与架构后确认当前主要差距：正式 `read_segment`/`intervention_turn` 尚未完全拆分，`SessionSegment` 缓存和 SSE/后台生成尚未实现，真实 AI 慢响应仍是体验风险。
-- 阅读生成长度开始进入运行时：服务端根据作品 `defaultSegmentLength` 传入目标字数和段落数，真实模型 prompt 要求生成完整小说小节，阅读器按自然段展示正文。
+纯文本互动叙事闭环已经跑通，并被测试固定住：注册登录、探索书架、进入故事、流式阅读、入戏行动、存档回溯、配额、内容审核、创作控制台、管理控制台都在工作。
 
-### 验证结果
+命令（Windows PowerShell 下逐条执行，不要用 `&&`）：
 
-- `npm install` 成功。
-- `npm run typecheck` 通过。
-- `npm run build` 通过。
-- `npm run test` 通过。
-- 服务端健康检查通过：`http://localhost:4000/api/health`。
-- Web 首页返回 200：`http://localhost:3000`。
+```powershell
+npm install
+npm run typecheck          # 全 workspace + e2e 的 tsc
+npm run test               # 各 workspace 的 vitest
+npm run test:e2e           # 会先重置 e2e 数据库，再拉起独立的 4000/3000
+npm run dev:server         # API  http://localhost:4000
+npm run dev:web            # Web  http://localhost:3000
+npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 schema
+```
 
-### 已知问题
+最近一次全量结果：typecheck 通过；单测 server 155 / story-engine 12 / web 20；e2e 30 条通过。
 
-- `npm audit` 报告 2 个 moderate，来源是 `next@16.2.6` 依赖的 `postcss`。当前 `npm audit fix --force` 会降级到破坏性旧版本，暂不执行。
-- 故事、世界、角色和锚点已进入 SQLite 表，但仍以 JSON payload 存储，尚未拆成完全关系化字段。
-- SQLite 当前使用 Node.js 内置 `node:sqlite`，在 Node 24 下可能出现实验性 API 提示。
-- AI 叙事默认使用 Mock provider；真实模型可通过 `npm run verify:llm` 在配置 API Key 后手动验证。
+## 已实现
 
-### 下一步
+- **账号与权限**：邮箱注册登录、httpOnly Cookie 会话、`role` 为 `reader` / `admin`；`ADMIN_EMAILS` 注册即生效，已有账号下次登录时提权；`PUT /api/admin/users/:userId/role` 可发角色。`/admin` 按角色拦截。
+- **阅读运行时**：`POST /api/sessions/:id/turns` 与 SSE 版 `/turns/stream`（逐字上屏、可中断）、存档时间线、`rewind` 分支、`reset` 重开、`DELETE /api/sessions/:id`、按窗口分页读取回合（`?turnLimit`、`/turns?before=`）、每日配额随会话读取一起返回。
+- **介入节点（§5.3）**：每回合带 `intervention`（六种 `kind` + 一句提示），存在 `session_turns.intervention`；模型不标时服务端按这一段真实改变的状态兜一个（`deriveIntervention`，只对 `read_continue` 生效）。
+- **创作**：故事四段表单、故事内演员重设（故事身份 / 与读者关系 / 秘密 / 当前目标 / 性格 / 禁止项）、剧情锚点整组替换、试玩区分「回到上次试玩」与「从开场重新试玩」、五套阅读装帧主题。
+- **反馈与社会证明**：`GET /api/me/story-insights`（作者看自己的故事被读到什么程度）与 `GET /api/stories/insights`（公开书架上的读者数与最深回合），共用同一份聚合。
+- **管理台**：运行状态、模型配置与 Provider 验证、用量、审核队列（解决 / 忽略）、故事配置、会话审计。
+- **AI 编排**：`MockNarrativeProvider` 与 `OpenAICompatibleProvider`（超时、分类重试退避、流式 narration 增量提取、输出 Zod 校验）。
 
-1. 扩展故事演员配置，支持故事内身份、关系、秘密、目标和行为约束。
-2. 实现 `SessionSegment` 存储，生成内容按 `sessionId` 隔离，并预留 `userId`。
-3. 将当前 `read_continue` 兼容回合升级为正式 `read_segment` 接口，并与 `intervention_turn` 完全拆分。
-4. 为阅读生成引入 SSE 流式状态或后台任务，避免真实 AI 请求长时间阻塞前端体验。
-5. 增加阅读设置：字号、行距、主题、滚动/分页偏好。
-6. 增加 Web 阅读器交互测试和 `/admin` 页面级测试。
+## 代码地图
+
+- `apps/server/src/app.ts`：所有路由都在这一个 `buildApp` 里，没有 routes/ 分层。找接口直接搜 `app.get("/api/`。
+- `apps/server/src/db/`：`migrations.ts`（唯一的 schema 事实来源，append-only）、各 `*-store.ts` 直接写 SQL，没有 ORM。
+- `apps/server/src/model-runtime.ts`：Provider 的装配与 `verify`；`moderation/checker.ts` 是输入输出审核，`security/rate-limiter.ts` 是限流。
+- `packages/ai-orchestrator/src/`：`factory.ts` 选 Provider，`mock-provider.ts` / `openai-compatible-provider.ts` 是两种实现（超时与重试退避在后者里），`narration-stream.ts` 从流式 JSON 里抽 narration 增量。
+- `packages/shared/src/story.ts` + `schemas.ts`：前后端唯一契约。改字段从这里开始。
+- `packages/story-engine/src/state.ts`：`applyStateDelta`、`shouldCreateTimelineNode`、`deriveIntervention`，纯函数，好测。
+- `apps/web/src/components/home-workspace.tsx`：首页三个 Tab 与整个创作控制台，是最大的一个客户端文件。
+- `apps/web/src/components/reader-client.tsx`：阅读器全部交互。
+- `apps/web/src/lib/api.ts`：所有服务端调用；`app/actions.ts` 是表单用的 server actions。
+- `e2e/`：Playwright，`reset-database.ts` 在每次 `test:e2e` 前重置数据库。
+
+## 数据库迁移
+
+`apps/server/src/db/migrations.ts` 是 append-only 的：已经应用过的条目一律不改，只追加下一个 id。每次启动都会跑 `runMigrations`。
+
+1. `initial_schema` — stories / worlds / characters / story_anchors / reader_sessions / reader_profiles / model_config
+2. `session_and_story_lookup_indexes`
+3. `normalize_session_turns_and_timeline` — 把回合与时间线从 `reader_sessions.payload` 拆成独立表
+4. `add_users_and_auth_sessions` — 并把历史的 `local-reader` 落成一个真实账号
+5. `attach_reader_sessions_to_users`
+6. `add_generation_usage` — 每次生成一行，配额与成本都从这里算
+7. `add_moderation_events` — 审核队列与审计是同一张表
+8. `add_turn_intervention` — 回合上的关键节点
+9. `snapshot_story_title_on_sessions` — 会话自己记住故事名，故事删了卡片还能叫出名字
+
+## 工程约定（动手前先读）
+
+这些不是风格偏好，是踩过的坑换来的：
+
+- **不编兜底值。** 缺数据就说缺，不要猜一个看起来合理的。曾经「继续」卡片在故事缺失时兜底显示题材「故事」、篇幅「标准」，结果是界面在说谎；现在故事没了就给墓碑卡片。
+- **越权一律 404，不是 403。** 私有故事不该确认「这个 ID 存在」。见 `canReadStory`。
+- **聚合按每个故事各自的作者排除。** 「读者数」的意思是别人读过，不是作者打开过自己的草稿；公开书架混着不同作者，所以排除是逐故事的。
+- **快照和实时要分清。** `ReaderRole`（进故事时的身份）、故事内 `Character`（从角色库复制）、`reader_sessions.story_title` 都是快照，不能改成实时查询；`StorySummary` 是实时配置，卡片上的题材篇幅必须现取。
+- **模型输出不可信但也别一票否决。** `narrativeResultSchema` 里 `intervention` 用 `.catch(null)`：模型写错一个字段不该让读者损失一整段正文和一次配额。
+- **`apps/web` 只能从 `@instory/shared` 做 type import。** 值导入会踩到 shared 包内部 `./x.js` 说明符解析失败；需要常量就在 `apps/web/src/lib/` 里放一份（见 `reading-themes.ts`）。
+- **`"use server"` 文件只能导出 async function。** 共享的 `IDLE_FORM` 之类必须放在 `lib/form-result.ts`。
+- **表单失败要把用户输入还回去。** server action 失败后 React 会重挂表单，`values` + `defaultValue`（新建）或 `kept()`（编辑）是唯一能保住稿子的办法。
+- **破坏性操作先问一次**：删故事、删角色、删进度、重置会话、恢复存档。
+- **加一个字段的顺序**：`packages/shared`（类型 + zod）→ 需要落库就加迁移 → `*-store.ts` 读写与归一化 → `app.ts` 路由 → `apps/web/src/lib/api.ts` → 界面 → 服务端单测 + e2e → 文档。
+
+## 本机排错
+
+- **跑 e2e 前必须先停掉 dev server。** `playwright.config.ts` 里 `reuseExistingServer: false`，否则 4000 端口冲突直接报 `already used`；这个设置是故意的，避免 e2e 跑在开发数据库上把测试账号写进去。
+- **PowerShell 不支持 `&&`**，命令要分开发；提交信息用 `git commit -F .git/COMMIT_MSG_TMP.txt`，避免引号和 `<>` 破坏解析。
+- **`apps/web/next-env.d.ts` 会来回抖动**（dev 与 build 写的路径不同），提交前 `git checkout -- apps/web/next-env.d.ts`。
+- **e2e 单跑某个 spec 会 409**：`npm run test:e2e` 才会重置数据库，直接 `npx playwright test xxx.spec.ts` 会撞上上一轮留下的账号。
+- 真实模型：`.env` 里把 `LLM_PROVIDER` 换成 `openai-compatible` 并配 `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL`，或在 `/admin` 里存一份（API Key 只落服务端，不回显）。
+
+## 下一步（按我判断的优先级）
+
+1. **阅读预期**：卡片仍然不说这故事大概能读多久。锚点数量 + `defaultSegmentLength` 已经够给一个诚实的区间，比让读者盲开一个故事强。
+2. **`SessionSegment` 缓存与作者预设优先**：现在每次推进都实打实调模型。按 `ARCHITECTURE.md` §3.2 的三级优先级（预设 → 已生成 → 现生成）做，才对得起 `scripted` 这个模式名。
+3. **阅读设置**：字号、行距、深浅、滚动偏好。目前装帧是作者定的，读者一点都调不了。
+4. **首屏与空态**：新部署只有一个种子故事时书架很空，首页也不解释自己是什么。
+5. **按故事的成本视图**：`generation_usage` 里数据都有，管理台只给了总量，看不出是哪个故事在烧钱。
+6. **`路线分歧` 与 `NPC 发问` 两种节点**只能由模型识别（状态里读不出来），这是能力边界，不是遗漏；要做只能加一次轻量的判定调用。
+
+## 已知问题
+
+- `npm audit` 有 2 个 moderate，来自 `next` 依赖的 `postcss`；`--force` 会降级到破坏性版本，暂不处理。
+- 故事、世界、演员、锚点仍以 JSON payload 存在各自表里，没有完全关系化。`story_anchors` 是整组替换，够用。
+- `node:sqlite` 在 Node 24 下会打实验性 API 提示。
+- 默认 Mock Provider；真实模型的输出质量只能靠 `verify:llm` 和手动阅读判断，没有自动评测。
+
+## 历史记录
+
+2026-05-20 到 2026-09-07 之间的逐条记录（monorepo 搭建、SQLite 迁移、账号体系、流式生成、配额、审核、装帧主题、锚点与演员编辑、可见性收口、墓碑卡片、阅读社会证明）都在 git 历史里，`git log --oneline` 一眼能看完，每条 commit 的正文都写了「为什么这么改」。本文档不再重复维护那份清单——它曾经长到 116 行，而且和现状开始互相矛盾，那比没有更糟。
+
+

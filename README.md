@@ -19,6 +19,8 @@
   ·
   <a href="docs/ARCHITECTURE.md">架构规划</a>
   ·
+  <a href="docs/INTERACTION_DESIGN.md">交互设计</a>
+  ·
   <a href="docs/PROGRESS.md">项目进度</a>
 </p>
 
@@ -37,11 +39,12 @@ InStory 是一个开源的 AI 互动叙事项目，目标是让读者不再只�
 
 | 模块 | 状态 |
 | --- | --- |
-| Web 客户端 | 已有阅读器、品牌图标、Admin 控制台 |
-| 服务端 API | 已有故事、会话、回合、回溯、Admin API |
-| 存储 | SQLite，本地默认 `data/instory.sqlite` |
-| AI | 默认 Mock，可切换 OpenAI-compatible |
-| 测试 | `npm run test` 覆盖核心状态机、存储和服务端 API |
+| Web 客户端 | 首页工作台（探索 / 书架 / 创作 / 我的角色）、阅读器、Admin 控制台 |
+| 服务端 API | 账号、故事、会话、回合（含 SSE 流式）、回溯、创作编辑、阅读数据、Admin API |
+| 存储 | SQLite（`node:sqlite`），本地默认 `data/instory.sqlite`，schema 由 `apps/server/src/db/migrations.ts` 的 9 条迁移决定 |
+| AI | 默认 Mock，可切换 OpenAI-compatible，并在 Admin 控制台验证 |
+| 测试 | `npm run test` 单元测试 + `npm run test:e2e` Playwright 端到端 |
+| 进度与下一步 | 见 [docs/PROGRESS.md](docs/PROGRESS.md) |
 
 ## 界面预览
 
@@ -56,11 +59,11 @@ InStory 是一个开源的 AI 互动叙事项目，目标是让读者不再只�
 ## 技术栈
 
 - Monorepo：npm workspaces
-- Web：Next.js / React / TypeScript
+- Web：Next.js / React / TypeScript / HeroUI / Tailwind CSS
 - Server：Node.js / Fastify / TypeScript
 - Storage：SQLite via Node.js `node:sqlite`
 - Validation：Zod
-- Test：Vitest
+- Test：Vitest + Playwright
 
 ## 代码结构
 
@@ -75,14 +78,19 @@ packages/
 docs/
   PRODUCT_PLAN.md
   ARCHITECTURE.md
+  INTERACTION_DESIGN.md
+  ADR-UI-STACK.md
   PROGRESS.md
+e2e/           # Playwright 端到端用例
 ```
 
 ## 文档
 
 - [产品规划](docs/PRODUCT_PLAN.md)：产品愿景、用户体验、功能范围、商业模式、路线图和核心指标。
-- [架构规划](docs/ARCHITECTURE.md)：服务端、客户端、AI 编排、数据模型和 MVP 工程实施路线。
-- [项目进度](docs/PROGRESS.md)：已完成事项、验证结果、已知问题和下一步计划。
+- [架构规划](docs/ARCHITECTURE.md)：服务端、客户端、AI 编排、数据模型和 MVP 工程实施路线。第 0 节列出本文档和实际实现的差距。
+- [交互设计](docs/INTERACTION_DESIGN.md)：四类用户（访客、读者、创作者、管理员）的完整流程、页面结构和能力边界。
+- [UI 技术选型](docs/ADR-UI-STACK.md)：HeroUI + Tailwind 的决策记录。
+- [项目进度](docs/PROGRESS.md)：当前现状、已实现能力、代码地图、迁移清单、工程约定和下一步。**接手项目先读这份。**
 
 ## 开发启动
 
@@ -165,6 +173,12 @@ npm run dev:web
 npm run typecheck
 npm run test
 npm run build
+```
+
+端到端测试自带 dev server，跑之前必须先停掉本地的 `dev:server` / `dev:web`，否则 4000 端口冲突：
+
+```bash
+npm run test:e2e
 ```
 
 ### 验证模型 Provider

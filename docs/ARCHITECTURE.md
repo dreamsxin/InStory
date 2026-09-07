@@ -2,6 +2,19 @@
 
 本文档定义 InStory 的初始工程架构。项目按“服务端 + 客户端”拆分，MVP 阶段优先实现“连续阅读 + 随时入戏”的纯文本叙事闭环，暂缓多人实时、完整知识图谱、图片/语音生成和复杂收益分成。
 
+## 0. 实现现状与本文档的差距
+
+本文档是**规划**，不是现状描述。下面几处已经和代码不一致，读的时候以代码为准；`docs/PROGRESS.md` 记录真实进度。
+
+- **存储是 SQLite，不是 PostgreSQL。** 服务端用 Node 内置 `node:sqlite` 的 `DatabaseSync`（`apps/server/src/db/app-database.ts`），默认落在 `data/instory.sqlite`。结构化状态存 JSON 文本列，读取时归一化，不是 JSONB。
+- **没有 Redis、没有任务队列、没有 ORM。** 第 3.1 节提到的 Redis / BullMQ / Prisma 都未引入，也不在近期计划里。SQL 手写在各 store 里。
+- **没有 migrations 目录，只有一个追加式数组。** schema 的唯一事实来源是 `apps/server/src/db/migrations.ts` 里按顺序排列的 9 条迁移：`initial_schema`、`session_and_story_lookup_indexes`、`normalize_session_turns_and_timeline`、`add_users_and_auth_sessions`、`attach_reader_sessions_to_users`、`add_generation_usage`、`add_moderation_events`、`add_turn_intervention`、`snapshot_story_title_on_sessions`。每次启动都跑一遍，只能往后追加，不能改历史条目。
+- **第 6 节的表清单是愿望。** 实际存在的表由上面 9 条迁移决定，`story_versions`、`character_constraints`、`memory_events`、`entitlements` 等尚未落地；而计划里划到“商业化阶段”的 `generation_usage` 已经存在，每日额度就是从它推导的。
+- **服务端目录不是 `routes/` + `modules/`。** 所有路由都注册在 `apps/server/src/app.ts` 的 `buildApp` 里，数据访问集中在 `apps/server/src/db/*-store.ts`，审核在 `apps/server/src/moderation/checker.ts`，限流在 `apps/server/src/security/rate-limiter.ts`。没有 `packages/safety`，workspace 只有 `shared`、`story-engine`、`ai-orchestrator`。
+- **SSE 流式已经实现，但是并行的第二条路径。** 第 3.2 节“当前实现风险”里说的同步阻塞不是唯一形态：`POST /api/sessions/:sessionId/turns/stream` 以 `text/event-stream` 逐段推送正文，Provider 没实现 `streamNarrative` 时回落到非流式的 `POST /api/sessions/:sessionId/turns`。两条路径共用同一段提交逻辑，产出相同的状态、id 和时间线节点。
+- **`read`/`interventions` 两个端点没有拆。** 仍然是 `POST /api/sessions/:sessionId/turns` 用 `inputType` 区分阅读推进和入戏，第 5.4 节的兼容性说明才是现状。
+- **`apps/mobile` 不存在。**
+
 ## 1. 架构目标
 
 - 可开源协作：目录清晰、模块边界稳定、贡献者能独立认领任务。
