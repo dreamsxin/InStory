@@ -318,6 +318,17 @@ a {
   padding: 22px;
 }
 
+/* An empty state that offers a way out needs air between the explanation and the
+   button; without this the two sit flush and read as one block. */
+.empty-state-panel h2 {
+  margin: 0 0 8px;
+}
+
+.empty-state-panel p {
+  margin: 0 0 14px;
+}
+
+
 .quick-card-row {
   display: flex;
   flex-wrap: wrap;
@@ -1978,6 +1989,12 @@ a {
 
   .app-hero {
     display: none;
+  }
+
+  /* Kept for a reader with no progress: on a narrow screen this card is the only
+     thing that says what InStory is. */
+  .app-hero.is-first-run {
+    display: grid;
   }
 
   .section-heading {

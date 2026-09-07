@@ -96,11 +96,17 @@ export function HomeWorkspace({
       </div>
 
 
-      <Card className="app-hero">
+      {/* Hidden on phones once someone is reading - the tab bar and the shelf say
+          enough by then. A reader with no progress yet keeps it, because otherwise
+          the narrow layout explains nothing about what this place is. */}
+      <Card className={`app-hero${sessions.length === 0 ? " is-first-run" : ""}`}>
         <div>
-          <span className="eyebrow">MVP Workspace</span>
-          <h2>选择一个身份，进入一个故事世界。</h2>
-          <p>创建入戏角色用于扮演自己；创建故事世界用于吸引读者进入你的设定。</p>
+          <span className="eyebrow">AI 互动小说</span>
+          <h2>翻开下一章，主角就是你。</h2>
+          <p>
+            读一段故事，随时以角色身份介入：说一句话、做一个动作，AI 接着往下写。也可以自己搭一个世界，
+            让别人进来演。每天 20 次推进，够读完一个晚上。
+          </p>
         </div>
         <div className="hero-stat-grid" aria-label="InStory stats">
           <div>
@@ -121,6 +127,7 @@ export function HomeWorkspace({
             profiles={profiles}
             sessions={sessions}
             stories={stories}
+            onCreateStory={() => setActiveTab("create")}
           />
         ) : null}
         {activeTab === "continue" ? <ContinueView sessions={sessions} /> : null}
@@ -153,11 +160,13 @@ export function HomeWorkspace({
 
 function StoriesView({
   insights,
+  onCreateStory,
   profiles,
   sessions,
   stories
 }: {
   insights: StoryReadingInsight[];
+  onCreateStory: () => void;
   profiles: ReaderProfile[];
   sessions: ReaderSessionListItem[];
   stories: StorySummary[];
@@ -172,19 +181,36 @@ function StoriesView({
           <span className="eyebrow">Worlds</span>
           <h2 className="section-title">探索故事</h2>
         </div>
-        <Chip size="sm" variant="soft">所有可进入的故事</Chip>
+        <Chip size="sm" variant="soft">{stories.length ? "所有可进入的故事" : "暂无公开故事"}</Chip>
       </div>
-      <div className="story-grid">
-        {stories.map((story) => (
-          <StoryLauncher
-            existingSession={sessionsByStoryId.get(story.id)}
-            insight={insightsByStoryId.get(story.id)}
-            key={story.id}
-            profiles={profiles}
-            story={story}
-          />
-        ))}
-      </div>
+      {stories.length ? (
+        <div className="story-grid">
+          {stories.map((story) => (
+            <StoryLauncher
+              existingSession={sessionsByStoryId.get(story.id)}
+              insight={insightsByStoryId.get(story.id)}
+              key={story.id}
+              profiles={profiles}
+              story={story}
+            />
+          ))}
+        </div>
+      ) : (
+        /* A fresh deployment can genuinely have nothing public: the shelf used to
+           render a heading over blank space, which reads like a failure. */
+        <Card className="empty-state-panel">
+          <Card.Content>
+            <h2>这里还没有公开的故事</h2>
+            <p className="muted">
+              别人公开的作品会出现在这里。现在最快的办法是自己搭一个——填完世界前提和起点就能试玩，
+              设为公开后其他读者才看得到。
+            </p>
+            <Button type="button" onPress={onCreateStory}>
+              去创作
+            </Button>
+          </Card.Content>
+        </Card>
+      )}
     </div>
   );
 }

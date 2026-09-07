@@ -91,6 +91,14 @@ test.describe("app-like shell", () => {
     // The account controls belong to the chrome, so they must stay on screen.
     await expect(page.locator(".app-topbar .account-bar")).toBeVisible();
 
+    // A reader with no progress is told what this place is; the card used to say
+    // "MVP Workspace" and nothing about reading. It is also the first-run variant,
+    // which is what keeps it on screen at phone widths.
+    const intro = page.locator(".app-hero");
+    await expect(intro).toContainText("主角就是你");
+    await expect(intro).toHaveClass(/is-first-run/);
+
+
     // One card per story, sized like a card. A lone story used to fill the whole
     // grid row (auto-fit collapses empty tracks), so its 16/9 cover alone made a
     // ~900px slab; rows also have to size to content, not to the panel height.
