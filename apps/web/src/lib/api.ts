@@ -4,6 +4,7 @@ import type {
   CreateStoryRequest,
   CreateSessionResponse,
   CreateTurnResponse,
+  PublicStoryDetail,
   ReaderProfile,
   ReaderSessionListItem,
   SessionTurn,
@@ -444,7 +445,22 @@ export async function deleteSession(sessionId: string): Promise<void> {
   }
 }
 
+/**
+ * The story behind a session, as a reader may know it. The same URL serves the
+ * author their full sheet, but a reader must not rely on the hidden half: the
+ * server strips actor secrets and the plot anchors for anyone but the owner, so
+ * this signature says what a reader actually gets.
+ */
+export async function getPublicStoryDetail(storyId: string): Promise<PublicStoryDetail> {
+  return requestStoryDetail<PublicStoryDetail>(storyId);
+}
+
+/** Only sound for a story the signed-in user owns; see getPublicStoryDetail. */
 export async function getStoryDetail(storyId: string): Promise<StoryDetail> {
+  return requestStoryDetail<StoryDetail>(storyId);
+}
+
+async function requestStoryDetail<T>(storyId: string): Promise<T> {
   const response = await apiFetch(`/api/stories/${storyId}`);
   if (response.status === 404) {
     throw new ApiNotFoundError("这个故事不存在或已被删除。");
@@ -452,7 +468,7 @@ export async function getStoryDetail(storyId: string): Promise<StoryDetail> {
   if (!response.ok) {
     throw new Error("加载故事详情失败");
   }
-  return (await response.json()) as StoryDetail;
+  return (await response.json()) as T;
 }
 
 /** How much of a session's transcript a response carried, and whether more exists. */

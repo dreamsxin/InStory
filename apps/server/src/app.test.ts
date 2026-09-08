@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type {
   CreateSessionResponse,
   CreateTurnResponse,
+  PublicStoryDetail,
   ReaderSessionListItem,
   SessionTurn,
   StoryAnchor,
@@ -83,15 +84,20 @@ describe("server API", () => {
       method: "GET",
       url: "/api/stories/rain-mansion"
     });
-    const body = story.json<StoryDetail>();
+    const body = story.json<PublicStoryDetail>();
 
     expect(story.statusCode).toBe(200);
     expect(body.story.title).toBe("雨夜旧宅");
     expect(body.story.visibility).toBe("public");
     expect(body.story.ownerId).toBeNull();
     expect(body.world.locations).toHaveLength(5);
+    // The seed story has no author, so nobody reads it through this route as one:
+    // the cast comes back by name and role, and the anchors - which include how it
+    // can end - are not part of a reader's copy. Admins see the full sheet through
+    // /api/admin/stories.
     expect(body.characters).toHaveLength(3);
-    expect(body.anchors).toHaveLength(5);
+    expect(Object.keys(body.characters[0] ?? {}).sort()).toEqual(["id", "name", "role", "storyId"]);
+    expect(story.json<Record<string, unknown>>().anchors).toBeUndefined();
   });
 
   it("creates a session, advances a turn, and reads it back", async () => {
@@ -1906,6 +1912,118 @@ describe("authentication", () => {
     });
     expect(blocked.statusCode).toBe(404);
   });
+
+  it("keeps the actors' secrets and the plot outline out of a reader's copy", async () => {
+    await buildAuthApp(false);
+    const author = await register("spoiler-author@example.com", "作者");
+    const reader = await register("spoiler-reader@example.com", "读者");
+    const asAuthor = { authorization: `Bearer ${author}` };
+    const asReader = { authorization: `Bearer ${reader}` };
+
+    const profile = await authApp.inject({
+      method: "POST",
+      url: "/api/reader/profiles",
+      headers: asAuthor,
+      payload: {
+        name: "守灯人",
+        gender: "男",
+        visibility: "private",
+        personality: "沉默",
+        avatarUrl: null,
+        description: "看守灯塔的人。"
+      }
+    });
+    const profileId = profile.json<{ profile: { id: string } }>().profile.id;
+
+    const created = await authApp.inject({
+      method: "POST",
+      url: "/api/stories",
+      headers: asAuthor,
+      payload: {
+        id: "lamp-keeper",
+        title: "守灯人",
+        tagline: "灯灭之前不要问他名字。",
+        genre: "悬疑",
+        coverUrl: null,
+        visibility: "public",
+        premise: "海雾里只有一座灯塔。",
+        openingLocationName: "灯塔底层",
+        openingLocationDescription: "铁梯上结着盐。",
+        worldRules: [],
+        castProfileIds: [profileId],
+        aiFreedom: "medium",
+        experienceMode: "coauthored",
+        defaultSegmentLength: "standard"
+      }
+    });
+    expect(created.statusCode).toBe(201);
+    const castId = created.json<{ story: StoryDetail }>().story.characters[0]?.id ?? "";
+
+    await authApp.inject({
+      method: "PUT",
+      url: `/api/me/stories/lamp-keeper/characters/${castId}`,
+      headers: asAuthor,
+      payload: {
+        role: "灯塔守夜人",
+        relationToReader: "认得你，却装作不认得",
+        secret: "灯是他自己熄的",
+        personality: ["沉默"],
+        goals: ["拖到天亮"],
+        constraints: ["不能承认上过塔顶"]
+      }
+    });
+
+    await authApp.inject({
+      method: "PUT",
+      url: "/api/me/stories/lamp-keeper/anchors",
+      headers: asAuthor,
+      payload: {
+        anchors: [{ title: "灯塔重新亮起", type: "ending", description: "读者点亮灯之后故事可以收束。" }]
+      }
+    });
+
+    // The author writes against the full sheet, so theirs keeps everything.
+    const ownCopy = await authApp.inject({
+      method: "GET",
+      url: "/api/stories/lamp-keeper",
+      headers: asAuthor
+    });
+    expect(ownCopy.statusCode).toBe(200);
+    const full = ownCopy.json<StoryDetail>();
+    expect(full.characters[0]?.secret).toBe("灯是他自己熄的");
+    expect(full.anchors).toHaveLength(1);
+
+    // A reader gets the world and the cast by name and role. Knowing the id used
+    // to be enough to fetch every actor's secret and the whole outline, ending
+    // included - the story they came to be told, handed over up front.
+    const readerCopy = await authApp.inject({
+      method: "GET",
+      url: "/api/stories/lamp-keeper",
+      headers: asReader
+    });
+    expect(readerCopy.statusCode).toBe(200);
+    expect(readerCopy.body).not.toContain("灯是他自己熄的");
+    expect(readerCopy.body).not.toContain("灯塔重新亮起");
+    expect(readerCopy.body).not.toContain("拖到天亮");
+
+    const readerBody = readerCopy.json<Record<string, unknown>>();
+    // Absent, not emptied: an empty array would claim the story has no anchors.
+    expect(readerBody.anchors).toBeUndefined();
+    expect(readerBody.characters).toEqual([
+      { id: castId, storyId: "lamp-keeper", name: "守灯人", role: "灯塔守夜人" }
+    ]);
+    // Still enough to render the reader's page and its frame.
+    expect(readerCopy.json<{ story: { title: string } }>().story.title).toBe("守灯人");
+    expect(readerCopy.json<{ world: { premise: string } }>().world.premise).toBe("海雾里只有一座灯塔。");
+
+    // Same redaction without a session at all: a public story is readable by
+    // anyone, so anonymous must not be a way around it.
+    const anonymous = await authApp.inject({ method: "GET", url: "/api/stories/lamp-keeper" });
+    expect(anonymous.statusCode).toBe(200);
+    expect(anonymous.body).not.toContain("灯是他自己熄的");
+    expect(anonymous.json<Record<string, unknown>>().anchors).toBeUndefined();
+  });
+
 
   it("leaves a tombstone card when the author deletes a story someone was reading", async () => {
     await buildAuthApp(false);

@@ -173,6 +173,32 @@ export interface StoryDetail {
   anchors: StoryAnchor[];
 }
 
+/**
+ * What an actor looks like to someone who is not the author: name and in-story
+ * role only. `secret`, `goals`, `constraints` and `relationToReader` are written
+ * for the model, not for the reader - handing them over spoils the story the
+ * author is trying to tell.
+ */
+export interface PublicCharacterProfile {
+  id: string;
+  storyId: string;
+  name: string;
+  role: string;
+}
+
+/**
+ * A story as a reader may know it. Plot anchors are absent rather than emptied:
+ * they are the author's outline, including what must never happen early and how
+ * the story can end, so a reader is not told there are none - they are simply not
+ * part of this view.
+ */
+export interface PublicStoryDetail {
+  story: StorySummary;
+  world: WorldProfile;
+  characters: PublicCharacterProfile[];
+}
+
+
 export interface ReaderRole {
   mode: EntryMode;
   characterId?: string;

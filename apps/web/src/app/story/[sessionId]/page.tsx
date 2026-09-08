@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { ReaderClient } from "@/components/reader-client";
-import { ApiNotFoundError, getCurrentUser, getSession, getStoryDetail } from "@/lib/api";
+import { ApiNotFoundError, getCurrentUser, getPublicStoryDetail, getSession } from "@/lib/api";
 
 export default async function StoryPage({ params }: { params: Promise<{ sessionId: string }> }) {
   if (!(await getCurrentUser())) {
@@ -13,7 +13,7 @@ export default async function StoryPage({ params }: { params: Promise<{ sessionI
     const { session, history, quota } = await getSession(sessionId);
     // The session only carries storyId, and the reader needs the title and the
     // story's own reading theme in its header and page frame.
-    const story = await getStoryDetail(session.storyId);
+    const story = await getPublicStoryDetail(session.storyId);
 
     return (
       <ReaderClient

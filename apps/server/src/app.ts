@@ -28,6 +28,7 @@ import type {
   CreateSessionResponse,
   CreateTurnResponse,
   NarrativeResult,
+  PublicStoryDetail,
   ReaderSessionListItem,
   ReaderProfile,
   SegmentLengthPreset,
@@ -271,6 +272,27 @@ function canReadStory(
   }
   return story.ownerId === userId || sessionStore.hasSessionForStory(userId, story.id);
 }
+
+/**
+ * The story as anyone but its author may see it. The full detail carries what the
+ * author wrote for the model: every actor's secret, goals and constraints, and the
+ * plot anchors - including what must not happen yet and how the story can end.
+ * Handing that to a reader is handing them the ending, so a non-author gets the
+ * world, and actors by name and role only.
+ */
+function toPublicStoryDetail(detail: StoryDetail): PublicStoryDetail {
+  return {
+    story: detail.story,
+    world: detail.world,
+    characters: detail.characters.map((character) => ({
+      id: character.id,
+      storyId: character.storyId,
+      name: character.name,
+      role: character.role
+    }))
+  };
+}
+
 
 /** Turn quota is counted from recorded successful generations, not from turn ids. */
 function resolveQuota(usageStore: UsageStore, userId: string, dailyLimit: number): TurnQuota {
@@ -953,7 +975,14 @@ export async function buildApp(options: BuildAppOptions) {
       return reply.code(404).send({ error: "Story not found" });
     }
 
-    return storyDetail;
+    // Only the author gets the full sheet. Everyone else - including a reader with
+    // a session in it - would otherwise be handed the actors' secrets and the whole
+    // plot outline, which is the story they came to be told.
+    if (storyDetail.story.ownerId && storyDetail.story.ownerId === request.authUser?.id) {
+      return storyDetail;
+    }
+
+    return toPublicStoryDetail(storyDetail);
   });
 
 
