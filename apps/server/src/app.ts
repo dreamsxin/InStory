@@ -27,6 +27,7 @@ import type {
   CharacterProfile,
   CreateSessionResponse,
   CreateTurnResponse,
+  GenerationUsage,
   NarrativeResult,
   PublicStoryDetail,
   ReaderSessionListItem,
@@ -1438,26 +1439,65 @@ export async function buildApp(options: BuildAppOptions) {
       reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     };
 
+    /**
+     * The reader pressing 停止生成 aborts their request, and a closed socket is the
+     * only word we get about it. Until this existed the server read the generation
+     * to the end and committed it: the reader was told the passage was stopped, was
+     * charged a turn for it, and found it in the transcript on the next visit.
+     */
+    let readerLeft = false;
+    let streamFinished = false;
+    request.raw.on("close", () => {
+      // Set before the response is closed on purpose: a destroyed socket already
+      // looks "ended" from the response side, so only our own flag can tell a
+      // finished passage from an abandoned one.
+      if (!streamFinished) {
+        readerLeft = true;
+      }
+    });
+    /**
+     * Both signals matter: the event covers a clean hang-up, and the destroyed
+     * response covers the case where it fired before this handler was attached.
+     * `request.raw.destroyed` is deliberately not consulted - Node destroys the
+     * request stream once its body has been read, so it is true on every request.
+     */
+    const readerGone = (): boolean => readerLeft || reply.raw.destroyed;
+
+    let usageRecorded = false;
+    const recordUsage = (status: "success" | "error", usage?: GenerationUsage): void => {
+      if (usageRecorded) {
+        return;
+      }
+      usageRecorded = true;
+      options.usageStore.record({
+        userId: authUserId,
+        sessionId,
+        storyId: session.storyId,
+        provider: modelConfig.provider,
+        model: modelConfig.model,
+        intent,
+        status,
+        usage,
+        latencyMs: Date.now() - startedAt
+      });
+    };
+
     try {
       let completed = false;
 
       for await (const event of provider.streamNarrative(input)) {
+        // Checked before every event, so a passage that finishes generating after
+        // the reader left is neither charged nor written into their transcript.
+        if (readerGone()) {
+          break;
+        }
+
         if (event.type === "narration_delta") {
           send("narration_delta", { text: event.text });
           continue;
         }
 
-        options.usageStore.record({
-          userId: authUserId,
-          sessionId,
-          storyId: session.storyId,
-          provider: modelConfig.provider,
-          model: modelConfig.model,
-          intent,
-          status: "success",
-          usage: event.usage,
-          latencyMs: Date.now() - startedAt
-        });
+        recordUsage("success", event.usage);
 
         // Known limitation of streaming: the deltas have already reached the reader
         // by the time the full narration can be judged. Blocking here still keeps it
@@ -1491,23 +1531,21 @@ export async function buildApp(options: BuildAppOptions) {
         completed = true;
       }
 
-      if (!completed) {
+      if (readerGone() && !completed) {
+        // Cancelled, not failed: no turn, and no success row, so the reader keeps
+        // the turn they did not get. Still recorded as an error, because the model
+        // was called and may well have been billed - a silent gap in usage would
+        // hide that spend.
+        recordUsage("error");
+      } else if (!completed) {
         send("error", { error: "生成未返回完整结果" });
       }
     } catch (error) {
       request.log.error({ err: error }, "streaming turn failed");
-      options.usageStore.record({
-        userId: authUserId,
-        sessionId,
-        storyId: session.storyId,
-        provider: modelConfig.provider,
-        model: modelConfig.model,
-        intent,
-        status: "error",
-        latencyMs: Date.now() - startedAt
-      });
+      recordUsage("error");
       send("error", { error: error instanceof Error ? error.message : "生成失败" });
     } finally {
+      streamFinished = true;
       reply.raw.end();
     }
 

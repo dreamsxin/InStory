@@ -11,7 +11,8 @@ import type {
   StoryAnchor,
   StoryDetail,
   StoryReadingInsight,
-  StorySession
+  StorySession,
+  TurnQuota
 } from "@instory/shared";
 import { MockNarrativeProvider } from "@instory/ai-orchestrator";
 import type {
@@ -2490,6 +2491,130 @@ describe("key nodes when the model marks none", () => {
     expect(read.json<CreateTurnResponse>().turn.intervention).toMatchObject({ kind: "clue_found" });
   });
 });
+
+/** Resolved by the test once it has abandoned the stream, standing in for a slow model. */
+let releaseGeneration: (() => void) | null = null;
+
+/**
+ * Delivers one delta, then waits: this is the window in which a reader presses
+ * 停止生成, and the model finishes afterwards regardless.
+ */
+class SlowStreamProvider implements LLMProvider {
+  private readonly inner = new MockNarrativeProvider();
+
+  async generateNarrative(input: GenerateNarrativeInput): Promise<NarrativeGeneration> {
+    return this.inner.generateNarrative(input);
+  }
+
+  async *streamNarrative(input: GenerateNarrativeInput): AsyncGenerator<NarrativeStreamEvent> {
+    yield { type: "narration_delta", text: "雨声先到。" };
+    await new Promise<void>((resolve) => {
+      releaseGeneration = resolve;
+    });
+    const generation = await this.inner.generateNarrative(input);
+    yield { type: "complete", result: generation.result, usage: generation.usage };
+  }
+}
+
+class SlowRuntime extends ModelRuntime {
+  override getProvider(): LLMProvider {
+    return new SlowStreamProvider();
+  }
+}
+
+async function waitUntil(check: () => boolean, label: string): Promise<void> {
+  const startedAt = Date.now();
+  while (!check()) {
+    if (Date.now() - startedAt > 3000) {
+      throw new Error(`timed out waiting for ${label}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
+describe("a reader who stops the generation", () => {
+  let abortApp: TestApp;
+  let abortDatabase: AppDatabase;
+  let abortUsage: UsageStore;
+  let abortDir: string;
+  let baseUrl: string;
+
+  beforeEach(async () => {
+    releaseGeneration = null;
+    abortDir = mkdtempSync(join(tmpdir(), "instory-abort-"));
+    abortDatabase = new AppDatabase(join(abortDir, "api.sqlite"));
+    abortUsage = new UsageStore(abortDatabase);
+    abortApp = await buildApp({
+      sessionStore: new SessionStore(abortDatabase),
+      readerProfileStore: new ReaderProfileStore(abortDatabase),
+      storyCatalog: new StoryCatalog(abortDatabase),
+      userStore: new UserStore(abortDatabase),
+      usageStore: abortUsage,
+      moderationStore: new ModerationStore(abortDatabase),
+      modelRuntime: new SlowRuntime(new ModelConfigStore(abortDatabase), {
+        provider: "mock",
+        updatedAt: "2026-05-20T00:00:00.000Z"
+      }),
+      allowLegacyAnonymousUser: true,
+      logger: false
+    });
+    // A real socket: inject() cannot hang up mid-response, and hanging up is the
+    // whole behaviour under test.
+    baseUrl = await abortApp.listen({ port: 0, host: "127.0.0.1" });
+  });
+
+  afterEach(async () => {
+    releaseGeneration?.();
+    await abortApp?.close();
+    abortDatabase?.close();
+    rmSync(abortDir, { recursive: true, force: true });
+  });
+
+  it("keeps the turn and the quota the reader did not spend", async () => {
+    const created = await abortApp.inject({
+      method: "POST",
+      url: "/api/stories/rain-mansion/sessions",
+      payload: { entryMode: "existing_character", characterId: "lu_qinghe" }
+    });
+    const sessionId = created.json<CreateSessionResponse>().session.id;
+
+    const controller = new AbortController();
+    const response = await fetch(`${baseUrl}/api/sessions/${sessionId}/turns/stream`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ inputType: "read_continue", content: "继续阅读" }),
+      signal: controller.signal
+    });
+    expect(response.status).toBe(200);
+
+    // Read the first passage, then walk away - exactly what 停止生成 does.
+    const reader = response.body?.getReader();
+    await reader?.read();
+    controller.abort();
+
+    await waitUntil(() => releaseGeneration !== null, "the generator to be waiting");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    // The model comes back after the reader is gone. Before this fix that answer
+    // was recorded as a success, charged, and committed to the transcript.
+    releaseGeneration?.();
+
+    await waitUntil(() => abortUsage.summarizeDay().generations > 0, "the attempt to be recorded");
+
+    const summary = abortUsage.summarizeDay();
+    expect(summary.successes).toBe(0);
+    // Recorded as a failure rather than not at all: the model was called, so the
+    // spend stays visible in the admin view.
+    expect(summary.failures).toBe(1);
+
+    const after = await abortApp.inject({ method: "GET", url: `/api/sessions/${sessionId}` });
+    const body = after.json<{ session: StorySession; quota: TurnQuota }>();
+    // Only the opening turn, and nothing spent today.
+    expect(body.session.turns).toHaveLength(1);
+    expect(body.quota.usedToday).toBe(0);
+    expect(body.quota.remainingTurnsToday).toBe(body.quota.dailyLimit);
+  });
+});
+
 
 
 

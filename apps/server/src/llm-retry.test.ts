@@ -211,4 +211,30 @@ describe("LLM streaming retries", () => {
     // A retry would have duplicated the visible text, so only one call is made.
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("cancels the upstream body when the consumer stops reading", async () => {
+    // A reader pressing 停止生成 makes the route break out of this generator. If the
+    // body were only released and not cancelled, the model would keep generating -
+    // and keep billing - into a stream nobody reads.
+    let cancelled = false;
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const payload = JSON.stringify({ choices: [{ delta: { content: '{"narration":"第一段' } }] });
+        controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
+      },
+      cancel() {
+        cancelled = true;
+      }
+    });
+    fetchMock.mockResolvedValueOnce(new Response(body, { status: 200 }));
+
+    for await (const event of createProvider().streamNarrative(createInput())) {
+      if (event.type === "narration_delta") {
+        break;
+      }
+    }
+
+    expect(cancelled).toBe(true);
+  });
 });

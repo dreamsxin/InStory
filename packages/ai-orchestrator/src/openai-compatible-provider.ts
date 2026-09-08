@@ -141,7 +141,11 @@ export class OpenAICompatibleNarrativeProvider implements LLMProvider {
         }
       }
     } finally {
-      reader.releaseLock();
+      // cancel(), not just releaseLock(): when the consumer stops early - a reader
+      // pressing 停止生成 closes their socket, and the route breaks out of this
+      // generator - the upstream request would otherwise keep running and keep
+      // billing tokens nobody will read.
+      await reader.cancel().catch(() => undefined);
     }
 
     if (!narration.raw) {
