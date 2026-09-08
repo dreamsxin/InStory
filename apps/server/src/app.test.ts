@@ -909,6 +909,12 @@ describe("server API", () => {
       }
     });
     expect(duplicate.statusCode).toBe(409);
+    // Words the author can act on, naming the field to change. The store's own
+    // message ("Story id already exists") belongs in a log, not in a form.
+    const refusal = duplicate.json<{ error: string; field?: string }>();
+    expect(refusal.error).toContain("moon-market");
+    expect(refusal.error).toContain("已经被占用");
+    expect(refusal.field).toBe("id");
 
     const deleted = await app.inject({
       method: "DELETE",

@@ -19,6 +19,21 @@ export interface StorySeedData {
   anchors: StoryAnchor[];
 }
 
+/**
+ * Thrown when the author picked an id another story already holds. Typed rather
+ * than matched by message: the route turns it into the one thing the author can
+ * act on, and a message comparison would break the day the wording changes.
+ */
+export class DuplicateStoryIdError extends Error {
+  readonly storyId: string;
+
+  constructor(storyId: string) {
+    super(`Story id already exists: ${storyId}`);
+    this.name = "DuplicateStoryIdError";
+    this.storyId = storyId;
+  }
+}
+
 export class StoryStore {
   private readonly database: AppDatabase;
 
@@ -109,7 +124,7 @@ export class StoryStore {
   createStory(input: CreateStoryRequest, characters: CharacterProfile[] = [], ownerId: string | null = null): StoryDetail {
     const existing = this.findStorySummary(input.id);
     if (existing) {
-      throw new Error("Story id already exists");
+      throw new DuplicateStoryIdError(input.id);
     }
 
     const story: StorySummary = {

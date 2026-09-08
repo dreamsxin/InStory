@@ -43,6 +43,7 @@ import type {
   WorldState
 } from "@instory/shared";
 import type { StoryCatalog } from "./data/story-catalog.js";
+import { DuplicateStoryIdError } from "./db/story-store.js";
 import type { ReaderProfileStore } from "./db/reader-profile-store.js";
 import type { SessionOverview, SessionStore } from "./db/session-store.js";
 import { LEGACY_USER_ID, SESSION_TTL_MS, type UserRecord, type UserStore } from "./db/user-store.js";
@@ -960,9 +961,16 @@ export async function buildApp(options: BuildAppOptions) {
       const story = options.storyCatalog.createStory(parsed.data, castCharacters, ownerId);
       return reply.code(201).send({ story });
     } catch (error) {
-      return reply.code(409).send({
-        error: error instanceof Error ? error.message : "Failed to create story"
-      });
+      // The one cause an author can do something about, said in words they can act
+      // on. The store's own message is for a log, not for a form.
+      if (error instanceof DuplicateStoryIdError) {
+        return reply.code(409).send({
+          error: `故事 ID「${error.storyId}」已经被占用，换一个再试。`,
+          field: "id"
+        });
+      }
+      request.log.error({ err: error }, "creating a story failed");
+      return reply.code(409).send({ error: "创建故事失败，请稍后再试。" });
     }
   });
 

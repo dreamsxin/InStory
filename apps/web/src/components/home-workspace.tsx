@@ -1021,8 +1021,11 @@ function CreateStoryPanel({ profiles }: { profiles: ReaderProfile[] }) {
               <h3>展示信息</h3>
             </div>
             <div className="form-grid">
+              {/* The rules live in the label because they are only discoverable
+                  there: breaking them used to surface as a bare「创建故事失败」after
+                  submitting. */}
               <TextField defaultValue={submitted(result, "id")} isRequired name="id">
-                <Label>故事 ID</Label>
+                <Label>故事 ID（小写字母、数字、连字符，至少 3 位）</Label>
                 <Input maxLength={80} placeholder="moon-market" />
               </TextField>
               <TextField defaultValue={submitted(result, "title")} isRequired name="title">

@@ -282,7 +282,7 @@ export async function createReaderProfile(input: {
   }
 
   if (!response.ok) {
-    throw new Error("创建我的角色失败");
+    throw await readFormError(response, "创建我的角色失败");
   }
 
   const data = (await response.json()) as { profile: ReaderProfile };
@@ -310,7 +310,7 @@ export async function updateReaderProfile(
   }
 
   if (!response.ok) {
-    throw new Error("更新我的角色失败");
+    throw await readFormError(response, "更新我的角色失败");
   }
 
   const data = (await response.json()) as { profile: ReaderProfile };
@@ -342,7 +342,7 @@ export async function createStory(input: CreateStoryRequest): Promise<StoryDetai
   }
 
   if (!response.ok) {
-    throw new Error("创建故事失败");
+    throw await readFormError(response, "创建故事失败");
   }
 
   const data = (await response.json()) as { story: StoryDetail };
@@ -360,7 +360,7 @@ export async function updateMyStory(storyId: string, input: UpdateStoryRequest):
   }
 
   if (!response.ok) {
-    throw new Error("更新我的故事失败");
+    throw await readFormError(response, "更新我的故事失败");
   }
 
   const data = (await response.json()) as { story: StoryDetail };
@@ -383,7 +383,7 @@ export async function updateMyStoryCharacter(
   }
 
   if (!response.ok) {
-    throw new Error("保存故事演员失败");
+    throw await readFormError(response, "保存故事演员失败");
   }
 
   const data = (await response.json()) as { character: CharacterProfile };
@@ -405,7 +405,7 @@ export async function updateMyStoryAnchors(
   }
 
   if (!response.ok) {
-    throw new Error("保存剧情锚点失败");
+    throw await readFormError(response, "保存剧情锚点失败");
   }
 
   const data = (await response.json()) as { anchors: StoryAnchor[] };
@@ -835,16 +835,75 @@ async function readApiError(response: Response): Promise<string | null> {
 /** Parses a JSON error body, tolerating non-JSON and malformed responses. */
 async function readApiBody(
   response: Response
-): Promise<{ error?: unknown; retryAfterSeconds?: unknown } | null> {
+): Promise<{ error?: unknown; retryAfterSeconds?: unknown; issues?: unknown } | null> {
   try {
     const contentType = response.headers.get("content-type") ?? "";
     if (!contentType.includes("application/json")) {
       return null;
     }
-    return (await response.json()) as { error?: unknown; retryAfterSeconds?: unknown };
+    return (await response.json()) as { error?: unknown; retryAfterSeconds?: unknown; issues?: unknown };
   } catch {
     return null;
   }
+}
+
+/**
+ * Field names as the forms label them. The server validates by field name, and the
+ * form is where those names have words a person recognises, so the translation
+ * belongs on this side.
+ */
+const FORM_FIELD_LABELS: Record<string, string> = {
+  id: "故事 ID",
+  title: "标题",
+  tagline: "一句话钩子",
+  genre: "类型",
+  coverUrl: "封面图 URL",
+  visibility: "可见性",
+  premise: "世界前提",
+  openingLocationName: "起点地点",
+  openingLocationDescription: "起点场景",
+  worldRules: "世界规则",
+  castProfileIds: "故事演员",
+  experienceMode: "入戏体验",
+  defaultSegmentLength: "生成长度",
+  aiFreedom: "AI 自由度",
+  readingTheme: "阅读装帧",
+  name: "名称",
+  gender: "性别",
+  personality: "性格",
+  avatarUrl: "头像 URL",
+  description: "身份背景",
+  role: "故事身份",
+  relationToReader: "与读者的关系",
+  secret: "秘密",
+  goals: "当前目标",
+  constraints: "不能做的事",
+  anchors: "剧情锚点"
+};
+
+/**
+ * Why the server refused a form. A rejected save used to surface only a generic
+ * "创建故事失败": the reason the server had written (a duplicate id) and the list of
+ * offending fields were both read off the response and thrown away, leaving the
+ * author nothing to correct.
+ */
+async function readFormError(response: Response, fallback: string): Promise<Error> {
+  const body = await readApiBody(response);
+  const issues = Array.isArray(body?.issues) ? body.issues : [];
+  const fields = [...new Set(issues.map(fieldLabelOf).filter((label): label is string => Boolean(label)))];
+
+  if (fields.length > 0) {
+    return new Error(`这些内容还不符合要求：${fields.join("、")}。`);
+  }
+
+  return new Error(typeof body?.error === "string" ? body.error : fallback);
+}
+
+/** The first path segment of a Zod issue is the field the form knows by name. */
+function fieldLabelOf(issue: unknown): string | null {
+  const path = (issue as { path?: unknown })?.path;
+  const key = Array.isArray(path) ? path[0] : null;
+  return typeof key === "string" ? FORM_FIELD_LABELS[key] ?? key : null;
 }
 
 export interface AdminUsageSummary {

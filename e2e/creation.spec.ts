@@ -59,6 +59,9 @@ test.describe("creation console", () => {
     await expect(submit).toBeEnabled();
     await submit.click();
     await expect(feedback).toHaveClass(/is-error/);
+    // And it says why: the duplicate id used to surface as a bare 创建故事失败,
+    // because the client read the server's reason off the response and dropped it.
+    await expect(feedback).toContainText("已经被占用");
     await expect(panel.getByLabel("标题")).toHaveValue("月市");
     await expect(panel.getByLabel("世界前提")).toHaveValue("一座只在月落后出现的市集，交易的是记忆。");
   });
