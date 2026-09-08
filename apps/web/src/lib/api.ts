@@ -563,6 +563,23 @@ export class StreamingUnsupportedError extends Error {
   }
 }
 
+/**
+ * Thrown when a turn failed after the stream had already opened. The model was
+ * called and the server has recorded that attempt, so retrying on the plain
+ * endpoint would spend a second generation - and a second burst slot - on one
+ * reader action. Callers must surface this instead of falling back.
+ */
+export class StreamedTurnError extends Error {
+  /** True when the passage was refused by moderation rather than lost to a fault. */
+  readonly moderated: boolean;
+
+  constructor(message = "生成失败", moderated = false) {
+    super(message);
+    this.name = "StreamedTurnError";
+    this.moderated = moderated;
+  }
+}
+
 /** Thrown when the reader has spent today's generation quota. */
 export class QuotaExceededError extends Error {
   constructor(message = "今日推进次数已用完，请明天再来。") {
@@ -648,6 +665,7 @@ export async function streamTurn(
   let buffer = "";
   let completed: CreateTurnResponse | null = null;
   let failure: string | null = null;
+  let moderated = false;
 
   const handleBlock = (block: string): void => {
     let event: string | null = null;
@@ -671,7 +689,9 @@ export async function streamTurn(
     } else if (event === "complete") {
       completed = payload as CreateTurnResponse;
     } else if (event === "error") {
-      failure = (payload as { error?: string }).error ?? "生成失败";
+      const detail = payload as { error?: string; moderated?: boolean };
+      failure = detail.error ?? "生成失败";
+      moderated = detail.moderated === true;
     }
   };
 
@@ -695,16 +715,20 @@ export async function streamTurn(
     if (buffer.trim()) {
       handleBlock(buffer);
     }
+  } catch (error) {
+    // The stream was already open, so the generation had started: whatever went
+    // wrong here, the model call is spent and must not be made a second time.
+    throw new StreamedTurnError(error instanceof Error ? error.message : "生成中断");
   } finally {
     reader.releaseLock();
   }
 
   if (failure) {
-    throw new Error(failure);
+    throw new StreamedTurnError(failure, moderated);
   }
 
   if (!completed) {
-    throw new Error("生成中断，未收到完整结果");
+    throw new StreamedTurnError("生成中断，未收到完整结果");
   }
 
   return completed;

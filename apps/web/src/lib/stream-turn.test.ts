@@ -102,6 +102,31 @@ describe("streamTurn", () => {
     await expect(runStreamTurn()).rejects.toThrow("生成中断");
   });
 
+  it("marks a failure that arrived after the stream opened, so it is not retried", async () => {
+    respondWithChunks([sseEvent("narration_delta", { text: "开头" }), sseEvent("error", { error: "模型超时" })]);
+
+    const { StreamedTurnError } = await import("./api.js");
+    // The model was already called and the attempt recorded; a fallback here would
+    // spend a second generation on one reader action.
+    await expect(runStreamTurn()).rejects.toBeInstanceOf(StreamedTurnError);
+  });
+
+  it("marks a truncated stream the same way, since the generation had started", async () => {
+    respondWithChunks([sseEvent("narration_delta", { text: "半句" })]);
+
+    const { StreamedTurnError } = await import("./api.js");
+    await expect(runStreamTurn()).rejects.toBeInstanceOf(StreamedTurnError);
+  });
+
+  it("carries the moderation verdict, which a retry would only hit again", async () => {
+    respondWithChunks([
+      sseEvent("narration_delta", { text: "开头" }),
+      sseEvent("error", { error: "这一段生成内容未通过审核，请重新推进。", moderated: true })
+    ]);
+
+    await expect(runStreamTurn()).rejects.toMatchObject({ moderated: true });
+  });
+
   it("signals that the provider cannot stream so the caller can fall back", async () => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ error: "当前模型不支持流式生成" }), {
@@ -110,12 +135,17 @@ describe("streamTurn", () => {
       })
     );
 
-    const { streamTurn, StreamingUnsupportedError } = await import("./api.js");
+    const { streamTurn, StreamingUnsupportedError, StreamedTurnError } = await import("./api.js");
 
-    await expect(
-      streamTurn({ sessionId: "sess_1", content: "继续阅读", inputType: "read_continue" }, () => {})
-    ).rejects.toBeInstanceOf(StreamingUnsupportedError);
+    const attempt = streamTurn(
+      { sessionId: "sess_1", content: "继续阅读", inputType: "read_continue" },
+      () => {}
+    );
+    await expect(attempt).rejects.toBeInstanceOf(StreamingUnsupportedError);
+    // Nothing was generated, so this one is still a legitimate fallback.
+    await expect(attempt).rejects.not.toBeInstanceOf(StreamedTurnError);
   });
+
 
   it("signals an expired session separately, so it is not retried as a fallback", async () => {
     fetchMock.mockResolvedValue(new Response("{}", { status: 401 }));

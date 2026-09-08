@@ -17,6 +17,7 @@ import {
   RateLimitedError,
   resetSession,
   rewindSession,
+  StreamedTurnError,
   streamTurn,
   UnauthenticatedError,
   type SessionHistoryInfo
@@ -174,10 +175,17 @@ export function ReaderClient({
           // The plain endpoint shares the same budget, so retrying it would just
           // spend another rejected request.
           streamError instanceof RateLimitedError ||
+          // The stream had already opened, so the model was called and the attempt
+          // is recorded. Falling back here made one reader action cost two
+          // generations and two burst slots.
+          streamError instanceof StreamedTurnError ||
           controller.signal.aborted
         ) {
           throw streamError;
         }
+        // Left: the stream never opened - no streaming support, or the transport
+        // refused it - so nothing has been generated yet and the plain endpoint is
+        // the only way to answer this action.
         setStreamingNarration("");
         response = await createTurn({
           sessionId: session.id,
