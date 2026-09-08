@@ -1306,7 +1306,10 @@ describe("authentication", () => {
   let authDatabase: AppDatabase;
   let authTempDir: string;
 
-  async function buildAuthApp(allowLegacyAnonymousUser: boolean): Promise<void> {
+  async function buildAuthApp(
+    allowLegacyAnonymousUser: boolean,
+    adminToken?: string
+  ): Promise<void> {
     authTempDir = mkdtempSync(join(tmpdir(), "instory-auth-"));
     authDatabase = new AppDatabase(join(authTempDir, "auth.sqlite"));
     authApp = await buildApp({
@@ -1320,6 +1323,7 @@ describe("authentication", () => {
         provider: "mock",
         updatedAt: "2026-05-20T00:00:00.000Z"
       }),
+      adminToken,
       allowLegacyAnonymousUser,
       logger: false
     });
@@ -1662,6 +1666,59 @@ describe("authentication", () => {
       ).statusCode
     ).toBe(404);
   });
+
+  it("lists accounts so the role can be handed out without opening the database", async () => {
+    await buildAuthApp(false, "shared-secret");
+    await register("listed-reader@example.com", "读者");
+    const secondToken = await register("listed-second@example.com", "另一个读者");
+
+    const listed = await authApp.inject({
+      method: "GET",
+      url: "/api/admin/users",
+      headers: { authorization: "Bearer shared-secret" }
+    });
+    expect(listed.statusCode).toBe(200);
+
+    const users = listed.json<{ users: Array<Record<string, unknown>> }>().users;
+    // Newest first, so whoever just signed up is at the top of the console.
+    expect(users[0]?.email).toBe("listed-second@example.com");
+    expect(users.map((account) => account.email)).toContain("listed-reader@example.com");
+
+    // Enough to identify and act on an account, and nothing more: no password
+    // material of any kind reaches the console.
+    expect(Object.keys(users[0] ?? {}).sort()).toEqual([
+      "createdAt",
+      "displayName",
+      "email",
+      "id",
+      "role",
+      "updatedAt"
+    ]);
+
+    // The pairing this exists for: find the id in the list, then use it.
+    const target = users.find((account) => account.email === "listed-reader@example.com");
+    const promoted = await authApp.inject({
+      method: "PUT",
+      url: `/api/admin/users/${String(target?.id)}/role`,
+      headers: { authorization: "Bearer shared-secret" },
+      payload: { role: "admin" }
+    });
+    expect(promoted.statusCode).toBe(200);
+    expect(promoted.json<{ user: { role: string } }>().user.role).toBe("admin");
+
+    // A reader still cannot read the list. The account promoted above would pass,
+    // so this uses the one that stayed a reader.
+    expect(
+      (
+        await authApp.inject({
+          method: "GET",
+          url: "/api/admin/users",
+          headers: { authorization: `Bearer ${secondToken}` }
+        })
+      ).statusCode
+    ).toBe(401);
+  });
+
 
   it("keeps configured operator addresses on the admin role", async () => {
     authTempDir = mkdtempSync(join(tmpdir(), "instory-auth-"));

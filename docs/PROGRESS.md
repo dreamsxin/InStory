@@ -19,7 +19,7 @@ npm run dev:web            # Web  http://localhost:3000
 npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 schema
 ```
 
-最近一次全量结果：typecheck 通过；单测 server 158 / story-engine 12 / web 33；e2e 31 条通过。
+最近一次全量结果：typecheck 通过；单测 server 159 / story-engine 12 / web 33；e2e 31 条通过。
 
 ## 已实现
 
@@ -34,7 +34,8 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 - **中断真的中断**：读者点 `停止生成` 时，流式路由发现连接已断就不记成功用量、不落库，同时 Provider 会 `cancel()` 上游响应体，模型不再往一条没人读的流里生成。这一次仍记一条 `error` 用量——模型被调用过，钱花了，管理台不该看不见。
 - **表单失败说得出原因**：重复的故事 ID 会得到「故事 ID「x」已经被占用，换一个再试。」（`DuplicateStoryIdError` → 409 带 `field`），字段校验失败会列出出错的字段名（`readFormError` 把 Zod 的 `issues` 路径翻成表单里的中文标签）。故事 ID 的规则写在标签里。此前这些原因都被 `lib/api.ts` 丢掉，只剩一句「创建故事失败」。
 - **一次动作只调一次模型**：流式失败分两种。流还没开起来（Provider 不支持流式、传输层拒绝）才回落到非流式端点；流已经开了再失败（模型报错、审核拦下、连接中断）一律直接报给读者——那次生成已经花掉了，回落只会再花一次生成和一次突发额度。见 `StreamedTurnError`。
-- **管理台**：运行状态、模型配置与 Provider 验证、用量、审核队列（解决 / 忽略）、故事配置、会话审计。
+- **管理台**：运行状态、模型配置与 Provider 验证、用量、审核队列（解决 / 忽略）、故事配置、会话审计、账号列表与角色发放（`GET /api/admin/users` + 每行一个「设为管理员 / 收回管理员」，当前登录的账号不给自己降权）。
+- **看得见自己是谁**：账号栏在昵称下面写出邮箱，读者也一样——此前只有昵称，两个账号昵称相同就分不出登录的是哪个。
 - **AI 编排**：`MockNarrativeProvider` 与 `OpenAICompatibleProvider`（超时、分类重试退避、流式 narration 增量提取、输出 Zod 校验）。
 
 ## 代码地图
@@ -86,6 +87,7 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 - **跑 e2e 前必须先停掉 dev server。** `playwright.config.ts` 里 `reuseExistingServer: false`，否则 4000 端口冲突直接报 `already used`；这个设置是故意的，避免 e2e 跑在开发数据库上把测试账号写进去。
 - **PowerShell 不支持 `&&`**，命令要分开发；提交信息用 `git commit -F .git/COMMIT_MSG_TMP.txt`，避免引号和 `<>` 破坏解析。
 - **`apps/web/next-env.d.ts` 会来回抖动**（dev 与 build 写的路径不同），提交前 `git checkout -- apps/web/next-env.d.ts`。
+- **`.env` 只有服务端读，而且是通过启动参数读的。** `apps/server` 的 dev/start 脚本带 `--env-file-if-exists=../../.env`；在此之前根目录 `.env` 根本没人读，README 让人复制的那份文件一直是摆设，所有变量只有导出到 shell 里才生效。已导出的环境变量优先级高于文件，所以 e2e 显式传的配置不会被开发用的 `.env` 覆盖。Web 侧的变量要放 `apps/web/.env`——Next 只读自己目录。
 - **e2e 单跑某个 spec 会 409**：`npm run test:e2e` 才会重置数据库，直接 `npx playwright test xxx.spec.ts` 会撞上上一轮留下的账号。
 - 真实模型：`.env` 里把 `LLM_PROVIDER` 换成 `openai-compatible` 并配 `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL`，或在 `/admin` 里存一份（API Key 只落服务端，不回显）。
 

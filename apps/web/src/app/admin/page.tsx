@@ -7,10 +7,11 @@ import {
   getAdminStatus,
   getAdminStories,
   getAdminUsage,
+  getAdminUsers,
   getCurrentUser
 } from "@/lib/api";
 import { ModelConfigForm, StorySummaryForm } from "@/components/admin-console-forms";
-import { resolveModerationEventAction } from "@/app/admin/actions";
+import { resolveModerationEventAction, updateUserRoleAction } from "@/app/admin/actions";
 import { BrandMark } from "@/components/brand-mark";
 import Link from "next/link";
 
@@ -34,13 +35,14 @@ export default async function AdminPage({
   }
 
   const query = await searchParams;
-  const [status, modelConfig, stories, sessions, moderation, usage] = await Promise.all([
+  const [status, modelConfig, stories, sessions, moderation, usage, users] = await Promise.all([
     getAdminStatus(),
     getAdminModelConfig(),
     getAdminStories(),
     getAdminSessions(),
     getAdminModerationEvents(),
-    getAdminUsage()
+    getAdminUsage(),
+    getAdminUsers()
   ]);
 
   return (
@@ -56,6 +58,7 @@ export default async function AdminPage({
         <nav className="app-nav" aria-label="Admin navigation">
           <a href="#model">模型</a>
           <a href="#usage">用量</a>
+          <a href="#users">账号</a>
           <a href="#moderation">审核</a>
           <a href="#stories">故事</a>
           <a href="#sessions">会话</a>
@@ -249,6 +252,59 @@ export default async function AdminPage({
         ) : (
           <p className="muted">暂无会话。</p>
         )}
+      </section>
+
+      <section className="panel" id="users">
+        <div className="admin-usage-head">
+          <h2>账号</h2>
+          <span className="muted">最近 {users.length} 个账号</span>
+        </div>
+        <p className="muted admin-usage-note">
+          只读加一个动作：把角色发给别人，或收回来。这里不显示密码相关的任何数据，也不显示谁读了什么。
+          `ADMIN_EMAILS` 里的地址注册即为管理员，收回后下次登录会再次被提权。
+        </p>
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>邮箱</th>
+                <th>昵称</th>
+                <th>角色</th>
+                <th>注册时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((account) => (
+                <tr key={account.id}>
+                  <td>{account.email}</td>
+                  <td>{account.displayName}</td>
+                  <td>{account.role === "admin" ? "管理员" : "读者"}</td>
+                  <td>{formatDate(account.createdAt)}</td>
+                  <td>
+                    {/* The signed-in operator cannot demote themselves here: doing it
+                        would take away the page they are standing on, mid-request. */}
+                    {account.id === user.id ? (
+                      <span className="muted">当前登录</span>
+                    ) : (
+                      <form action={updateUserRoleAction}>
+                        <input name="userId" type="hidden" value={account.id} />
+                        <input
+                          name="role"
+                          type="hidden"
+                          value={account.role === "admin" ? "reader" : "admin"}
+                        />
+                        <button className="admin-inline-button" type="submit">
+                          {account.role === "admin" ? "收回管理员" : "设为管理员"}
+                        </button>
+                      </form>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section className="panel" id="moderation">

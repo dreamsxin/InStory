@@ -92,6 +92,20 @@ export class UserStore {
     return row ?? null;
   }
 
+  /**
+   * Accounts for the console, newest first. Capped because the console shows a
+   * page, not the whole table: an operator looking for someone who just signed up
+   * needs the recent end, and pulling every row would only get slower with use.
+   */
+  listUsers(limit = 50): UserRecord[] {
+    return this.database.db
+      .prepare(
+        `SELECT id, email, display_name AS displayName, role, created_at AS createdAt, updated_at AS updatedAt
+         FROM users ORDER BY created_at DESC LIMIT ?`
+      )
+      .all(Math.max(1, Math.min(200, Math.trunc(limit)))) as unknown as UserRecord[];
+  }
+
   /** Promotes or demotes an account. Returns null when the id is unknown. */
   setRole(userId: string, role: UserRole, now = new Date()): UserRecord | null {
     const result = this.database.db

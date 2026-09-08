@@ -652,6 +652,19 @@ export async function buildApp(options: BuildAppOptions) {
   }));
 
   /**
+   * The accounts an operator has to reason about. Read-only and deliberately thin:
+   * ids, addresses, names, roles and when they signed up - no password material and
+   * nothing about what anyone read. Until this existed the role endpoint below could
+   * only be used by someone who already knew a user id, which meant opening the
+   * database by hand.
+   */
+  app.get("/api/admin/users", async (request) => {
+    const { limit } = request.query as { limit?: string };
+    const parsed = Number(limit);
+    return { users: options.userStore.listUsers(Number.isFinite(parsed) ? parsed : 50) };
+  });
+
+  /**
    * Hands the admin role to an account. The very first administrator is
    * bootstrapped with the shared token; after that the console itself is enough,
    * so nobody needs shell access to the database to add a colleague.

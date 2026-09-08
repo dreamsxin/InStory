@@ -115,6 +115,12 @@ npm install
 cp .env.example .env
 ```
 
+这份根目录的 `.env` 由服务端读取（`apps/server` 的 dev/start 脚本带
+`--env-file-if-exists=../../.env`）。已经导出到 shell 里的变量优先级更高，所以
+`npm run test:e2e` 显式传的那套配置不会被它覆盖。Web 侧的变量（`ADMIN_TOKEN`、
+`API_PROXY_TARGET`、`NEXT_PUBLIC_API_BASE`）要放在 `apps/web/.env`——Next.js 只读自己
+目录下的 env 文件，不会向上找根目录。
+
 如需接入真实模型，将 `LLM_PROVIDER` 改为 `openai-compatible`，并配置：
 
 - `LLM_BASE_URL`

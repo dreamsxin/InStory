@@ -7,8 +7,24 @@ import {
   resolveAdminModerationEvent,
   updateAdminModelConfig,
   updateAdminStorySummary,
+  updateAdminUserRole,
   verifyAdminModelConfig
 } from "@/lib/api";
+
+/**
+ * Promotes or demotes one account. The submitter carries the role, so the row shows
+ * one button saying what it will do rather than a select the operator has to read.
+ */
+export async function updateUserRoleAction(formData: FormData) {
+  const userId = String(formData.get("userId") ?? "");
+  if (!userId) {
+    return;
+  }
+
+  await updateAdminUserRole(userId, formData.get("role") === "admin" ? "admin" : "reader");
+
+  revalidatePath("/admin");
+}
 
 /** Handles both the resolve and the dismiss buttons; the submitter carries which one. */
 export async function resolveModerationEventAction(formData: FormData) {

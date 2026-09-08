@@ -2524,6 +2524,24 @@ a {
   font-weight: 600;
 }
 
+/* Name over address, right-aligned with the rest of the bar. Two lines fit where
+   one was because the bar is only as tall as the top bar's other content. */
+.account-identity {
+  display: grid;
+  justify-items: end;
+  line-height: 1.3;
+  min-width: 0;
+}
+
+.account-email {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+
 .account-role {
   padding: 2px 8px;
   border: 1px solid var(--line);
@@ -2709,6 +2727,25 @@ a {
   gap: 8px;
   align-items: center;
 }
+
+/* A single action living inside a table cell: reads as a control without turning
+   the row into a form. */
+.admin-inline-button {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.admin-inline-button:hover {
+  border-color: color-mix(in oklab, var(--accent) 40%, var(--line));
+  background: color-mix(in oklab, var(--accent) 8%, var(--panel));
+}
+
 
 .moderation-note {
   flex: 1 1 200px;

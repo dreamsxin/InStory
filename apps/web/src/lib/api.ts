@@ -928,6 +928,33 @@ export async function getAdminUsage(): Promise<AdminUsageSummary> {
   return adminGet<AdminUsageSummary>("/api/admin/usage");
 }
 
+/** One account as the console shows it. No password material, no reading history. */
+export interface AdminUserRow {
+  id: string;
+  email: string;
+  displayName: string;
+  role: "reader" | "admin";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function getAdminUsers(): Promise<AdminUserRow[]> {
+  const data = await adminGet<{ users: AdminUserRow[] }>("/api/admin/users");
+  return data.users;
+}
+
+export async function updateAdminUserRole(
+  userId: string,
+  role: "reader" | "admin"
+): Promise<AdminUserRow> {
+  const data = await adminRequest<{ user: AdminUserRow }>(`/api/admin/users/${userId}/role`, {
+    method: "PUT",
+    body: JSON.stringify({ role })
+  });
+  return data.user;
+}
+
+
 export async function getAdminStatus(): Promise<AdminStatus> {
   return adminGet<AdminStatus>("/api/admin/status");
 }

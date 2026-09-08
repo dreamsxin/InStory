@@ -130,6 +130,15 @@ test.describe("app-like shell", () => {
     const header = page.locator(".admin-header");
     await expect(header).toBeVisible();
 
+    // The console can now answer "who has an account" without opening the database:
+    // the role endpoint existed, but nothing listed the ids it needs.
+    const users = page.locator("#users");
+    await expect(users).toContainText("e2e-shell-admin@example.com");
+    await expect(users.locator("tr", { hasText: "e2e-shell-admin@example.com" })).toContainText(
+      "当前登录"
+    );
+
+
     expect(await documentScrolls(page)).toBe(false);
     expect(await overflowY(page, ".admin-shell")).toBe("auto");
 
