@@ -428,6 +428,13 @@ export interface BuildAppOptions {
 declare module "fastify" {
   interface FastifyRequest {
     authUser?: UserRecord;
+    /**
+     * True when the identity above is the non-production fallback rather than a
+     * session the caller presented. Owner-scoped routes may treat it as a caller;
+     * anything that answers "who am I" must not, or the app tells an anonymous
+     * visitor they are signed in.
+     */
+    authUserIsFallback?: boolean;
   }
 }
 
@@ -483,6 +490,7 @@ export async function buildApp(options: BuildAppOptions) {
 
     if (options.allowLegacyAnonymousUser) {
       request.authUser = options.userStore.findById(LEGACY_USER_ID) ?? undefined;
+      request.authUserIsFallback = request.authUser !== undefined;
     }
   });
 
@@ -628,7 +636,10 @@ export async function buildApp(options: BuildAppOptions) {
   });
 
   app.get("/api/auth/me", async (request, reply) => {
-    if (!request.authUser) {
+    // The dev fallback is not an answer to this question. Reporting it made an
+    // anonymous visitor look signed in as the seeded local reader, which sent
+    // /login straight back to the home page - so 退出登录 appeared to do nothing.
+    if (!request.authUser || request.authUserIsFallback) {
       return reply.code(401).send({ error: "未登录" });
     }
 

@@ -138,6 +138,13 @@ test.describe("app-like shell", () => {
       "当前登录"
     );
 
+    // And it says who is using it, with a way out: signing out used to mean going
+    // back to the client first, because the console had no account bar at all.
+    const bar = page.locator(".admin-header .account-bar");
+    await expect(bar).toContainText("e2e-shell-admin@example.com");
+    await expect(bar.getByRole("button", { name: "退出登录" })).toBeVisible();
+
+
 
     expect(await documentScrolls(page)).toBe(false);
     expect(await overflowY(page, ".admin-shell")).toBe("auto");

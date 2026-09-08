@@ -2,7 +2,14 @@ import type { AuthUser } from "@instory/shared";
 import Link from "next/link";
 import { logoutAction } from "@/app/auth/actions";
 
-export function AccountBar({ user }: { user: AuthUser }) {
+export function AccountBar({
+  showConsoleLink = true,
+  user
+}: {
+  /** Off inside the console itself, where the link would point at the page you are on. */
+  showConsoleLink?: boolean;
+  user: AuthUser;
+}) {
   return (
     <div className="account-bar">
       <span className="account-identity">
@@ -16,7 +23,7 @@ export function AccountBar({ user }: { user: AuthUser }) {
       </span>
       {/* The badge doubles as the only way into the console: it used to be plain
           text, so even an administrator had to type the address by hand. */}
-      {user.role === "admin" ? (
+      {user.role === "admin" && showConsoleLink ? (
         <Link className="account-role" href="/admin">
           管理控制台
         </Link>

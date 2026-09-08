@@ -11,6 +11,7 @@ import {
   getCurrentUser
 } from "@/lib/api";
 import { ModelConfigForm, StorySummaryForm } from "@/components/admin-console-forms";
+import { AccountBar } from "@/components/account-bar";
 import { resolveModerationEventAction, updateUserRoleAction } from "@/app/admin/actions";
 import { BrandMark } from "@/components/brand-mark";
 import Link from "next/link";
@@ -64,6 +65,10 @@ export default async function AdminPage({
           <a href="#sessions">会话</a>
           <Link href="/">客户端</Link>
         </nav>
+        {/* The console had no way out and no name on it: an operator could not tell
+            which account they were using, and signing out meant going back to the
+            client first. */}
+        <AccountBar showConsoleLink={false} user={user} />
       </header>
 
       <section className="admin-command">

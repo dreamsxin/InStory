@@ -1452,6 +1452,22 @@ describe("authentication", () => {
     const response = await authApp.inject({ method: "GET", url: "/api/me/stories" });
 
     expect(response.statusCode).toBe(200);
+
+    // But the fallback is not an identity: asked who is signed in, the answer is
+    // nobody. Reporting the seeded reader here made an anonymous visitor look
+    // signed in, so /login bounced them to the home page and 退出登录 looked broken.
+    const me = await authApp.inject({ method: "GET", url: "/api/auth/me" });
+    expect(me.statusCode).toBe(401);
+
+    // A real session still gets a real answer on the same server.
+    const token = await register("fallback-real@example.com", "真实账号");
+    const signedIn = await authApp.inject({
+      method: "GET",
+      url: "/api/auth/me",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    expect(signedIn.statusCode).toBe(200);
+    expect(signedIn.json<{ user: { email: string } }>().user.email).toBe("fallback-real@example.com");
   });
 
   it("keeps one reader's stories, roles and sessions away from another", async () => {
