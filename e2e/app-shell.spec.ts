@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
-
-const API_BASE = "http://127.0.0.1:4000";
+import { E2E_API_BASE as API_BASE } from "../playwright.config.js";
 const PASSWORD = "e2e-password-123";
 /** Matches playwright.config.ts, and is the console's bootstrap credential. */
 const ADMIN_TOKEN = "e2e-admin-token-0123456789abcdef0123456789abcdef";

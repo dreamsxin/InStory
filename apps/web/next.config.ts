@@ -10,6 +10,15 @@ const nextConfig: NextConfig = {
   transpilePackages: ["@instory/shared"],
 
   /**
+   * A dev server refuses to start when another one is already running for the same
+   * build directory, whatever port it was given. The e2e suite runs its own web
+   * server, so it points this elsewhere (`.next-e2e`) and the two coexist - a test
+   * run no longer requires killing the developer's dev server.
+   */
+  distDir: process.env.NEXT_DIST_DIR ?? ".next",
+
+
+  /**
    * The dev server only serves /_next/* to origins it recognises, and it does not
    * treat 127.0.0.1 as the same origin as localhost. Without this the client bundle
    * is refused when the app is opened on 127.0.0.1: the markup renders but nothing

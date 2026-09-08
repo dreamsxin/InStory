@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
-
-const API_BASE = "http://127.0.0.1:4000";
+import { E2E_API_BASE as API_BASE } from "../playwright.config.js";
 const PASSWORD = "e2e-password-123";
 
 /** Registers through the API and hands the browser the matching session cookie. */

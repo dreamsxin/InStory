@@ -1,8 +1,15 @@
 import { join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 
-const API_PORT = 4000;
-const WEB_PORT = 3000;
+/**
+ * Deliberately not 4000/3000: those belong to `npm run dev`. Sharing them meant a
+ * run had to kill the developer's servers first, and a browser left open on
+ * localhost:3000 would silently start showing the throwaway test database - test
+ * stories appearing and then vanishing looks exactly like data loss.
+ */
+const API_PORT = 4100;
+const WEB_PORT = 3100;
+
 
 /**
  * Absolute on purpose: `npm run -w` runs the server with its own workspace as the
@@ -10,6 +17,9 @@ const WEB_PORT = 3000;
  * does not clean.
  */
 export const E2E_DATABASE_PATH = join(process.cwd(), "data", "e2e.sqlite");
+
+/** Where the suite's own API answers. Specs set up state through it. */
+export const E2E_API_BASE = `http://127.0.0.1:${API_PORT}`;
 
 /**
  * End-to-end coverage for the paths only a real browser can exercise: form
@@ -50,10 +60,9 @@ export default defineConfig({
     {
       command: "npm run start -w apps/server",
       url: `http://127.0.0.1:${API_PORT}/api/health`,
-      // Never reuse: a dev server on the same port holds the development database,
-      // and reusing it silently runs the whole suite against real data - which both
-      // fills that database with test accounts and makes the next run fail on
-      // duplicate emails. Failing on the busy port is the honest outcome.
+      // Still never reuse: the ports are the suite's own, so anything already
+      // listening on them is a leftover process from an interrupted run, and reusing
+      // it would mean testing against a database this run did not reset.
       reuseExistingServer: false,
       timeout: 60_000,
       env: {
@@ -80,12 +89,16 @@ export default defineConfig({
     {
       command: "npm run dev -w apps/web",
       url: `http://127.0.0.1:${WEB_PORT}/login`,
-      // Same reason as the API: a reused dev server carries different env, so the
-      // suite would be testing a different configuration than the one it declares.
+      // Same reason as the API: the port is the suite's own, and a reused server
+      // carries different env, so the suite would be testing a different
+      // configuration than the one it declares.
       reuseExistingServer: false,
       timeout: 120_000,
       env: {
         PORT: String(WEB_PORT),
+        // Its own build directory, so this dev server and the developer's can run at
+        // the same time (Next allows only one dev server per build directory).
+        NEXT_DIST_DIR: ".next-e2e",
         // Both the /api rewrite and the server-side fetches read this.
         API_PROXY_TARGET: `http://127.0.0.1:${API_PORT}`,
         ADMIN_TOKEN: "e2e-admin-token-0123456789abcdef0123456789abcdef"

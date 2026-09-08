@@ -181,11 +181,13 @@ npm run test
 npm run build
 ```
 
-端到端测试自带 dev server，跑之前必须先停掉本地的 `dev:server` / `dev:web`，否则 4000 端口冲突：
+端到端测试自带 dev server，跑在自己的端口（API 4100 / Web 3100）和自己的数据库
+`data/e2e.sqlite` 上，所以本地的 `dev:server` / `dev:web` 可以一直开着：
 
 ```bash
 npm run test:e2e
 ```
+
 
 ### 验证模型 Provider
 

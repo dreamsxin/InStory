@@ -13,7 +13,7 @@
 npm install
 npm run typecheck          # 全 workspace + e2e 的 tsc
 npm run test               # 各 workspace 的 vitest
-npm run test:e2e           # 会先重置 e2e 数据库，再拉起独立的 4000/3000
+npm run test:e2e           # 会先重置 e2e 数据库，再拉起独立的 4100/3100
 npm run dev:server         # API  http://localhost:4000
 npm run dev:web            # Web  http://localhost:3000
 npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 schema
@@ -86,7 +86,7 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 
 ## 本机排错
 
-- **跑 e2e 前必须先停掉 dev server。** `playwright.config.ts` 里 `reuseExistingServer: false`，否则 4000 端口冲突直接报 `already used`；这个设置是故意的，避免 e2e 跑在开发数据库上把测试账号写进去。
+- **e2e 有自己的端口和数据库。** API 4100 / Web 3100 / `data/e2e.sqlite`，dev server 可以一直开着。以前共用 4000/3000，代价有两个：跑之前得先杀掉开发服务器（而且杀掉后台任务并不会杀掉 `tsx watch` / `next dev` 的子进程，只能按端口 `Get-NetTCPConnection` → `Stop-Process`），以及浏览器里开着的 localhost:3000 会在那段时间里悄悄显示测试数据库——测试故事出现又消失，看起来和"数据被清空"一模一样。`reuseExistingServer: false` 仍然保留：这两个端口是 e2e 自己的，上面还在监听的只可能是上一轮没退干净的进程。另外换端口不够——Next 一个构建目录只允许一个 dev server，所以 e2e 还带 `NEXT_DIST_DIR=.next-e2e`（`next.config.ts` 读它）。
 - **PowerShell 不支持 `&&`**，命令要分开发；提交信息用 `git commit -F .git/COMMIT_MSG_TMP.txt`，避免引号和 `<>` 破坏解析。
 - **`apps/web/next-env.d.ts` 会来回抖动**（dev 与 build 写的路径不同），提交前 `git checkout -- apps/web/next-env.d.ts`。
 - **`.env` 只有服务端读，而且是通过启动参数读的。** `apps/server` 的 dev/start 脚本带 `--env-file-if-exists=../../.env`；在此之前根目录 `.env` 根本没人读，README 让人复制的那份文件一直是摆设，所有变量只有导出到 shell 里才生效。已导出的环境变量优先级高于文件，所以 e2e 显式传的配置不会被开发用的 `.env` 覆盖。Web 侧的变量要放 `apps/web/.env`——Next 只读自己目录。
