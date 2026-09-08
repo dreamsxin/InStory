@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { AppDatabase } from "./app-database.js";
-import { estimateCost, UsageStore, usageDateKey } from "./usage-store.js";
+import { estimateCost, UsageStore, usageDateKey, usageDayResetsAt } from "./usage-store.js";
 
 const openDatabases: AppDatabase[] = [];
 const tempDirs: string[] = [];
@@ -130,6 +130,28 @@ describe("UsageStore", () => {
       averageLatencyMs: 0,
       byModel: []
     });
+  });
+});
+
+describe("usageDayResetsAt", () => {
+  it("lands on the next UTC midnight, whatever time of day it is asked", () => {
+    expect(usageDayResetsAt(new Date("2026-05-20T10:00:00.000Z"))).toBe("2026-05-21T00:00:00.000Z");
+    expect(usageDayResetsAt(new Date("2026-05-20T23:59:59.999Z"))).toBe("2026-05-21T00:00:00.000Z");
+    expect(usageDayResetsAt(new Date("2026-05-20T00:00:00.000Z"))).toBe("2026-05-21T00:00:00.000Z");
+  });
+
+  it("crosses month and year ends", () => {
+    expect(usageDayResetsAt(new Date("2026-05-31T12:00:00.000Z"))).toBe("2026-06-01T00:00:00.000Z");
+    expect(usageDayResetsAt(new Date("2026-12-31T12:00:00.000Z"))).toBe("2027-01-01T00:00:00.000Z");
+  });
+
+  it("agrees with the day key the counting queries use", () => {
+    const at = new Date("2026-05-20T10:00:00.000Z");
+
+    // If these two drift apart, a reader is shown a reset time that is not the moment
+    // their counter actually starts over.
+    expect(usageDateKey(at)).toBe("2026-05-20");
+    expect(usageDateKey(new Date(usageDayResetsAt(at)))).toBe("2026-05-21");
   });
 });
 

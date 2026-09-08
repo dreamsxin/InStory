@@ -62,6 +62,16 @@ function readLimit(raw: string | undefined, windowMs: number) {
   return Number.isFinite(limit) && limit > 0 ? { limit: Math.floor(limit), windowMs } : undefined;
 }
 
+/**
+ * A quota of NaN compares false against every limit, which silently turns the daily
+ * budget off - the one failure mode nobody notices until the bill arrives. A
+ * non-numeric value falls back to the default instead.
+ */
+function readDailyTurnQuota(raw: string | undefined): number {
+  const quota = Number(raw);
+  return Number.isFinite(quota) && quota >= 0 ? Math.floor(quota) : 20;
+}
+
 const abuseLimits = {
   authAttempts: readLimit(process.env.AUTH_ATTEMPTS_PER_MINUTE, 60_000),
   loginFailuresPerAccount: readLimit(process.env.LOGIN_FAILURES_PER_ACCOUNT, 15 * 60_000),
@@ -101,7 +111,7 @@ const app = await buildApp({
   modelRuntime,
   adminToken,
   adminEmails: readAdminEmails(process.env.ADMIN_EMAILS),
-  dailyTurnQuota: Number(process.env.DAILY_TURN_QUOTA || 20),
+  dailyTurnQuota: readDailyTurnQuota(process.env.DAILY_TURN_QUOTA),
   pricing: readPricingFromEnv(process.env),
   sessionTurnWindow: Number(process.env.SESSION_TURN_WINDOW || 0) || undefined,
   abuseLimits,

@@ -42,6 +42,19 @@ export function usageDateKey(at: Date = new Date()): string {
 }
 
 /**
+ * Start of the next UTC day - the instant the per-day counters start over. Derived
+ * from the same day key the counting queries use, so the number a reader is shown
+ * and the moment it changes can never disagree.
+ */
+export function usageDayResetsAt(at: Date = new Date()): string {
+  const next = new Date(`${usageDateKey(at)}T00:00:00.000Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+
+  return next.toISOString();
+}
+
+
+/**
  * Records what each generation cost. Failures are recorded too: a retry storm that
  * burns tokens without producing a turn is exactly the thing that stays invisible
  * otherwise.

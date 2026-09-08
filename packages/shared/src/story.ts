@@ -12,7 +12,15 @@ export interface TurnQuota {
   remainingTurnsToday: number;
   dailyLimit: number;
   usedToday: number;
+  /**
+   * When the counter goes back to zero, as an absolute instant. The day is a UTC
+   * day, so east of Greenwich "tomorrow" is not midnight local time - in UTC+8 it
+   * is 08:00. Clients render this in the reader's own timezone instead of saying
+   * "come back tomorrow", which is only true for part of the world.
+   */
+  resetsAt: string;
 }
+
 
 /** The authenticated account, as exposed to clients. Never carries credentials. */
 export interface AuthUser {

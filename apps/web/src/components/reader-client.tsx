@@ -12,6 +12,7 @@ import type {
 } from "@instory/shared";
 import {
   createTurn,
+  formatQuotaReset,
   getOlderTurns,
   QuotaExceededError,
   RateLimitedError,
@@ -70,6 +71,10 @@ export function ReaderClient({
   // this reader's storage, so rendering their real choice on the first pass would
   // hydrate against different markup.
   const [prefs, setPrefs] = useState<ReadingPrefs>(DEFAULT_READING_PREFS);
+  // Same reason: the quota resets on a UTC boundary, and only the browser knows what
+  // that is in local time. Rendering it on the server would hydrate against a
+  // different string whenever the two timezones disagree.
+  const [quotaResetLabel, setQuotaResetLabel] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const latestTurn = session.turns.at(-1);
@@ -77,6 +82,11 @@ export function ReaderClient({
   useEffect(() => {
     setPrefs(loadReadingPrefs());
   }, []);
+
+  useEffect(() => {
+    setQuotaResetLabel(formatQuotaReset(quota.resetsAt));
+  }, [quota.resetsAt]);
+
 
   function changePrefs(update: Partial<ReadingPrefs>) {
     setPrefs((current) => {
@@ -217,6 +227,11 @@ export function ReaderClient({
       } else if (err instanceof RateLimitedError) {
         // Recoverable on its own, so tell the reader how long rather than just failing.
         setError(`${err.message}（约 ${err.retryAfterSeconds} 秒后可再试）`);
+      } else if (err instanceof QuotaExceededError) {
+        // The budget is gone until a fixed moment, so name it. "明天再来" was wrong
+        // for anyone east of Greenwich: the day rolls over at 08:00 in UTC+8.
+        const resetAt = formatQuotaReset(err.resetsAt) ?? quotaResetLabel;
+        setError(resetAt ? `${err.message}${resetAt} 后恢复。` : err.message);
       } else {
         setError(err instanceof Error ? err.message : "提交失败");
       }
@@ -248,9 +263,20 @@ export function ReaderClient({
             </div>
           </div>
           {/* Always present: the budget arrives with the session, so a reader knows
-              what is left before spending any of it. */}
-          <Chip className="quota-chip" aria-label={`今日剩余推进 ${quota.remainingTurnsToday} 次`}>
+              what is left before spending any of it. The reset time is spelled out
+              once the budget is gone - that is when "when does it come back" stops
+              being trivia and starts being the only question. */}
+          <Chip
+            className="quota-chip"
+            aria-label={
+              quotaResetLabel
+                ? `今日剩余推进 ${quota.remainingTurnsToday} 次，${quotaResetLabel} 恢复`
+                : `今日剩余推进 ${quota.remainingTurnsToday} 次`
+            }
+            title={quotaResetLabel ? `配额于 ${quotaResetLabel} 恢复` : undefined}
+          >
             今日剩余 {quota.remainingTurnsToday}/{quota.dailyLimit}
+            {quota.remainingTurnsToday <= 0 && quotaResetLabel ? ` · ${quotaResetLabel} 恢复` : null}
           </Chip>
         </div>
 

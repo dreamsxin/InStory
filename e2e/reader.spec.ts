@@ -90,6 +90,9 @@ test.describe("reader", () => {
     await expect(page.locator(".turn-streaming")).toBeHidden();
 
     await expect(quota).toContainText("今日剩余 19/20");
+    // The reset time is only useful if it is a real local time, so check the chip
+    // carries one rather than the "明天" it used to imply.
+    await expect(quota).toHaveAttribute("title", /配额于 .*\d.* 恢复/);
     // Visible, not merely present: the bar used to carry the hidden-chrome class
     // unconditionally with no button to turn it back on.
     await expect(quota).toBeVisible();

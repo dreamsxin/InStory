@@ -117,6 +117,7 @@ export default async function AdminPage({
         <p className="muted admin-usage-note">
           输入 {usage.today.promptTokens.toLocaleString()} / 输出 {usage.today.completionTokens.toLocaleString()}{" "}
           token，每位读者每日限 {usage.dailyTurnQuota} 次推进。失败的尝试会被记录但不占用配额。
+          今日与配额都按 UTC 日切统计，东八区的重置时间是上午 8 点。
           {usage.estimatedCost === null
             ? " 配置 LLM_PRICE_INPUT_PER_MTOK 与 LLM_PRICE_OUTPUT_PER_MTOK 后可显示成本。"
             : null}

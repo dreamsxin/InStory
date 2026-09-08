@@ -47,7 +47,12 @@ import { DuplicateStoryIdError } from "./db/story-store.js";
 import type { ReaderProfileStore } from "./db/reader-profile-store.js";
 import type { SessionOverview, SessionStore } from "./db/session-store.js";
 import { LEGACY_USER_ID, SESSION_TTL_MS, type UserRecord, type UserStore } from "./db/user-store.js";
-import { estimateCost, type TokenPricing, type UsageStore } from "./db/usage-store.js";
+import {
+  estimateCost,
+  usageDayResetsAt,
+  type TokenPricing,
+  type UsageStore
+} from "./db/usage-store.js";
 import type { ModerationStatus, ModerationStore } from "./db/moderation-store.js";
 import {
   buildExcerpt,
@@ -303,9 +308,11 @@ function resolveQuota(usageStore: UsageStore, userId: string, dailyLimit: number
   return {
     dailyLimit,
     usedToday,
-    remainingTurnsToday: Math.max(0, dailyLimit - usedToday)
+    remainingTurnsToday: Math.max(0, dailyLimit - usedToday),
+    resetsAt: usageDayResetsAt()
   };
 }
+
 
 /**
  * Derives the opening turn from the story's own world configuration. Both session
@@ -1318,7 +1325,10 @@ export async function buildApp(options: BuildAppOptions) {
 
     const quotaBefore = resolveQuota(options.usageStore, request.authUser.id, dailyTurnQuota);
     if (quotaBefore.remainingTurnsToday <= 0) {
-      return reply.code(429).send({ error: "今日推进次数已用完，请明天再来。", quota: quotaBefore });
+      // No "come back tomorrow": the day is a UTC day, so the reader's tomorrow may
+      // be hours away from the reset. The client turns quota.resetsAt into a local
+      // time instead.
+      return reply.code(429).send({ error: "今日推进次数已用完。", quota: quotaBefore });
     }
 
     // Consumed last, so only requests that are really about to call the model pay for it.
@@ -1435,7 +1445,10 @@ export async function buildApp(options: BuildAppOptions) {
     const quotaBefore = resolveQuota(options.usageStore, request.authUser.id, dailyTurnQuota);
     if (quotaBefore.remainingTurnsToday <= 0) {
       // Refused before opening the stream, so the client gets a normal JSON error.
-      return reply.code(429).send({ error: "今日推进次数已用完，请明天再来。", quota: quotaBefore });
+      // No "come back tomorrow": the day is a UTC day, so the reader's tomorrow may
+      // be hours away from the reset. The client turns quota.resetsAt into a local
+      // time instead.
+      return reply.code(429).send({ error: "今日推进次数已用完。", quota: quotaBefore });
     }
 
     // Also refused before the stream opens, for the same reason.

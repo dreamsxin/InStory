@@ -28,7 +28,7 @@ import { ModelConfigStore } from "./db/model-config-store.js";
 import { ReaderProfileStore } from "./db/reader-profile-store.js";
 import { SessionStore } from "./db/session-store.js";
 import { UserStore } from "./db/user-store.js";
-import { UsageStore } from "./db/usage-store.js";
+import { usageDayResetsAt, UsageStore } from "./db/usage-store.js";
 import { ModerationStore } from "./db/moderation-store.js";
 import { ModelRuntime } from "./model-runtime.js";
 
@@ -1136,7 +1136,10 @@ describe("generation quota and usage", () => {
     expect(first.json<CreateTurnResponse>().quota).toEqual({
       dailyLimit: 2,
       usedToday: 1,
-      remainingTurnsToday: 1
+      remainingTurnsToday: 1,
+      // The counter is a UTC day, so the reset instant has to be the next UTC
+      // midnight - that is what the client turns into a local time.
+      resetsAt: usageDayResetsAt()
     });
 
     const second = await advance(sessionId);
@@ -1144,7 +1147,13 @@ describe("generation quota and usage", () => {
 
     const third = await advance(sessionId);
     expect(third.statusCode).toBe(429);
-    expect(third.json<{ quota: { remainingTurnsToday: number } }>().quota.remainingTurnsToday).toBe(0);
+    const refused = third.json<{ error: string; quota: { remainingTurnsToday: number; resetsAt: string } }>();
+    expect(refused.quota.remainingTurnsToday).toBe(0);
+    // The refusal has to say when the budget comes back, and it must not promise
+    // "tomorrow": the day rolls over at UTC midnight, which is mid-morning in UTC+8.
+    expect(refused.quota.resetsAt).toBe(usageDayResetsAt());
+    expect(Date.parse(refused.quota.resetsAt)).toBeGreaterThan(Date.now());
+    expect(refused.error).not.toContain("明天");
   });
 
   it("applies the same quota to the streaming endpoint", async () => {

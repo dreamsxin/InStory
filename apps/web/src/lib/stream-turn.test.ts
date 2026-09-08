@@ -159,10 +159,16 @@ describe("streamTurn", () => {
 
   it("signals an exhausted quota separately, so it is not retried as a fallback", async () => {
     fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ error: "今日推进次数已用完，请明天再来。" }), {
-        status: 429,
-        headers: { "content-type": "application/json" }
-      })
+      new Response(
+        JSON.stringify({
+          error: "今日推进次数已用完。",
+          quota: { remainingTurnsToday: 0, dailyLimit: 20, usedToday: 20, resetsAt: "2026-05-21T00:00:00.000Z" }
+        }),
+        {
+          status: 429,
+          headers: { "content-type": "application/json" }
+        }
+      )
     );
 
     const { streamTurn, QuotaExceededError } = await import("./api.js");
@@ -174,6 +180,9 @@ describe("streamTurn", () => {
 
     await expect(attempt).rejects.toBeInstanceOf(QuotaExceededError);
     await expect(attempt).rejects.toThrow("今日推进次数已用完");
+    // Carried through so the reader can be told when the budget comes back, in their
+    // own timezone rather than as "tomorrow".
+    await expect(attempt).rejects.toMatchObject({ resetsAt: "2026-05-21T00:00:00.000Z" });
   });
 
   it("treats a throttled burst as recoverable rather than an exhausted quota", async () => {
@@ -227,3 +236,25 @@ describe("streamTurn", () => {
     });
   });
 });
+
+describe("formatQuotaReset", () => {
+  it("renders the reset instant in the reader's own timezone", async () => {
+    const { formatQuotaReset } = await import("./api.js");
+
+    const label = formatQuotaReset("2026-05-21T00:00:00.000Z");
+
+    // Not asserting an exact string: the test machine's timezone decides it. What
+    // matters is that an instant produces a readable local time, not "明天".
+    expect(label).toBeTruthy();
+    expect(label).toMatch(/\d/);
+  });
+
+  it("says nothing rather than something wrong when the value is missing or broken", async () => {
+    const { formatQuotaReset } = await import("./api.js");
+
+    expect(formatQuotaReset(undefined)).toBeNull();
+    expect(formatQuotaReset("")).toBeNull();
+    expect(formatQuotaReset("not-a-date")).toBeNull();
+  });
+});
+

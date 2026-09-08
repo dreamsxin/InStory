@@ -582,11 +582,40 @@ export class StreamedTurnError extends Error {
 
 /** Thrown when the reader has spent today's generation quota. */
 export class QuotaExceededError extends Error {
-  constructor(message = "今日推进次数已用完，请明天再来。") {
+  /** When the budget starts over, as sent by the API. Absent on older responses. */
+  readonly resetsAt: string | undefined;
+
+  constructor(message = "今日推进次数已用完。", resetsAt?: string) {
     super(message);
     this.name = "QuotaExceededError";
+    this.resetsAt = resetsAt;
   }
 }
+
+/**
+ * The quota day is a UTC day, so "tomorrow" is wrong for most of the world - in
+ * UTC+8 the reset lands at 08:00 the same morning. Formatting the instant in the
+ * reader's own timezone is the only version that is true everywhere. Returns null
+ * for anything unparseable so a bad value degrades to saying nothing.
+ */
+export function formatQuotaReset(resetsAt: string | undefined): string | null {
+  if (!resetsAt) {
+    return null;
+  }
+
+  const at = new Date(resetsAt);
+  if (Number.isNaN(at.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(at);
+}
+
 
 /**
  * Thrown when the API throttled a burst. Unlike QuotaExceededError this clears on
@@ -614,7 +643,10 @@ async function readThrottleError(response: Response): Promise<QuotaExceededError
     return new RateLimitedError(message, body.retryAfterSeconds);
   }
 
-  return new QuotaExceededError(message);
+  const quota = body?.quota as { resetsAt?: unknown } | undefined;
+  const resetsAt = typeof quota?.resetsAt === "string" ? quota.resetsAt : undefined;
+
+  return new QuotaExceededError(message, resetsAt);
 }
 
 
@@ -835,13 +867,18 @@ async function readApiError(response: Response): Promise<string | null> {
 /** Parses a JSON error body, tolerating non-JSON and malformed responses. */
 async function readApiBody(
   response: Response
-): Promise<{ error?: unknown; retryAfterSeconds?: unknown; issues?: unknown } | null> {
+): Promise<{ error?: unknown; retryAfterSeconds?: unknown; issues?: unknown; quota?: unknown } | null> {
   try {
     const contentType = response.headers.get("content-type") ?? "";
     if (!contentType.includes("application/json")) {
       return null;
     }
-    return (await response.json()) as { error?: unknown; retryAfterSeconds?: unknown; issues?: unknown };
+    return (await response.json()) as {
+      error?: unknown;
+      retryAfterSeconds?: unknown;
+      issues?: unknown;
+      quota?: unknown;
+    };
   } catch {
     return null;
   }
