@@ -339,6 +339,29 @@ export class StoryStore {
     return row.count;
   }
 
+  /**
+   * How many beats each story has planned, by story id. Counts 必经 and 可作为结局
+   * anchors: those are the ones a reading has to pass through, so they are the only
+   * honest basis for "how long is this". 可选 may never happen and 禁止 is a thing
+   * that must not, so neither says anything about length.
+   *
+   * A count, deliberately: the anchor titles are the author's outline, and shipping
+   * them to a shelf would hand every reader the ending before they start.
+   */
+  countPlannedBeats(): Map<string, number> {
+    const rows = this.database.db
+      .prepare(
+        `SELECT story_id AS storyId, COUNT(*) AS beats
+           FROM story_anchors
+          WHERE json_extract(payload, '$.type') IN ('required', 'ending')
+          GROUP BY story_id`
+      )
+      .all() as Array<{ storyId: string; beats: number }>;
+
+    return new Map(rows.map((row) => [row.storyId, row.beats]));
+  }
+
+
   private findStorySummary(storyId: string): StorySummary | null {
     const row = this.database.db.prepare("SELECT payload FROM stories WHERE id = ?").get(storyId) as
       | { payload: string }

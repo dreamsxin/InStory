@@ -7,6 +7,7 @@ import type {
   CharacterProfile,
   ReaderProfile,
   ReaderSessionListItem,
+  ShelfStory,
   StoryAnchor,
   StoryDetail,
   StoryReadingInsight,
@@ -58,7 +59,7 @@ export function HomeWorkspace({
   sessions: ReaderSessionListItem[];
   /** Reader counts for the public shelf, so a story can show it has been read. */
   shelfInsights: StoryReadingInsight[];
-  stories: StorySummary[];
+  stories: ShelfStory[];
   storyInsights: StoryReadingInsight[];
 }) {
   const [activeTab, setActiveTab] = useState<HomeTab>("stories");
@@ -186,7 +187,7 @@ function StoriesView({
   onCreateStory: () => void;
   profiles: ReaderProfile[];
   sessions: ReaderSessionListItem[];
-  stories: StorySummary[];
+  stories: ShelfStory[];
 }) {
   const [query, setQuery] = useState("");
   const [genre, setGenre] = useState<string>(ALL_GENRES);

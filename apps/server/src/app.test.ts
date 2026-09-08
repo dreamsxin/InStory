@@ -2111,7 +2111,18 @@ describe("authentication", () => {
     expect(anonymous.statusCode).toBe(200);
     expect(anonymous.body).not.toContain("灯是他自己熄的");
     expect(anonymous.json<Record<string, unknown>>().anchors).toBeUndefined();
+
+    // The shelf still has to answer "how long is this", so it carries a count and a
+    // word target - the two facts that say something about length without handing
+    // over the outline that produced them.
+    const shelf = await authApp.inject({ method: "GET", url: "/api/stories" });
+    const stories = shelf.json<{ stories: Array<{ id: string }> }>().stories;
+    expect(stories).toContainEqual(
+      expect.objectContaining({ id: "lamp-keeper", plannedBeats: 1, segmentTargetWords: 800 })
+    );
+    expect(shelf.body).not.toContain("灯塔重新亮起");
   });
+
 
 
   it("leaves a tombstone card when the author deletes a story someone was reading", async () => {

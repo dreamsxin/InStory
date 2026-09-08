@@ -8,6 +8,7 @@ import type {
   ReaderProfile,
   ReaderSessionListItem,
   SessionTurn,
+  ShelfStory,
   StoryAnchor,
   StoryDetail,
   StoryReadingInsight,
@@ -161,12 +162,12 @@ export interface AdminModelVerificationResult {
   checkedAt: string;
 }
 
-export async function listStories(): Promise<StorySummary[]> {
+export async function listStories(): Promise<ShelfStory[]> {
   const response = await apiFetch("/api/stories");
   if (!response.ok) {
     throw new Error("加载故事列表失败");
   }
-  const data = (await response.json()) as { stories: StorySummary[] };
+  const data = (await response.json()) as { stories: ShelfStory[] };
   return data.stories;
 }
 

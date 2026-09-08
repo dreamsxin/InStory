@@ -73,6 +73,18 @@ export interface StorySummary {
   defaultSegmentLength: SegmentLengthPreset;
 }
 
+/**
+ * A story as the shelf shows it: the summary plus what can honestly be said about
+ * its length. Counts and word targets only - anchor titles and descriptions are the
+ * author's outline and never leave the author's own view.
+ */
+export interface ShelfStory extends StorySummary {
+  /** Anchors the author marked 必经 or 可作为结局, so "how many beats are planned". */
+  plannedBeats: number;
+  /** Words the model is actually asked for per passage, from defaultSegmentLength. */
+  segmentTargetWords: number;
+}
+
 export interface CreateStoryRequest {
   id: string;
   title: string;

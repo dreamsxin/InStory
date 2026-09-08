@@ -43,6 +43,12 @@ export class StoryCatalog {
     return this.store.listStoriesByOwner(ownerId);
   }
 
+  /** Planned-beat counts by story id, for the shelf's length estimate. */
+  countPlannedBeats(): Map<string, number> {
+    return this.store.countPlannedBeats();
+  }
+
+
   findStory(storyId: string): StoryDetail | null {
     return this.store.findStory(storyId);
   }

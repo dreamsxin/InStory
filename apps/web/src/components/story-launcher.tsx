@@ -2,7 +2,7 @@
 
 import { Button, Card, Chip, Label, ListBox, Select } from "@heroui/react";
 import { useRouter } from "next/navigation";
-import type { ReaderProfile, ReaderSessionListItem, StoryReadingInsight, StorySummary } from "@instory/shared";
+import type { ReaderProfile, ReaderSessionListItem, ShelfStory, StoryReadingInsight } from "@instory/shared";
 import { createSession } from "@/lib/api";
 import { readingThemeLabel } from "@/lib/reading-themes";
 import { useState } from "react";
@@ -17,7 +17,7 @@ export function StoryLauncher({
   /** Aggregate reader counts, or undefined before anyone has read anything. */
   insight?: StoryReadingInsight;
   profiles: ReaderProfile[];
-  story: StorySummary;
+  story: ShelfStory;
 }) {
   const router = useRouter();
   const [readerProfileId, setReaderProfileId] = useState(profiles[0]?.id ?? DEFAULT_ROLE_KEY);
@@ -60,6 +60,7 @@ export function StoryLauncher({
           <Chip size="sm" variant="soft">{readingThemeLabel(story.readingTheme)}</Chip>
         </div>
         <ReadCountLine insight={insight} />
+        <LengthExpectationLine story={story} />
         {existingSession ? (
           <div className="tag-row compact">
             <Chip size="sm" variant="soft">继续身份：{existingSession.readerRoleName}</Chip>
@@ -121,10 +122,40 @@ function ReadCountLine({ insight }: { insight?: StoryReadingInsight }) {
 }
 
 
-function experienceModeLabel(mode: StorySummary["experienceMode"]) {
+/**
+ * How long this is, as far as anyone can honestly say. Two known figures: the beats
+ * the author planned, and the words a passage is written to. The minutes are a floor,
+ * not a promise - a reader can spend several passages on one beat, so the story is at
+ * least this long and usually longer, which is why the label says 起.
+ *
+ * A story with no planned beats gets no number at all. Inventing one for an
+ * improvised story would be the same lie the shelf used to tell by saying nothing.
+ */
+function LengthExpectationLine({ story }: { story: ShelfStory }) {
+  if (story.plannedBeats === 0) {
+    return (
+      <span className="story-expectation muted">
+        没有预设主线节点，长度由你和 AI 一起决定 · 每段约 {story.segmentTargetWords} 字
+      </span>
+    );
+  }
+
+  // 400 characters a minute is a middling Chinese reading pace; the floor rounds up so
+  // a very short story never reads as "0 分钟".
+  const minutes = Math.max(1, Math.round((story.plannedBeats * story.segmentTargetWords) / 400));
+
+  return (
+    <span className="story-expectation">
+      主线 {story.plannedBeats} 个节点 · 每段约 {story.segmentTargetWords} 字 · 约 {minutes} 分钟起
+    </span>
+  );
+}
+
+function experienceModeLabel(mode: ShelfStory["experienceMode"]) {
   return mode === "scripted" ? "剧本入戏" : mode === "improvised" ? "即兴入戏" : "共演入戏";
 }
 
-function segmentLengthLabel(length: StorySummary["defaultSegmentLength"]) {
+function segmentLengthLabel(length: ShelfStory["defaultSegmentLength"]) {
   return length === "short" ? "短段" : length === "long" ? "长小节" : "标准小节";
 }
+

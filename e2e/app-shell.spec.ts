@@ -102,6 +102,10 @@ test.describe("app-like shell", () => {
     // grid row (auto-fit collapses empty tracks), so its 16/9 cover alone made a
     // ~900px slab; rows also have to size to content, not to the panel height.
     await expect(page.locator(".story-card")).toHaveCount(1);
+    // The card now says how long the story is, from the two facts that can be known:
+    // the seed's 3 必经 anchors and the 1200 words its 长小节 asks for. Before this a
+    // reader could not tell an evening's read from three minutes.
+    await expect(page.locator(".story-expectation")).toHaveText("主线 3 个节点 · 每段约 1200 字 · 约 9 分钟起");
     expect(await page.locator(".story-grid").evaluate((el) => getComputedStyle(el).alignContent)).toBe("start");
 
     const card = (await page.locator(".story-card").first().boundingBox()) ?? { height: 0, width: 0 };
@@ -156,6 +160,9 @@ test.describe("app-like shell", () => {
     await page.getByLabel("搜索").fill("邮差");
     await expect(page.locator(".story-card")).toHaveCount(1);
     await expect(page.locator(".story-card")).toContainText("虚空邮差");
+    // These two were created without anchors, so the card says the length is open
+    // rather than inventing a number for a story nobody has planned beats for.
+    await expect(page.locator(".story-expectation")).toContainText("没有预设主线节点");
 
     // No match is not the same as "nothing is public": the shelf used to have only
     // the latter panel, which would tell someone who mistyped to go create a story.

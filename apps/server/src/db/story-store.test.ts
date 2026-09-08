@@ -200,4 +200,30 @@ describe("StoryStore", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("counts only the beats a reading has to pass through", () => {
+    const dir = mkdtempSync(join(tmpdir(), "instory-story-store-"));
+    const database = new AppDatabase(join(dir, "story.sqlite"));
+    const store = new StoryStore(database);
+
+    try {
+      store.seedIfEmpty(loadSeed());
+
+      // The seed story has 5 anchors: 3 必经, 1 可选, 1 禁止. Only the 必经 group (plus
+      // 可作为结局, which the seed has none of) says anything about how long a reading
+      // is: 可选 may never happen, and 禁止 is a thing that must not, so counting
+      // either would inflate the shelf's estimate.
+      expect(store.findStory("rain-mansion")?.anchors).toHaveLength(5);
+      expect(store.countPlannedBeats().get("rain-mansion")).toBe(3);
+
+      // A story nobody wrote anchors for is absent rather than zero: the caller
+      // decides what to say about a story with no planned beats.
+      expect(store.countPlannedBeats().has("no-such-story")).toBe(false);
+    } finally {
+      database.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
+
+

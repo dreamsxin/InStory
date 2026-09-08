@@ -812,9 +812,23 @@ export async function buildApp(options: BuildAppOptions) {
     };
   });
 
-  app.get("/api/stories", async () => ({
-    stories: options.storyCatalog.listPublicStories()
-  }));
+  /**
+   * The public shelf. Each entry carries the two figures a reader needs to judge
+   * "how long is this" - how many beats the author planned, and how many words a
+   * passage is written to - and neither of them exposes the outline itself.
+   */
+  app.get("/api/stories", async () => {
+    const beats = options.storyCatalog.countPlannedBeats();
+
+    return {
+      stories: options.storyCatalog.listPublicStories().map((story) => ({
+        ...story,
+        plannedBeats: beats.get(story.id) ?? 0,
+        segmentTargetWords: SEGMENT_LENGTH_GUIDES[story.defaultSegmentLength].targetWords
+      }))
+    };
+  });
+
 
   /**
    * How far each public story has carried readers, for the explore shelf. Aggregates
@@ -1749,28 +1763,35 @@ function createReaderSessionListItem(
 }
 
 
+/**
+ * What each length preset actually asks the model for. Module level because the shelf
+ * quotes the same numbers: telling a reader "每段约 800 字" is only honest if it is
+ * the figure the prompt really carries.
+ */
+const SEGMENT_LENGTH_GUIDES: Record<SegmentLengthPreset, { targetWords: number; paragraphs: number }> = {
+  short: {
+    targetWords: 450,
+    paragraphs: 4
+  },
+  standard: {
+    targetWords: 800,
+    paragraphs: 6
+  },
+  long: {
+    targetWords: 1200,
+    paragraphs: 8
+  }
+};
+
 function createLengthGuide(storyDetail: StoryDetail | undefined) {
   const preset = storyDetail?.story.defaultSegmentLength ?? "standard";
-  const guides: Record<SegmentLengthPreset, { targetWords: number; paragraphs: number }> = {
-    short: {
-      targetWords: 450,
-      paragraphs: 4
-    },
-    standard: {
-      targetWords: 800,
-      paragraphs: 6
-    },
-    long: {
-      targetWords: 1200,
-      paragraphs: 8
-    }
-  };
 
   return {
     preset,
-    ...guides[preset]
+    ...SEGMENT_LENGTH_GUIDES[preset]
   };
 }
+
 
 function splitProfileText(value: string): string[] {
   return value
