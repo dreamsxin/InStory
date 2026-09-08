@@ -195,8 +195,25 @@ a {
 .muted {
   color: var(--muted);
 }
+/* Sits between the shelf heading and the cards. The search field gets the wide
+   track because a keyword is the longest thing anyone types here; the two selects
+   stay at their label width. Wraps to one column per row on a phone. */
+.shelf-filters {
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) minmax(140px, 1fr) minmax(140px, 1fr);
+  align-items: end;
+  gap: 12px;
+  margin-block-end: 16px;
+}
+
+@media (max-width: 640px) {
+  .shelf-filters {
+    grid-template-columns: 1fr;
+  }
+}
 
 .story-grid {
+
   display: grid;
   /* auto-fill, not auto-fit: empty tracks are kept, so a lone story stays a
      card instead of stretching across the whole column (its 16/9 cover alone

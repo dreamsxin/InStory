@@ -158,6 +158,23 @@ export function HomeWorkspace({
   );
 }
 
+/**
+ * The shelf is ordered by what a reader would ask for, not by story id. "最近有人读"
+ * is the default because a shelf sorted alphabetically silently buries everything
+ * after the first screen - and the reader counts were already being computed and
+ * shown on the cards without ever being used to order them.
+ */
+type ShelfSort = "recent" | "readers" | "title";
+
+const SHELF_SORTS: Array<{ id: ShelfSort; label: string }> = [
+  { id: "recent", label: "最近有人读" },
+  { id: "readers", label: "读者最多" },
+  { id: "title", label: "按标题" }
+];
+
+/** Sentinel for "no genre filter"; a real genre is free text and could be anything. */
+const ALL_GENRES = "__all__";
+
 function StoriesView({
   insights,
   onCreateStory,
@@ -171,8 +188,24 @@ function StoriesView({
   sessions: ReaderSessionListItem[];
   stories: StorySummary[];
 }) {
+  const [query, setQuery] = useState("");
+  const [genre, setGenre] = useState<string>(ALL_GENRES);
+  const [sort, setSort] = useState<ShelfSort>("recent");
   const sessionsByStoryId = new Map(sessions.map((session) => [session.storyId, session]));
   const insightsByStoryId = new Map(insights.map((insight) => [insight.storyId, insight]));
+
+  const genres = [...new Set(stories.map((story) => story.genre))].sort((left, right) =>
+    left.localeCompare(right, "zh-CN")
+  );
+  const keyword = query.trim().toLowerCase();
+  const visible = [...stories]
+    .filter((story) => genre === ALL_GENRES || story.genre === genre)
+    .filter(
+      (story) =>
+        !keyword || `${story.title} ${story.tagline} ${story.genre}`.toLowerCase().includes(keyword)
+    )
+    .sort((left, right) => compareForShelf(left, right, sort, insightsByStoryId));
+  const filtering = keyword.length > 0 || genre !== ALL_GENRES;
 
   return (
     <div className="app-section">
@@ -181,20 +214,99 @@ function StoriesView({
           <span className="eyebrow">Worlds</span>
           <h2 className="section-title">探索故事</h2>
         </div>
-        <Chip size="sm" variant="soft">{stories.length ? "所有可进入的故事" : "暂无公开故事"}</Chip>
+        <Chip size="sm" variant="soft">
+          {stories.length === 0
+            ? "暂无公开故事"
+            : filtering
+              ? `筛出 ${visible.length} / 共 ${stories.length}`
+              : "所有可进入的故事"}
+        </Chip>
       </div>
       {stories.length ? (
-        <div className="story-grid">
-          {stories.map((story) => (
-            <StoryLauncher
-              existingSession={sessionsByStoryId.get(story.id)}
-              insight={insightsByStoryId.get(story.id)}
-              key={story.id}
-              profiles={profiles}
-              story={story}
-            />
-          ))}
-        </div>
+        <>
+          <div className="shelf-filters">
+            <TextField aria-label="搜索故事" value={query} onChange={setQuery}>
+              <Label>搜索</Label>
+              <Input maxLength={80} placeholder="标题、钩子或类型" type="search" />
+            </TextField>
+            <Select
+              selectedKey={genre}
+              onSelectionChange={(key) => setGenre(typeof key === "string" ? key : ALL_GENRES)}
+            >
+              <Label>类型</Label>
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id={ALL_GENRES} textValue="全部类型">
+                    全部类型
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                  {genres.map((name) => (
+                    <ListBox.Item id={name} key={name} textValue={name}>
+                      {name}
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
+            <Select
+              selectedKey={sort}
+              onSelectionChange={(key) => setSort(parseShelfSort(key))}
+            >
+              <Label>排序</Label>
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  {SHELF_SORTS.map((option) => (
+                    <ListBox.Item id={option.id} key={option.id} textValue={option.label}>
+                      {option.label}
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </div>
+          {visible.length ? (
+            <div className="story-grid">
+              {visible.map((story) => (
+                <StoryLauncher
+                  existingSession={sessionsByStoryId.get(story.id)}
+                  insight={insightsByStoryId.get(story.id)}
+                  key={story.id}
+                  profiles={profiles}
+                  story={story}
+                />
+              ))}
+            </div>
+          ) : (
+            /* Deliberately not the "nothing is public yet" panel: telling someone to go
+               create a story when they merely mistyped a search would be a lie. */
+            <Card className="empty-state-panel">
+              <Card.Content>
+                <h2>没有符合条件的故事</h2>
+                <p className="muted">换个关键词，或把类型放回「全部类型」。</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onPress={() => {
+                    setQuery("");
+                    setGenre(ALL_GENRES);
+                  }}
+                >
+                  清空筛选
+                </Button>
+              </Card.Content>
+            </Card>
+          )}
+        </>
       ) : (
         /* A fresh deployment can genuinely have nothing public: the shelf used to
            render a heading over blank space, which reads like a failure. */
@@ -214,6 +326,39 @@ function StoriesView({
     </div>
   );
 }
+
+function parseShelfSort(key: unknown): ShelfSort {
+  return SHELF_SORTS.some((option) => option.id === key) ? (key as ShelfSort) : "recent";
+}
+
+/**
+ * Never-read stories sort last rather than first: a missing lastReadAt means "nobody
+ * has been here", which is the opposite of recent. Ties fall back to the title so the
+ * order is stable instead of depending on how the rows came out of the database.
+ */
+function compareForShelf(
+  left: StorySummary,
+  right: StorySummary,
+  sort: ShelfSort,
+  insights: Map<string, StoryReadingInsight>
+): number {
+  const byTitle = left.title.localeCompare(right.title, "zh-CN");
+  if (sort === "title") {
+    return byTitle;
+  }
+
+  const leftInsight = insights.get(left.id);
+  const rightInsight = insights.get(right.id);
+
+  if (sort === "readers") {
+    return (rightInsight?.readers ?? 0) - (leftInsight?.readers ?? 0) || byTitle;
+  }
+
+  const leftRead = leftInsight?.lastReadAt ? Date.parse(leftInsight.lastReadAt) : 0;
+  const rightRead = rightInsight?.lastReadAt ? Date.parse(rightInsight.lastReadAt) : 0;
+  return rightRead - leftRead || byTitle;
+}
+
 
 function ContinueView({ sessions }: { sessions: ReaderSessionListItem[] }) {
   return (

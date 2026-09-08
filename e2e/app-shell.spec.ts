@@ -114,6 +114,73 @@ test.describe("app-like shell", () => {
 
   });
 
+  test("the shelf can be searched, filtered and sorted", async ({ page, request }) => {
+    const { token } = await signIn(page, request, "e2e-shelf-filter@example.com");
+
+    // Two public stories of different genres, so filtering has something to do. The
+    // seeded 雨夜旧宅 is the third. They are removed at the end: later specs assert on
+    // the shelf, and this suite shares one database on purpose.
+    const created: string[] = [];
+    for (const story of [
+      { id: `e2e-shelf-tea-${Date.now()}`, title: "茶馆密约", genre: "民国谍战" },
+      { id: `e2e-shelf-void-${Date.now()}`, title: "虚空邮差", genre: "太空歌剧" }
+    ]) {
+      const response = await request.post(`${API_BASE}/api/stories`, {
+        headers: { authorization: `Bearer ${token}` },
+        data: {
+          id: story.id,
+          title: story.title,
+          tagline: `${story.title}的一句钩子`,
+          genre: story.genre,
+          coverUrl: null,
+          visibility: "public",
+          readingTheme: "classic",
+          experienceMode: "coauthored",
+          defaultSegmentLength: "standard",
+          premise: "一段用于筛选测试的世界前提。",
+          openingLocationName: "起点",
+          openingLocationDescription: "第一幕的场景描写。",
+          worldRules: []
+        }
+      });
+      expect(response.status()).toBe(201);
+      created.push(story.id);
+    }
+
+
+    await page.goto("/");
+    await expect(page.locator(".story-card")).toHaveCount(3);
+
+    // Search covers title, tagline and genre - a reader looking for a story types
+    // whichever of the three they remember.
+    await page.getByLabel("搜索").fill("邮差");
+    await expect(page.locator(".story-card")).toHaveCount(1);
+    await expect(page.locator(".story-card")).toContainText("虚空邮差");
+
+    // No match is not the same as "nothing is public": the shelf used to have only
+    // the latter panel, which would tell someone who mistyped to go create a story.
+    await page.getByLabel("搜索").fill("没有这个故事");
+    await expect(page.locator(".story-card")).toHaveCount(0);
+    const noMatch = page.locator(".empty-state-panel");
+    await expect(noMatch).toContainText("没有符合条件的故事");
+    await noMatch.getByRole("button", { name: "清空筛选" }).click();
+    await expect(page.locator(".story-card")).toHaveCount(3);
+
+    // Sorting by title is the one order that does not depend on reading history, so
+    // it is the one that can be asserted exactly.
+    await page.getByLabel("排序").click();
+    await page.getByRole("option", { name: "按标题" }).click();
+    const titles = await page.locator(".story-card h2").allInnerTexts();
+    expect(titles).toEqual([...titles].sort((left, right) => left.localeCompare(right, "zh-CN")));
+
+    for (const storyId of created) {
+      const removed = await request.delete(`${API_BASE}/api/me/stories/${storyId}`, {
+        headers: { authorization: `Bearer ${token}` }
+      });
+      expect(removed.status()).toBe(204);
+    }
+  });
+
   test("the console keeps its header pinned and scrolls the rest", async ({ page, request }) => {
     const { userId } = await signIn(page, request, "e2e-shell-admin@example.com");
 
