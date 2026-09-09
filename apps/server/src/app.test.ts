@@ -1286,6 +1286,63 @@ describe("generation quota and usage", () => {
     expect(missing.statusCode).toBe(404);
   });
 
+  it("takes the reported story off the shelf and says so in the event", async () => {
+    const sessionId = await startSession();
+    const reported = await quotaApp.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/report`,
+      payload: { reason: "这段描写让我不适" }
+    });
+    const eventId = reported.json<{ event: { id: string } }>().event.id;
+
+    const takedown = await quotaApp.inject({
+      method: "POST",
+      url: `/api/admin/moderation/events/${eventId}/takedown`,
+      headers: { authorization: "Bearer secret" },
+      payload: { resolution: "含未成年人相关描写" }
+    });
+
+    expect(takedown.statusCode).toBe(200);
+    // Hidden, not deleted: the story stays the author's, and the record says what was
+    // done - a queue that only writes "resolved" cannot answer "was this taken down".
+    expect(takedown.json<{ story: { visibility: string } }>().story.visibility).toBe("private");
+    expect(takedown.json<{ event: { status: string; resolution: string } }>().event).toMatchObject({
+      status: "resolved",
+      resolution: "已下架《雨夜旧宅》：含未成年人相关描写"
+    });
+
+    const shelf = await quotaApp.inject({ method: "GET", url: "/api/stories" });
+    expect(shelf.json<{ stories: Array<{ id: string }> }>().stories).toEqual([]);
+
+    // A reader already inside keeps reading: taking a story off the shelf is not
+    // taking it away from the people who started it.
+    const stillReadable = await quotaApp.inject({ method: "GET", url: `/api/sessions/${sessionId}` });
+    expect(stillReadable.statusCode).toBe(200);
+  });
+
+  it("refuses to take down an event that is not about a story", async () => {
+    const event = quotaModerationStore.record({
+      surface: "report",
+      action: "flagged",
+      categories: ["violence"],
+      excerpt: "没有故事的举报",
+      storyId: null
+    });
+
+    const response = await quotaApp.inject({
+      method: "POST",
+      url: `/api/admin/moderation/events/${event.id}/takedown`,
+      headers: { authorization: "Bearer secret" },
+      payload: {}
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json<{ error: string }>().error).toContain("没有关联故事");
+    // And the event is left open, because nothing was decided about it.
+    expect(quotaModerationStore.findById(event.id)?.status).toBe("open");
+  });
+
+
   it("exposes today's spend and derived cost to admins", async () => {
     const sessionId = await startSession();
     await advance(sessionId);

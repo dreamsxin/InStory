@@ -797,6 +797,51 @@ export async function buildApp(options: BuildAppOptions) {
   });
 
   /**
+   * Take the story off the shelf and close the event in one action.
+   *
+   * The queue could only change the colour of its own row: an operator who decided a
+   * story was over the line had to remember its id, find it in 故事配置 and flip
+   * visibility by hand - the one step that actually protects readers was the one the
+   * queue did not do. Visibility, not deletion: the author's work stays theirs, it is
+   * only off the public shelf, and readers already inside keep their sessions.
+   */
+  app.post("/api/admin/moderation/events/:eventId/takedown", async (request, reply) => {
+    const { eventId } = request.params as { eventId: string };
+    const body = (request.body ?? {}) as { resolution?: string };
+    const event = options.moderationStore.findById(eventId);
+
+    if (!event) {
+      return reply.code(404).send({ error: "Moderation event not found" });
+    }
+
+    if (!event.storyId) {
+      return reply.code(400).send({ error: "这条事件没有关联故事，无法下架。" });
+    }
+
+    const detail = options.storyCatalog.findStory(event.storyId);
+    if (!detail) {
+      return reply.code(404).send({ error: "故事不存在，可能已被作者删除。" });
+    }
+
+    const { id: _id, ownerId: _ownerId, ...summary } = detail.story;
+    const story = options.storyCatalog.updateStorySummary(event.storyId, {
+      ...summary,
+      visibility: "private"
+    });
+
+    const note = (body.resolution ?? "").trim();
+    const resolved = options.moderationStore.resolve(eventId, {
+      status: "resolved",
+      resolvedBy: request.authUser?.id ?? "admin-token",
+      // Says what was done, not just that something was: a queue that records only
+      // "resolved" cannot answer "was this story ever taken down".
+      resolution: note ? `已下架《${detail.story.title}》：${note}` : `已下架《${detail.story.title}》`
+    });
+
+    return { event: resolved, story };
+  });
+
+  /**
    * Today's generation spend. Cost is null when no per-token price is configured,
    * so the console can say "unknown" instead of showing a misleading zero.
    */

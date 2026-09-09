@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { parseReadingTheme } from "@/lib/reading-themes";
 import {
   resolveAdminModerationEvent,
+  takedownModeratedStory,
   updateAdminModelConfig,
   updateAdminStorySummary,
   updateAdminUserRole,
@@ -40,6 +41,24 @@ export async function resolveModerationEventAction(formData: FormData) {
     status,
     resolution: resolution || null
   });
+
+  revalidatePath("/admin");
+}
+
+/**
+ * Closes the event and hides the story it was about. Separate from the resolve action
+ * because it does something to the world, not just to the row. Reversible on purpose:
+ * it flips visibility, so 故事配置 can put the story back.
+ */
+export async function takedownModeratedStoryAction(formData: FormData) {
+  const eventId = String(formData.get("eventId") ?? "");
+  if (!eventId) {
+    return;
+  }
+
+  const resolution = String(formData.get("resolution") ?? "").trim();
+
+  await takedownModeratedStory(eventId, { resolution: resolution || null });
 
   revalidatePath("/admin");
 }

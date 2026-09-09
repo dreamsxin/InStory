@@ -19,7 +19,7 @@ npm run dev:web            # Web  http://localhost:3000
 npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 schema
 ```
 
-最近一次全量结果：typecheck 通过；单测 server 168 / story-engine 12 / web 35；e2e 32 条通过。
+最近一次全量结果：typecheck 通过；单测 server 170 / story-engine 12 / web 35；e2e 33 条通过。
 
 ## 已实现
 
@@ -43,6 +43,7 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 - **装完就有东西可读，也有人可登**：服务端启动时按需补一份示例数据（`data/demo-bootstrap.ts`）——三个账号 `admin@instory.local` / `author@instory.local` / `reader@instory.local`（密码 `instory-demo-2026`，`DEMO_PASSWORD` 可覆盖），示例作者名下两个公开故事「月下市集」（3 个主线节点）与「虚空邮差」（没有节点，正好覆盖长度未知那一种卡片），示例读者带一个入戏角色。逐项判重：邮箱或故事 ID 已存在就原样保留，绝不改动已注册账号的密码和角色——那会是后门，不是便利。`SEED_DEMO_DATA` 非生产默认开、生产默认关；生产显式打开时必须给 `DEMO_PASSWORD`，否则拒绝启动。e2e 显式关掉它（否则书架上的卡片数会变）。
 - **看得出是哪个故事在烧钱**：`GET /api/admin/usage` 多一个 `byStory`（`summarizeStoriesForDay`，按 token 降序），管理台在「今日生成用量」下面多一张「按故事」表：故事名、读者数、成功/失败、Token、预估成本。故事名在服务端解析——ID 不是运维认得的东西；故事已删除就显示「ID（已删除）」，钱花过就该留在账上。没有 storyId 的行归到「未关联故事」而不是丢掉：同屏的总量包含它们，两个数字对不上比一行难看的记录更糟。
 - **试玩不再假装是阅读**：`ReaderSessionListItem` 多一个 `isAuthorTrial`（服务端用和 insights 相同的那次比较：会话所属故事的 `ownerId` 是不是当前查看者），`继续` 列表里作者自己的试玩带一枚「试玩」标签，悬停写明「试玩同样计入今日配额」。此前同一个会话在 insights 里被当作者试玩排除、在 `继续` 里却显示成普通阅读，两处口径相反。配额照扣是有意的：那几次生成真花了钱，而且不扣就等于给「建个故事无限生成」开了一条路——要修的是界面在说谎，不是把账免掉。
+- **审核队列能真的下架故事**：`POST /api/admin/moderation/events/:id/takedown` 把被举报的故事设为仅自己可见，同时把事件标为已处置，处置说明记成「已下架《标题》：…」。此前队列只能改自己那一行的颜色——运维判定越线后，还得记住故事 ID、去 `故事配置` 手动翻 `可见性`，唯一真正保护读者的那一步恰好是队列不做的。是隐藏不是删除：作者的内容仍归作者，已经进去的读者会话照样能读（测试里断言了这条）。事件不带 `storyId` 时返回 400 并保持 open——没有可下架的对象，就不该假装做了决定。
 - **AI 编排**：`MockNarrativeProvider` 与 `OpenAICompatibleProvider`（超时、分类重试退避、流式 narration 增量提取、输出 Zod 校验）。
 
 ## 代码地图
@@ -111,7 +112,7 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 
 - 非 production 且未设 `ADMIN_TOKEN` 时 `/api/admin` 对所有人开放（`main.ts` 只在 production 下强制），而默认 `HOST=0.0.0.0`。
 - 作者试玩消耗作者自己的每日配额，这是有意的（生成真花钱，免掉就成了无限生成的路子），`继续` 列表已经标出「试玩」；但试玩仍然写进 `generation_usage` 的常规行里，管理台分不出「作者在调自己的故事」和「读者在读」。
-- 审核队列的 `解决`/`忽略` 只改事件行自己的状态，不下架故事也不处置用户；admin 不能删除他人故事、不能封禁用户、不能吊销登录会话。
+- 审核队列现在能下架故事（设为仅自己可见并记账），但仍不能处置用户：admin 不能封禁账号、不能吊销登录会话，也不能删除他人的故事。
 - 角色库的 `公开可展示` 有 UI、有 schema、有存储，但没有任何消费者。
 - `npm audit` 有 2 个 moderate，来自 `next` 依赖的 `postcss`；`--force` 会降级到破坏性版本，暂不处理。
 - 故事、世界、演员、锚点仍以 JSON payload 存在各自表里，没有完全关系化。`story_anchors` 是整组替换，够用。

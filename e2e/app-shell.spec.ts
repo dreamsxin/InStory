@@ -229,6 +229,59 @@ test.describe("app-like shell", () => {
     await expect(header).toBeInViewport();
   });
 
+  test("the console can take a reported story off the shelf", async ({ page, request }) => {
+    const { token, userId } = await signIn(page, request, "e2e-takedown-admin@example.com");
+    const promoted = await request.put(`${API_BASE}/api/admin/users/${userId}/role`, {
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+      data: { role: "admin" }
+    });
+    expect(promoted.status()).toBe(200);
+
+    const storyId = `e2e-takedown-${Date.now()}`;
+    const created = await request.post(`${API_BASE}/api/stories`, {
+      headers: { authorization: `Bearer ${token}` },
+      data: {
+        id: storyId,
+        title: "越线的故事",
+        tagline: "有人举报了这一段。",
+        genre: "测试",
+        coverUrl: null,
+        visibility: "public",
+        readingTheme: "classic",
+        experienceMode: "coauthored",
+        defaultSegmentLength: "standard",
+        premise: "一个用于下架流程测试的世界。",
+        openingLocationName: "起点",
+        openingLocationDescription: "第一幕。",
+        worldRules: []
+      }
+    });
+    expect(created.status()).toBe(201);
+
+    const session = await request.post(`${API_BASE}/api/stories/${storyId}/sessions`, {
+      headers: { authorization: `Bearer ${token}` },
+      data: { entryMode: "existing_character", characterId: null }
+    });
+    const sessionId = ((await session.json()) as { session: { id: string } }).session.id;
+    const reported = await request.post(`${API_BASE}/api/sessions/${sessionId}/report`, {
+      headers: { authorization: `Bearer ${token}` },
+      data: { reason: "这一段越线了" }
+    });
+    expect(reported.status()).toBe(201);
+
+    // The queue could only recolour its own row: hiding the story meant remembering
+    // its id and editing 可见性 by hand in 故事配置.
+    await page.goto("/admin");
+    const item = page.locator(".moderation-item", { hasText: "这一段越线了" });
+    await expect(item).toBeVisible();
+    await item.getByRole("button", { name: "确认违规并下架故事" }).click();
+
+    await expect(item).toContainText("已下架《越线的故事》");
+    // And it really is off the shelf, not just marked as handled.
+    await page.goto("/");
+    await expect(page.locator(".story-card", { hasText: "越线的故事" })).toHaveCount(0);
+  });
+
   test("the console turns away an account that is not an administrator", async ({ page, request }) => {
     await signIn(page, request, "e2e-shell-reader-admin@example.com");
 

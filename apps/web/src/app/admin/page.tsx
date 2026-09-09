@@ -12,7 +12,11 @@ import {
 } from "@/lib/api";
 import { ModelConfigForm, StorySummaryForm } from "@/components/admin-console-forms";
 import { AccountBar } from "@/components/account-bar";
-import { resolveModerationEventAction, updateUserRoleAction } from "@/app/admin/actions";
+import {
+  resolveModerationEventAction,
+  takedownModeratedStoryAction,
+  updateUserRoleAction
+} from "@/app/admin/actions";
 import { BrandMark } from "@/components/brand-mark";
 import Link from "next/link";
 
@@ -387,6 +391,7 @@ export default async function AdminPage({
                 <blockquote className="moderation-excerpt">{event.excerpt}</blockquote>
                 {event.detail ? <p className="moderation-detail">{event.detail}</p> : null}
                 {event.sessionId ? <p className="mono moderation-ref">会话 {event.sessionId}</p> : null}
+                {event.storyId ? <p className="mono moderation-ref">故事 {event.storyId}</p> : null}
                 {event.status === "open" ? (
                   <form action={resolveModerationEventAction} className="moderation-actions">
                     <input name="eventId" type="hidden" value={event.id} />
@@ -400,6 +405,19 @@ export default async function AdminPage({
                     <button className="moderation-button" name="status" type="submit" value="resolved">
                       确认违规
                     </button>
+                    {/* The queue used to be able to change only its own row: taking the
+                        story off the shelf meant remembering its id and editing
+                        可见性 by hand in 故事配置. Reversible - it hides, not deletes. */}
+                    {event.storyId ? (
+                      <button
+                        className="moderation-button"
+                        formAction={takedownModeratedStoryAction}
+                        title="把这个故事设为仅自己可见，并记下已下架；作者的内容不会被删除"
+                        type="submit"
+                      >
+                        确认违规并下架故事
+                      </button>
+                    ) : null}
                     <button className="moderation-button" name="status" type="submit" value="dismissed">
                       驳回
                     </button>

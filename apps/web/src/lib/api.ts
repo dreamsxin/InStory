@@ -1078,6 +1078,25 @@ export async function resolveAdminModerationEvent(
   return data.event;
 }
 
+/**
+ * Takes the flagged story off the public shelf and closes the event in one call. The
+ * story is hidden, not deleted: it stays the author's, and readers already inside keep
+ * their sessions.
+ */
+export async function takedownModeratedStory(
+  eventId: string,
+  input: { resolution?: string | null } = {}
+): Promise<AdminModerationEvent> {
+  const data = await adminRequest<{ event: AdminModerationEvent }>(
+    `/api/admin/moderation/events/${eventId}/takedown`,
+    {
+      method: "POST",
+      body: JSON.stringify(input)
+    }
+  );
+  return data.event;
+}
+
 async function adminGet<T>(path: string): Promise<T> {
   return adminRequest<T>(path);
 }
