@@ -989,6 +989,8 @@ export interface AdminUserRow {
   email: string;
   displayName: string;
   role: "reader" | "admin";
+  /** Set while the account is suspended: it cannot sign in and holds no session. */
+  disabledAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1107,6 +1109,21 @@ export async function revokeAdminUserSessions(userId: string): Promise<number> {
     { method: "POST" }
   );
   return data.revokedSessions;
+}
+
+/**
+ * Suspends or restores an account. Stronger than revoking sessions: a suspended
+ * account cannot sign in at all. Suspending also ends its current sessions.
+ */
+export async function setAdminUserAccess(
+  userId: string,
+  input: { disabled: boolean; reason?: string | null }
+): Promise<AdminUserRow> {
+  const data = await adminRequest<{ user: AdminUserRow }>(`/api/admin/users/${userId}/access`, {
+    method: "PUT",
+    body: JSON.stringify(input)
+  });
+  return data.user;
 }
 
 /** One recorded operator action. Append-only server-side; read-only here. */

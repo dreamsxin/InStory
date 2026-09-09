@@ -2,7 +2,12 @@ import { randomUUID } from "node:crypto";
 import type { AppDatabase } from "./app-database.js";
 
 /** What an operator did. Kept coarse on purpose: one row per real decision. */
-export type AdminActionKind = "story_takedown" | "revoke_sessions" | "role_change";
+export type AdminActionKind =
+  | "story_takedown"
+  | "revoke_sessions"
+  | "role_change"
+  | "account_ban"
+  | "account_unban";
 
 export interface AdminAction {
   id: string;

@@ -1815,6 +1815,7 @@ describe("authentication", () => {
     // material of any kind reaches the console.
     expect(Object.keys(users[0] ?? {}).sort()).toEqual([
       "createdAt",
+      "disabledAt",
       "displayName",
       "email",
       "id",
@@ -1971,6 +1972,120 @@ describe("authentication", () => {
     });
   });
 
+
+  it("suspends an account so it cannot sign in, and restores it", async () => {
+    await buildAuthApp(false, "shared-secret");
+    const token = await register("banned-reader@example.com", "被停用的读者");
+    const listed = await authApp.inject({
+      method: "GET",
+      url: "/api/admin/users",
+      headers: { authorization: "Bearer shared-secret" }
+    });
+    const target = listed
+      .json<{ users: Array<{ id: string; email: string }> }>()
+      .users.find((account) => account.email === "banned-reader@example.com");
+
+    const banned = await authApp.inject({
+      method: "PUT",
+      url: `/api/admin/users/${String(target?.id)}/access`,
+      headers: { authorization: "Bearer shared-secret" },
+      payload: { disabled: true, reason: "反复提交违规内容" }
+    });
+
+    expect(banned.statusCode).toBe(200);
+    // Suspending ends the sessions too: leaving them alive would mean the ban starts
+    // whenever the cookie happens to expire, up to thirty days later.
+    expect(banned.json<{ revokedSessions: number }>().revokedSessions).toBe(1);
+    expect(banned.json<{ disabledAt: string | null }>().disabledAt).toBeTruthy();
+
+    // The password is still correct, and that is deliberately not the answer given:
+    // "wrong password" would send someone round in circles changing one that works.
+    const refused = await authApp.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "banned-reader@example.com", password: "pw-12345678" }
+    });
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json<{ error: string }>().error).toContain("已被停用");
+
+    // And the token it held resolves to nobody, even if it survived somewhere.
+    expect(
+      (
+        await authApp.inject({
+          method: "GET",
+          url: "/api/auth/me",
+          headers: { authorization: `Bearer ${token}` }
+        })
+      ).statusCode
+    ).toBe(401);
+
+    const restored = await authApp.inject({
+      method: "PUT",
+      url: `/api/admin/users/${String(target?.id)}/access`,
+      headers: { authorization: "Bearer shared-secret" },
+      payload: { disabled: false }
+    });
+    expect(restored.statusCode).toBe(200);
+    expect(restored.json<{ disabledAt: string | null }>().disabledAt).toBeNull();
+
+    // Restoring opens the door; it does not hand back the old sessions.
+    expect(
+      (
+        await authApp.inject({
+          method: "POST",
+          url: "/api/auth/login",
+          payload: { email: "banned-reader@example.com", password: "pw-12345678" }
+        })
+      ).statusCode
+    ).toBe(200);
+
+    // Both decisions are on the record, with the reason the operator gave.
+    const audit = await authApp.inject({
+      method: "GET",
+      url: "/api/admin/actions",
+      headers: { authorization: "Bearer shared-secret" }
+    });
+    const actions = audit.json<{ actions: Array<Record<string, unknown>> }>().actions;
+    expect(actions.map((row) => row.action)).toEqual(["account_unban", "account_ban"]);
+    expect(actions[1]?.detail).toBe("反复提交违规内容；同时吊销 1 个登录会话");
+
+    // An operator cannot suspend themselves, and a malformed body is refused rather
+    // than read as "false".
+    const operatorToken = await register("banning-admin@example.com", "管理员");
+    const operatorId = (
+      await authApp.inject({
+        method: "GET",
+        url: "/api/auth/me",
+        headers: { authorization: `Bearer ${operatorToken}` }
+      })
+    ).json<{ user: { id: string } }>().user.id;
+    await authApp.inject({
+      method: "PUT",
+      url: `/api/admin/users/${operatorId}/role`,
+      headers: { authorization: "Bearer shared-secret" },
+      payload: { role: "admin" }
+    });
+    expect(
+      (
+        await authApp.inject({
+          method: "PUT",
+          url: `/api/admin/users/${operatorId}/access`,
+          headers: { authorization: `Bearer ${operatorToken}` },
+          payload: { disabled: true }
+        })
+      ).statusCode
+    ).toBe(400);
+    expect(
+      (
+        await authApp.inject({
+          method: "PUT",
+          url: `/api/admin/users/${String(target?.id)}/access`,
+          headers: { authorization: "Bearer shared-secret" },
+          payload: {}
+        })
+      ).statusCode
+    ).toBe(400);
+  });
 
   it("keeps configured operator addresses on the admin role", async () => {
     authTempDir = mkdtempSync(join(tmpdir(), "instory-auth-"));

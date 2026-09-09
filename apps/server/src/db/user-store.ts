@@ -11,6 +11,8 @@ export interface UserRecord {
   email: string;
   displayName: string;
   role: UserRole;
+  /** When the account was suspended, or null while it is in good standing. */
+  disabledAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -34,6 +36,17 @@ const SCRYPT_COST = 16384;
 const SCRYPT_BLOCK_SIZE = 8;
 const SCRYPT_PARALLELISATION = 1;
 
+const SELECT_USER = `
+  SELECT id,
+         email,
+         display_name AS displayName,
+         role,
+         disabled_at AS disabledAt,
+         created_at AS createdAt,
+         updated_at AS updatedAt
+    FROM users
+`;
+
 export class UserStore {
   private readonly database: AppDatabase;
 
@@ -49,6 +62,7 @@ export class UserStore {
       email: input.email.trim(),
       displayName: input.displayName.trim(),
       role: input.role ?? "reader",
+      disabledAt: null,
       createdAt: now,
       updatedAt: now
     };
@@ -73,21 +87,13 @@ export class UserStore {
   }
 
   findById(id: string): UserRecord | null {
-    const row = this.database.db
-      .prepare(
-        `SELECT id, email, display_name AS displayName, role, created_at AS createdAt, updated_at AS updatedAt
-         FROM users WHERE id = ?`
-      )
-      .get(id) as UserRecord | undefined;
+    const row = this.database.db.prepare(`${SELECT_USER} WHERE id = ?`).get(id) as UserRecord | undefined;
     return row ?? null;
   }
 
   findByEmail(email: string): UserRecord | null {
     const row = this.database.db
-      .prepare(
-        `SELECT id, email, display_name AS displayName, role, created_at AS createdAt, updated_at AS updatedAt
-         FROM users WHERE email_normalized = ?`
-      )
+      .prepare(`${SELECT_USER} WHERE email_normalized = ?`)
       .get(normalizeEmail(email)) as UserRecord | undefined;
     return row ?? null;
   }
@@ -99,10 +105,7 @@ export class UserStore {
    */
   listUsers(limit = 50): UserRecord[] {
     return this.database.db
-      .prepare(
-        `SELECT id, email, display_name AS displayName, role, created_at AS createdAt, updated_at AS updatedAt
-         FROM users ORDER BY created_at DESC LIMIT ?`
-      )
+      .prepare(`${SELECT_USER} ORDER BY created_at DESC LIMIT ?`)
       .all(Math.max(1, Math.min(200, Math.trunc(limit)))) as unknown as UserRecord[];
   }
 
@@ -113,6 +116,19 @@ export class UserStore {
       .run(role, now.toISOString(), userId);
     return result.changes > 0 ? this.findById(userId) : null;
   }
+
+  /**
+   * Suspends or restores an account. Suspending does not touch sessions - the caller
+   * revokes those - because the two are separate facts: one is "may not sign in", the
+   * other is "is not signed in".
+   */
+  setDisabled(userId: string, disabled: boolean, now = new Date()): UserRecord | null {
+    const result = this.database.db
+      .prepare("UPDATE users SET disabled_at = ?, updated_at = ? WHERE id = ?")
+      .run(disabled ? now.toISOString() : null, now.toISOString(), userId);
+    return result.changes > 0 ? this.findById(userId) : null;
+  }
+
 
 
   emailExists(email: string): boolean {
@@ -168,7 +184,16 @@ export class UserStore {
       return null;
     }
 
-    return this.findById(row.userId);
+    const user = this.findById(row.userId);
+
+    // A suspended account resolves to nobody, whatever it is still holding. Sessions
+    // are revoked when an account is suspended, so this is the belt to that braces:
+    // a token issued a moment before, or restored from anywhere, still stops working.
+    if (user?.disabledAt) {
+      return null;
+    }
+
+    return user;
   }
 
   revokeSession(token: string): void {

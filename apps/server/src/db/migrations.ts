@@ -359,8 +359,22 @@ export const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_admin_actions_target
       ON admin_actions(target_type, target_id, created_at DESC);
     `
+  },
+  {
+    id: 11,
+    name: "add_user_disabled_at",
+    up: `
+      -- Ending an account's sessions was the strongest thing the console could do, and
+      -- it lasted until the person signed in again. A disabled account cannot sign in
+      -- at all, and any session still holding a token stops resolving.
+      --
+      -- A timestamp rather than a flag: "since when" is the first thing anyone asks
+      -- about a suspension, and null is the plain, unambiguous "not suspended".
+      ALTER TABLE users ADD COLUMN disabled_at TEXT;
+    `
   }
 ];
+
 
 
 /**

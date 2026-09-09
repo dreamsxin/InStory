@@ -626,6 +626,15 @@ export async function buildApp(options: BuildAppOptions) {
       return reply.code(401).send({ error: "邮箱或密码不正确" });
     }
 
+    // Checked after the password, not instead of it: telling an unauthenticated caller
+    // that an address exists and is suspended would answer a question they have not
+    // earned. Whoever holds the password gets the real reason, because "wrong password"
+    // would send them round in circles changing a password that works.
+    if (user.disabledAt) {
+      return reply.code(403).send({ error: "这个账号已被停用，如需恢复请联系管理员。" });
+    }
+
+
     // Only failures should count, so a successful sign-in clears the account's tally.
     loginFailureLimiter.reset(accountKey);
 
@@ -907,6 +916,59 @@ export async function buildApp(options: BuildAppOptions) {
     });
 
     return { event: resolved, story };
+  });
+
+  /**
+   * Suspends or restores an account. Stronger than ending sessions, which only lasts
+   * until the person signs in again: a suspended account cannot sign in at all, and
+   * any token it still holds stops resolving.
+   *
+   * Suspending also revokes the sessions, because leaving them alive would mean the
+   * ban takes effect whenever the cookie happens to expire - up to thirty days later.
+   * Restoring does not hand them back: signing in again is the way in.
+   */
+  app.put("/api/admin/users/:userId/access", async (request, reply) => {
+    const { userId } = request.params as { userId: string };
+    const body = (request.body ?? {}) as { disabled?: unknown; reason?: unknown };
+
+    if (typeof body.disabled !== "boolean") {
+      return reply.code(400).send({ error: "disabled 必须是 true 或 false。" });
+    }
+
+    const existing = options.userStore.findById(userId);
+    if (!existing) {
+      return reply.code(404).send({ error: "User not found" });
+    }
+
+    if (request.authUser?.id === userId) {
+      return reply.code(400).send({ error: "这是你自己的账号，不能停用自己。" });
+    }
+
+    const user = options.userStore.setDisabled(userId, body.disabled);
+    if (!user) {
+      return reply.code(404).send({ error: "User not found" });
+    }
+
+    const revokedSessions = body.disabled ? options.userStore.revokeAllSessions(userId) : 0;
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+
+    options.adminActionStore.record({
+      ...auditActor(request),
+      action: body.disabled ? "account_ban" : "account_unban",
+      targetType: "user",
+      targetId: user.id,
+      targetLabel: user.email,
+      detail: body.disabled
+        ? [reason, `同时吊销 ${revokedSessions} 个登录会话`].filter(Boolean).join("；")
+        : reason || null
+    });
+
+    app.log.warn(
+      { adminId: request.authUser?.id ?? "admin-token", userId, disabled: body.disabled, revokedSessions },
+      body.disabled ? "disabled an account" : "restored an account"
+    );
+
+    return { user: toAuthUser(user), disabledAt: user.disabledAt, revokedSessions };
   });
 
   /**

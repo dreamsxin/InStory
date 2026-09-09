@@ -16,6 +16,7 @@ import { AccountBar } from "@/components/account-bar";
 import {
   resolveModerationEventAction,
   revokeUserSessionsAction,
+  setUserAccessAction,
   takedownModeratedStoryAction,
   updateUserRoleAction
 } from "@/app/admin/actions";
@@ -322,6 +323,7 @@ export default async function AdminPage({
                 <th>邮箱</th>
                 <th>昵称</th>
                 <th>角色</th>
+                <th>状态</th>
                 <th>注册时间</th>
                 <th>操作</th>
               </tr>
@@ -332,6 +334,7 @@ export default async function AdminPage({
                   <td>{account.email}</td>
                   <td>{account.displayName}</td>
                   <td>{account.role === "admin" ? "管理员" : "读者"}</td>
+                  <td>{account.disabledAt ? `已停用（${formatDate(account.disabledAt)}）` : "正常"}</td>
                   <td>{formatDate(account.createdAt)}</td>
                   <td>
                     {/* The signed-in operator cannot demote themselves here: doing it
@@ -361,6 +364,23 @@ export default async function AdminPage({
                             type="submit"
                           >
                             吊销登录
+                          </button>
+                        </form>
+                        {/* Stronger than ending sessions, and reversible: a suspended
+                            account cannot sign in until someone restores it. */}
+                        <form action={setUserAccessAction}>
+                          <input name="userId" type="hidden" value={account.id} />
+                          <input name="disabled" type="hidden" value={account.disabledAt ? "false" : "true"} />
+                          <button
+                            className="admin-inline-button"
+                            title={
+                              account.disabledAt
+                                ? "允许这个账号重新登录；已吊销的会话不会恢复"
+                                : "停用这个账号：不能再登录，现有登录一并结束；内容不删除"
+                            }
+                            type="submit"
+                          >
+                            {account.disabledAt ? "恢复账号" : "停用账号"}
                           </button>
                         </form>
                       </div>
@@ -501,7 +521,9 @@ const ACTION_LABELS: Record<string, string> = {
 const ADMIN_ACTION_LABELS: Record<string, string> = {
   story_takedown: "下架故事",
   revoke_sessions: "吊销登录",
-  role_change: "调整角色"
+  role_change: "调整角色",
+  account_ban: "停用账号",
+  account_unban: "恢复账号"
 };
 
 

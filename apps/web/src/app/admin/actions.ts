@@ -6,6 +6,7 @@ import { parseReadingTheme } from "@/lib/reading-themes";
 import {
   resolveAdminModerationEvent,
   revokeAdminUserSessions,
+  setAdminUserAccess,
   takedownModeratedStory,
   updateAdminModelConfig,
   updateAdminStorySummary,
@@ -39,6 +40,22 @@ export async function revokeUserSessionsAction(formData: FormData) {
   }
 
   await revokeAdminUserSessions(userId);
+
+  revalidatePath("/admin");
+}
+
+/**
+ * Suspends or restores an account; the submitter carries which way. Separate from the
+ * revoke action because it is a different promise: revoking ends sessions, suspending
+ * closes the door until someone opens it again.
+ */
+export async function setUserAccessAction(formData: FormData) {
+  const userId = String(formData.get("userId") ?? "");
+  if (!userId) {
+    return;
+  }
+
+  await setAdminUserAccess(userId, { disabled: formData.get("disabled") === "true" });
 
   revalidatePath("/admin");
 }
