@@ -960,6 +960,23 @@ export interface AdminUsageSummary {
   pricing: { inputPerMillion: number; outputPerMillion: number };
   /** Null when no per-token price is configured. */
   estimatedCost: number | null;
+  /**
+   * Today's spend per story, heaviest first. `storyId` is null for generations not
+   * tied to a story, and `title` is null when the story has since been deleted - the
+   * tokens were still spent, so the row stays.
+   */
+  byStory: Array<{
+    storyId: string | null;
+    title: string | null;
+    generations: number;
+    successes: number;
+    failures: number;
+    readers: number;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    estimatedCost: number | null;
+  }>;
 }
 
 export async function getAdminUsage(): Promise<AdminUsageSummary> {

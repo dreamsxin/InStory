@@ -1301,12 +1301,33 @@ describe("generation quota and usage", () => {
       today: { generations: number; totalTokens: number };
       dailyTurnQuota: number;
       estimatedCost: number | null;
+      byStory: Array<{
+        storyId: string | null;
+        title: string | null;
+        generations: number;
+        readers: number;
+        totalTokens: number;
+        estimatedCost: number | null;
+      }>;
     }>();
 
     expect(body.today.generations).toBe(1);
     expect(body.today.totalTokens).toBeGreaterThan(0);
     expect(body.dailyTurnQuota).toBe(2);
     expect(body.estimatedCost).toBeGreaterThan(0);
+    // Site totals cannot say which story is spending; the console needs the story's
+    // own name, not its id, and its own share of the cost.
+    expect(body.byStory).toEqual([
+      expect.objectContaining({
+        storyId: "rain-mansion",
+        title: "雨夜旧宅",
+        generations: 1,
+        readers: 1
+      })
+    ]);
+    expect(body.byStory[0]?.totalTokens).toBe(body.today.totalTokens);
+    expect(body.byStory[0]?.estimatedCost).toBeGreaterThan(0);
+
   });
 });
 

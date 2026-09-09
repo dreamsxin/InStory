@@ -148,7 +148,45 @@ export default async function AdminPage({
         ) : (
           <p className="muted">今天还没有生成记录。</p>
         )}
+        {usage.byStory.length > 0 ? (
+          <>
+            {/* Site-wide totals cannot answer "which story is burning the money", and
+                that is the question an operator watching the bill actually has. */}
+            <h3 className="admin-subheading">按故事</h3>
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>故事</th>
+                    <th>读者</th>
+                    <th>成功 / 失败</th>
+                    <th>Token</th>
+                    <th>预估成本</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {usage.byStory.map((row) => (
+                    <tr key={row.storyId ?? "__none__"}>
+                      <td>
+                        {row.storyId === null
+                          ? "未关联故事"
+                          : row.title ?? `${row.storyId}（已删除）`}
+                      </td>
+                      <td>{row.readers}</td>
+                      <td>
+                        {row.successes} / {row.failures}
+                      </td>
+                      <td>{row.totalTokens.toLocaleString()}</td>
+                      <td>{row.estimatedCost === null ? "—" : `¥${row.estimatedCost.toFixed(4)}`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : null}
       </section>
+
 
 
       <section className="admin-grid">

@@ -119,6 +119,33 @@ describe("UsageStore", () => {
     );
   });
 
+  it("breaks the day down by story, heaviest first", () => {
+    const store = createStore();
+
+    record(store, { storyId: "story_light", usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 } });
+    record(store, { storyId: "story_heavy" });
+    record(store, { storyId: "story_heavy", userId: "user_b" });
+    record(store, { storyId: "story_heavy", status: "error", usage: null });
+    // Not tied to a story, and not dropped either: the site totals on the same screen
+    // include it, so a row that vanished would make two numbers disagree.
+    record(store, { storyId: null, usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 } });
+    record(store, { storyId: "story_heavy", at: nextDay });
+
+    const byStory = store.summarizeStoriesForDay(day);
+
+    expect(byStory[0]).toMatchObject({
+      storyId: "story_heavy",
+      generations: 3,
+      successes: 2,
+      failures: 1,
+      // Two accounts read it, and the failed attempt does not invent a third.
+      readers: 2,
+      totalTokens: 800
+    });
+    expect(byStory.map((row) => row.storyId)).toEqual(["story_heavy", "story_light", null]);
+    expect(store.summarizeStoriesForDay(nextDay).map((row) => row.storyId)).toEqual(["story_heavy"]);
+  });
+
   it("reports an empty day without failing", () => {
     const store = createStore();
 
@@ -130,7 +157,9 @@ describe("UsageStore", () => {
       averageLatencyMs: 0,
       byModel: []
     });
+    expect(store.summarizeStoriesForDay(day)).toEqual([]);
   });
+
 });
 
 describe("usageDayResetsAt", () => {

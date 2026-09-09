@@ -36,6 +36,18 @@ export interface DailyUsageSummary {
   byModel: ModelUsageBreakdown[];
 }
 
+/** One story's share of a day's generations. Null id means "not tied to a story". */
+export interface StoryUsageBreakdown {
+  storyId: string | null;
+  generations: number;
+  successes: number;
+  failures: number;
+  readers: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
 /** UTC day key, matching the created_date column. */
 export function usageDateKey(at: Date = new Date()): string {
   return at.toISOString().slice(0, 10);
@@ -151,7 +163,37 @@ export class UsageStore {
       byModel
     };
   }
+
+  /**
+   * Which stories the day's tokens went to. Every row already carries a story id;
+   * without this the console could only say what the whole site spent, so an operator
+   * watching the bill climb had no way to tell which story was climbing it.
+   *
+   * Rows with no story id (a generation that never belonged to one) are grouped under
+   * a null id rather than dropped: the totals on the same screen include them, and two
+   * numbers that do not add up are worse than one awkward row.
+   */
+  summarizeStoriesForDay(at: Date = new Date(), limit = 20): StoryUsageBreakdown[] {
+    return this.database.db
+      .prepare(
+        `SELECT story_id AS storyId,
+                COUNT(*) AS generations,
+                SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS successes,
+                SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS failures,
+                COUNT(DISTINCT user_id) AS readers,
+                COALESCE(SUM(prompt_tokens), 0) AS promptTokens,
+                COALESCE(SUM(completion_tokens), 0) AS completionTokens,
+                COALESCE(SUM(total_tokens), 0) AS totalTokens
+           FROM generation_usage
+          WHERE created_date = ?
+          GROUP BY story_id
+          ORDER BY totalTokens DESC, generations DESC
+          LIMIT ?`
+      )
+      .all(usageDateKey(at), Math.max(1, Math.min(100, Math.trunc(limit)))) as unknown as StoryUsageBreakdown[];
+  }
 }
+
 
 export interface TokenPricing {
   /** Currency cost per one million prompt tokens. */

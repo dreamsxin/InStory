@@ -2658,6 +2658,14 @@ a {
   line-height: 1.7;
 }
 
+/* Separates the two breakdowns inside one usage panel. */
+.admin-subheading {
+  margin: 18px 0 8px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+
 /* Moderation queue */
 
 .moderation-list {

@@ -803,14 +803,26 @@ export async function buildApp(options: BuildAppOptions) {
   app.get("/api/admin/usage", async () => {
     const pricing = options.pricing ?? { inputPerMillion: 0, outputPerMillion: 0 };
     const today = options.usageStore.summarizeDay();
+    const titles = new Map(options.storyCatalog.listStories().map((story) => [story.id, story.title]));
 
     return {
       today,
       dailyTurnQuota: options.dailyTurnQuota ?? 20,
       pricing,
-      estimatedCost: estimateCost(today, pricing)
+      estimatedCost: estimateCost(today, pricing),
+      /**
+       * Where the day's tokens went, per story. The title is resolved here because a
+       * story id is not something an operator recognises; a deleted story keeps its
+       * row with a null title, since the spend happened either way.
+       */
+      byStory: options.usageStore.summarizeStoriesForDay().map((story) => ({
+        ...story,
+        title: story.storyId ? titles.get(story.storyId) ?? null : null,
+        estimatedCost: estimateCost(story, pricing)
+      }))
     };
   });
+
 
   /**
    * The public shelf. Each entry carries the two figures a reader needs to judge
