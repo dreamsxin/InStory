@@ -194,7 +194,55 @@ describe("migration runner", () => {
     database.close();
   });
 
+  it("labels the usage rows an author's own trials left behind", () => {
+    const databasePath = createTempDatabasePath();
+    const db = new DatabaseSync(databasePath);
+
+    // Everything up to the one under test, so the old rows exist without the column.
+    runMigrations(db, migrations.filter((migration) => migration.id < 12));
+
+    db.prepare("INSERT INTO stories (id, payload) VALUES (?, ?)").run(
+      "owned",
+      JSON.stringify({ id: "owned", title: "作者的故事", ownerId: "author" })
+    );
+    db.prepare("INSERT INTO stories (id, payload) VALUES (?, ?)").run(
+      "platform",
+      JSON.stringify({ id: "platform", title: "平台故事", ownerId: null })
+    );
+
+    const insert = db.prepare(
+      `INSERT INTO generation_usage
+         (id, user_id, story_id, provider, intent, status, created_at, created_date)
+       VALUES (?, ?, ?, 'mock', 'read_segment', 'success', '2026-05-20T00:00:00.000Z', '2026-05-20')`
+    );
+    insert.run("u_trial", "author", "owned");
+    insert.run("u_read", "reader", "owned");
+    insert.run("u_platform", "author", "platform");
+    insert.run("u_deleted", "author", "gone");
+
+    runMigrations(db, migrations);
+
+    const flags = new Map(
+      (
+        db.prepare("SELECT id, is_author_trial AS flag FROM generation_usage").all() as Array<{
+          id: string;
+          flag: number;
+        }>
+      ).map((row) => [row.id, row.flag])
+    );
+
+    // Derived, not guessed: the author's own turn on their own story is the trial.
+    expect(flags.get("u_trial")).toBe(1);
+    expect(flags.get("u_read")).toBe(0);
+    // A platform story has no author to be, and a story that is gone cannot be asked.
+    expect(flags.get("u_platform")).toBe(0);
+    expect(flags.get("u_deleted")).toBe(0);
+
+    db.close();
+  });
+
   it("rolls back and leaves the ledger untouched when a migration fails", () => {
+
     const databasePath = createTempDatabasePath();
     const db = new DatabaseSync(databasePath);
 

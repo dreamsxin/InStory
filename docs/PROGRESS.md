@@ -48,6 +48,7 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 - **管理操作有了可查的记录**：迁移 10 加 `admin_actions`（只追加，没有 update 和 delete），下架故事、吊销登录、发放/收回管理员都会写一行：谁、对什么、什么时候、说明。控制台多一个「操作记录」分区。故事名和邮箱是写进行里的快照——故事会改名会删除，只存 ID 的记录恰好在需要它的时候变得读不懂。操作者留空有两种情况：用 `ADMIN_TOKEN` 调的（共享凭证背后没有具体的人），以及开发匿名兜底（`authUserIsFallback`）——审计里写「本地读者干的」会是这张表最不该说的谎。`adminActionStore` 在 `BuildAppOptions` 里是必填而非可选：能被某条部署路径忘掉的审计不算审计。
 - **能停用账号，不只是踢下线**：迁移 11 给 `users` 加 `disabled_at`（时间戳而非布尔——「从什么时候起」是被停用的人第一个会问的事），`PUT /api/admin/users/:id/access` 收 `{ disabled }`：停用会同时吊销全部会话（不吊销就等于封禁要等 Cookie 自己过期，最长 30 天），恢复只是开门、不返还旧会话。登录路径在密码校验通过之后才看停用状态，返回 403「这个账号已被停用」——放在校验之前等于告诉未认证的人这个邮箱存在，而回一句「密码错误」会让持有正确密码的人反复去改一个没问题的密码。`findUserBySessionToken` 也拒绝已停用账号，作为吊销之外的第二道。控制台账号表多一列「状态」和「停用账号 / 恢复账号」，不能停用自己，两种决定都写进 `admin_actions`。
 - **撤掉了角色库那个什么都不做的开关**：入戏角色的 `公开可展示` 从两处表单、卡片标签和请求 schema（`createReaderProfileRequestSchema`，POST 与 PUT 共用）里一并删除。它有 UI、有 schema、有存储，却没有任何消费者：没有地方能浏览别人的入戏角色，作者也不能把别人的角色请进自己的故事，选「公开」和选「私有」对读者来说完全一样。留着一个不生效的选项，是界面在替一个不存在的功能许诺。存储层的 `visibility` 列保留，但 `ReaderProfileStore` 不再收这个入参：新建和保存一律写 `private`，接口收到 `visibility: "public"` 也只会得到私有角色（服务端和 store 两层测试都断言了这条）。老数据里已有的 `public` 行不做批量改写，反正没有任何读取方，下一次保存自然归位。让它成真（公开角色可以被作者选入故事）是一次产品决定，不是顺手补上的缺口——真要做，需要一个能浏览的入口、作者选角时的授权语义，以及别人拿走你的身份之后你还能不能改它。
+- **账面上分得出「作者在调自己的故事」和「有人在读」**：迁移 12 给 `generation_usage` 加 `is_author_trial`，两条推进路径（普通与流式，成功与失败）都按同一个 `isAuthorTrial(ownerId, viewerId)` 判定填进去——和 `继续` 列表的「试玩」标签、作者 insights 的排除用的是同一次比较，一次阅读不会在一个屏幕上算试玩、在另一个屏幕上算读者。`GET /api/admin/usage` 的 `byStory` 多 `trialGenerations` / `trialTokens`，`today` 也带同一对数字，控制台「按故事」表多一列「作者试玩」，说明行写出「其中 N 次是作者试玩自己的故事，照常计入作者本人的配额」。`readers` 的含义同时被修正成「除作者以外的账号数」——它此前把作者自己算成读者，和书架上同名的那个数字对不上。历史行不留空：迁移按故事 payload 里的 `ownerId` 回填，已删除的故事和平台故事（没有作者）留 0，迁移测试把这四种情况都钉住了。配额照扣不变。
 - **AI 编排**：`MockNarrativeProvider` 与 `OpenAICompatibleProvider`（超时、分类重试退避、流式 narration 增量提取、输出 Zod 校验）。
 
 ## 代码地图
@@ -78,6 +79,8 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 9. `snapshot_story_title_on_sessions` — 会话自己记住故事名，故事删了卡片还能叫出名字
 10. `add_admin_actions` — 管理操作的审计表，只追加
 11. `add_user_disabled_at` — 账号停用时间，null 就是正常
+12. `add_usage_author_trial` — 每条用量记下「这是作者在试玩自己的故事吗」，并按故事 payload 里的 `ownerId` 回填历史行
+
 
 ## 工程约定（动手前先读）
 
@@ -118,7 +121,8 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 ## 已知问题
 
 - 非 production 且未设 `ADMIN_TOKEN` 时 `/api/admin` 对所有人开放（`main.ts` 只在 production 下强制），而默认 `HOST=0.0.0.0`。
-- 作者试玩消耗作者自己的每日配额，这是有意的（生成真花钱，免掉就成了无限生成的路子），`继续` 列表已经标出「试玩」；但试玩仍然写进 `generation_usage` 的常规行里，管理台分不出「作者在调自己的故事」和「读者在读」。
+- 作者试玩消耗作者自己的每日配额，这是有意的（生成真花钱，免掉就成了无限生成的路子）；账面上现在分得出来了（`is_author_trial`），但配额本身仍不区分——如果以后要给作者一份单独的试玩额度，那是产品决定。
+
 - 审核队列能下架故事，账号表能吊销登录、停用与恢复账号，操作都写进 `admin_actions`；但 admin 仍不能删除他人的故事（只能设为仅自己可见）。
 - 入戏角色仍有 `visibility` 列，但所有写入都是 `private`，也没有任何界面或接口能改它；老库里遗留的 `public` 行不影响任何行为（没有读取方），下一次保存会写回 `private`。
 - `npm audit` 有 2 个 moderate，来自 `next` 依赖的 `postcss`；`--force` 会降级到破坏性版本，暂不处理。

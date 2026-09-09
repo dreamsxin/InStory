@@ -1550,6 +1550,7 @@ export async function buildApp(options: BuildAppOptions) {
     const intent = parsed.data.inputType === "read_continue" ? "read_segment" : "reader_action";
     const modelConfig = options.modelRuntime.getPublicConfig();
     const startedAt = Date.now();
+    const authorTrial = isAuthorTrial(storyDetail?.story.ownerId, request.authUser.id);
 
     let generation;
     try {
@@ -1569,6 +1570,7 @@ export async function buildApp(options: BuildAppOptions) {
         model: modelConfig.model,
         intent,
         status: "error",
+        isAuthorTrial: authorTrial,
         latencyMs: Date.now() - startedAt
       });
       throw error;
@@ -1583,8 +1585,10 @@ export async function buildApp(options: BuildAppOptions) {
       intent,
       status: "success",
       usage: generation.usage,
+      isAuthorTrial: authorTrial,
       latencyMs: Date.now() - startedAt
     });
+
 
     // A bad generation is the system's own output, so it is discarded rather than
     // shown with a warning. The turn is not persisted and the reader can retry.
@@ -1681,6 +1685,8 @@ export async function buildApp(options: BuildAppOptions) {
     const modelConfig = options.modelRuntime.getPublicConfig();
     const startedAt = Date.now();
     const authUserId = request.authUser.id;
+    const authorTrial = isAuthorTrial(storyDetail?.story.ownerId, authUserId);
+
 
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream; charset=utf-8",
@@ -1733,8 +1739,10 @@ export async function buildApp(options: BuildAppOptions) {
         intent,
         status,
         usage,
+        isAuthorTrial: authorTrial,
         latencyMs: Date.now() - startedAt
       });
+
     };
 
     try {
@@ -1968,13 +1976,22 @@ function createReaderSessionListItem(
     readerRoleName: overview.readerRoleName,
     latestSummary: overview.latestNarration ?? "刚刚进入故事。",
     turnCount: overview.turnCount,
-    // Same comparison the shelf insights make when they exclude an author's own
-    // trials, so the two surfaces cannot disagree about what counts as reading.
-    isAuthorTrial: story?.ownerId !== null && story?.ownerId === viewerId,
+    isAuthorTrial: isAuthorTrial(story?.ownerId, viewerId),
     createdAt: overview.createdAt,
     updatedAt: overview.updatedAt
   };
 }
+
+/**
+ * The story's own author reading it - a trial, not readership. One comparison for the
+ * whole server: the shelf insights, the 继续 list and the usage rows all ask this the
+ * same way, so one session cannot be a trial on one screen and a reader on the next.
+ * A platform story (null owner) has no author to be, so it is never a trial.
+ */
+function isAuthorTrial(ownerId: string | null | undefined, viewerId: string): boolean {
+  return ownerId != null && ownerId === viewerId;
+}
+
 
 
 /**

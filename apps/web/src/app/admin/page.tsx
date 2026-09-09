@@ -127,10 +127,14 @@ export default async function AdminPage({
           输入 {usage.today.promptTokens.toLocaleString()} / 输出 {usage.today.completionTokens.toLocaleString()}{" "}
           token，每位读者每日限 {usage.dailyTurnQuota} 次推进。失败的尝试会被记录但不占用配额。
           今日与配额都按 UTC 日切统计，东八区的重置时间是上午 8 点。
+          {usage.today.trialGenerations > 0
+            ? ` 其中 ${usage.today.trialGenerations} 次是作者试玩自己的故事（${usage.today.trialTokens.toLocaleString()} token），照常计入作者本人的配额。`
+            : null}
           {usage.estimatedCost === null
             ? " 配置 LLM_PRICE_INPUT_PER_MTOK 与 LLM_PRICE_OUTPUT_PER_MTOK 后可显示成本。"
             : null}
         </p>
+
         {usage.today.byModel.length > 0 ? (
           <div className="admin-table-wrap">
             <table className="admin-table">
@@ -168,9 +172,11 @@ export default async function AdminPage({
                   <tr>
                     <th>故事</th>
                     <th>读者</th>
+                    <th>作者试玩</th>
                     <th>成功 / 失败</th>
                     <th>Token</th>
                     <th>预估成本</th>
+
                   </tr>
                 </thead>
                 <tbody>
@@ -182,6 +188,14 @@ export default async function AdminPage({
                           : row.title ?? `${row.storyId}（已删除）`}
                       </td>
                       <td>{row.readers}</td>
+                      {/* An author debugging their own story and a reader reading it cost
+                          the same money but mean opposite things. */}
+                      <td>
+                        {row.trialGenerations === 0
+                          ? "—"
+                          : `${row.trialGenerations} 次 · ${row.trialTokens.toLocaleString()} token`}
+                      </td>
+
                       <td>
                         {row.successes} / {row.failures}
                       </td>

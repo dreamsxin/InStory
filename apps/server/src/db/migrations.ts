@@ -372,8 +372,34 @@ export const migrations: Migration[] = [
       -- about a suspension, and null is the plain, unambiguous "not suspended".
       ALTER TABLE users ADD COLUMN disabled_at TEXT;
     `
+  },
+  {
+    id: 12,
+    name: "add_usage_author_trial",
+    up: `
+      -- An author testing their own story and a reader reading it landed in the same
+      -- rows, so the cost table could not tell "someone is reading this" from "the
+      -- author is debugging it" - two facts an operator reads very differently.
+      --
+      -- Not nullable, because the flag is derivable for every existing row: the story's
+      -- owner is the author, and ownership never transfers here. Ownership lives in the
+      -- story payload, so the backfill reads it out of the JSON. Rows whose story has
+      -- since been deleted stay 0, as do platform stories with no owner at all; a
+      -- deleted story is the one case we genuinely cannot recover, and calling it
+      -- reading is the smaller lie than calling it a trial.
+      ALTER TABLE generation_usage ADD COLUMN is_author_trial INTEGER NOT NULL DEFAULT 0;
+
+      UPDATE generation_usage
+         SET is_author_trial = 1
+       WHERE story_id IS NOT NULL
+         AND user_id = (
+           SELECT json_extract(payload, '$.ownerId') FROM stories WHERE stories.id = generation_usage.story_id
+         );
+
+    `
   }
 ];
+
 
 
 

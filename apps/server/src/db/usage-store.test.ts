@@ -42,9 +42,11 @@ function record(
     status: "success",
     usage: { promptTokens: 100, completionTokens: 300, totalTokens: 400 },
     latencyMs: 1200,
+    isAuthorTrial: false,
     at: day,
     ...overrides
   });
+
 }
 
 describe("usageDateKey", () => {
@@ -146,6 +148,29 @@ describe("UsageStore", () => {
     expect(store.summarizeStoriesForDay(nextDay).map((row) => row.storyId)).toEqual(["story_heavy"]);
   });
 
+  it("separates an author's own trials from readership", () => {
+    const store = createStore();
+
+    record(store, { storyId: "story_x", userId: "author", isAuthorTrial: true });
+    record(store, { storyId: "story_x", userId: "author", isAuthorTrial: true });
+    record(store, { storyId: "story_x", userId: "reader_1" });
+
+    const [row] = store.summarizeStoriesForDay(day);
+
+    // The money is all there; only its meaning is split.
+    expect(row).toMatchObject({
+      storyId: "story_x",
+      generations: 3,
+      trialGenerations: 2,
+      trialTokens: 800,
+      totalTokens: 1200,
+      // The author is not a reader of their own draft, which is what 读者数 means
+      // everywhere else in the product.
+      readers: 1
+    });
+    expect(store.summarizeDay(day)).toMatchObject({ generations: 3, trialGenerations: 2, trialTokens: 800 });
+  });
+
   it("reports an empty day without failing", () => {
     const store = createStore();
 
@@ -155,10 +180,13 @@ describe("UsageStore", () => {
       failures: 0,
       totalTokens: 0,
       averageLatencyMs: 0,
+      trialGenerations: 0,
+      trialTokens: 0,
       byModel: []
     });
     expect(store.summarizeStoriesForDay(day)).toEqual([]);
   });
+
 
 });
 

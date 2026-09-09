@@ -2244,7 +2244,84 @@ describe("authentication", () => {
     expect(readerInsights.json<{ insights: StoryReadingInsight[] }>().insights).toEqual([]);
   });
 
+  it("tells an author's own trial apart from a reader's turn on the bill", async () => {
+    await buildAuthApp(false, "secret");
+    const author = await register("bill-author@example.com", "作者");
+    const reader = await register("bill-reader@example.com", "读者");
+    const asAuthor = { authorization: `Bearer ${author}` };
+    const asReader = { authorization: `Bearer ${reader}` };
+
+    const created = await authApp.inject({
+      method: "POST",
+      url: "/api/stories",
+      headers: asAuthor,
+      payload: {
+        id: "salt-ledger",
+        title: "盐渍账簿",
+        tagline: "账上少了一船盐。",
+        genre: "悬疑",
+        coverUrl: null,
+        premise: "一座靠盐税记事的港城。",
+        openingLocationName: "账房",
+        openingLocationDescription: "算珠停在半路。",
+        worldRules: [],
+        visibility: "public",
+        aiFreedom: "medium",
+        experienceMode: "coauthored",
+        defaultSegmentLength: "standard"
+      }
+    });
+    expect(created.statusCode).toBe(201);
+
+    const advance = async (headers: Record<string, string>): Promise<void> => {
+      const session = await authApp.inject({
+        method: "POST",
+        url: "/api/stories/salt-ledger/sessions",
+        headers,
+        payload: { entryMode: "existing_character", characterId: null }
+      });
+      const sessionId = session.json<CreateSessionResponse>().session.id;
+      const turn = await authApp.inject({
+        method: "POST",
+        url: `/api/sessions/${sessionId}/turns`,
+        headers,
+        payload: { inputType: "read_continue", content: "继续阅读" }
+      });
+      expect(turn.statusCode).toBe(200);
+    };
+
+    await advance(asAuthor);
+    await advance(asReader);
+
+    const usage = await authApp.inject({
+      method: "GET",
+      url: "/api/admin/usage",
+      headers: { authorization: "Bearer secret" }
+    });
+    expect(usage.statusCode).toBe(200);
+    const body = usage.json<{
+      today: { generations: number; trialGenerations: number; trialTokens: number };
+      byStory: Array<{ storyId: string | null; generations: number; readers: number; trialGenerations: number; trialTokens: number }>;
+    }>();
+
+    // Both turns cost money, and the bill says so; what it no longer does is call
+    // the author's debugging pass a reader.
+    expect(body.today.generations).toBe(2);
+    expect(body.today.trialGenerations).toBe(1);
+    expect(body.today.trialTokens).toBeGreaterThan(0);
+    expect(body.byStory).toEqual([
+      expect.objectContaining({
+        storyId: "salt-ledger",
+        generations: 2,
+        readers: 1,
+        trialGenerations: 1
+      })
+    ]);
+    expect(body.byStory[0]?.trialTokens).toBeGreaterThan(0);
+  });
+
   it("keeps a private story private, and keeps a reader who is already inside", async () => {
+
     await buildAuthApp(false);
     const author = await register("private-author@example.com", "作者");
     const reader = await register("private-reader@example.com", "读者");

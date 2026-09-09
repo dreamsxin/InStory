@@ -14,8 +14,15 @@ export interface RecordUsageInput {
   status: GenerationStatus;
   usage?: GenerationUsage | null;
   latencyMs: number;
+  /**
+   * Whether this generation was the story's own author trying their story out.
+   * Required, not optional: a caller that forgets it would silently file a trial
+   * as reading, which is exactly the confusion the column exists to remove.
+   */
+  isAuthorTrial: boolean;
   at?: Date;
 }
+
 
 export interface ModelUsageBreakdown {
   provider: string;
@@ -33,6 +40,9 @@ export interface DailyUsageSummary {
   completionTokens: number;
   totalTokens: number;
   averageLatencyMs: number;
+  /** Of the above, what authors spent trying out their own stories. */
+  trialGenerations: number;
+  trialTokens: number;
   byModel: ModelUsageBreakdown[];
 }
 
@@ -42,11 +52,15 @@ export interface StoryUsageBreakdown {
   generations: number;
   successes: number;
   failures: number;
+  /** Distinct accounts other than the author: the author's trials are not readership. */
   readers: number;
+  trialGenerations: number;
+  trialTokens: number;
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
 }
+
 
 /** UTC day key, matching the created_date column. */
 export function usageDateKey(at: Date = new Date()): string {
@@ -85,8 +99,9 @@ export class UsageStore {
       .prepare(
         `INSERT INTO generation_usage
            (id, user_id, session_id, story_id, provider, model, intent, status,
-            prompt_tokens, completion_tokens, total_tokens, latency_ms, created_at, created_date)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            prompt_tokens, completion_tokens, total_tokens, latency_ms, is_author_trial,
+            created_at, created_date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         `usage_${randomUUID()}`,
@@ -101,9 +116,11 @@ export class UsageStore {
         input.usage?.completionTokens ?? 0,
         input.usage?.totalTokens ?? 0,
         Math.max(0, Math.round(input.latencyMs)),
+        input.isAuthorTrial ? 1 : 0,
         at.toISOString(),
         usageDateKey(at)
       );
+
   }
 
   /** Successful generations only, so a failed attempt does not consume quota. */
@@ -129,7 +146,9 @@ export class UsageStore {
                 COALESCE(SUM(prompt_tokens), 0) AS promptTokens,
                 COALESCE(SUM(completion_tokens), 0) AS completionTokens,
                 COALESCE(SUM(total_tokens), 0) AS totalTokens,
-                COALESCE(AVG(latency_ms), 0) AS averageLatencyMs
+                COALESCE(AVG(latency_ms), 0) AS averageLatencyMs,
+                SUM(CASE WHEN is_author_trial = 1 THEN 1 ELSE 0 END) AS trialGenerations,
+                COALESCE(SUM(CASE WHEN is_author_trial = 1 THEN total_tokens ELSE 0 END), 0) AS trialTokens
          FROM generation_usage WHERE created_date = ?`
       )
       .get(date) as {
@@ -140,7 +159,10 @@ export class UsageStore {
       completionTokens: number;
       totalTokens: number;
       averageLatencyMs: number;
+      trialGenerations: number | null;
+      trialTokens: number;
     };
+
 
     const byModel = this.database.db
       .prepare(
@@ -160,7 +182,10 @@ export class UsageStore {
       completionTokens: totals.completionTokens,
       totalTokens: totals.totalTokens,
       averageLatencyMs: Math.round(totals.averageLatencyMs),
+      trialGenerations: totals.trialGenerations ?? 0,
+      trialTokens: totals.trialTokens,
       byModel
+
     };
   }
 
@@ -172,6 +197,9 @@ export class UsageStore {
    * Rows with no story id (a generation that never belonged to one) are grouped under
    * a null id rather than dropped: the totals on the same screen include them, and two
    * numbers that do not add up are worse than one awkward row.
+   *
+   * `readers` counts accounts other than the author, matching what 读者数 means on the
+   * shelf; the author's own trials are reported separately instead of inflating it.
    */
   summarizeStoriesForDay(at: Date = new Date(), limit = 20): StoryUsageBreakdown[] {
     return this.database.db
@@ -180,7 +208,9 @@ export class UsageStore {
                 COUNT(*) AS generations,
                 SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS successes,
                 SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS failures,
-                COUNT(DISTINCT user_id) AS readers,
+                COUNT(DISTINCT CASE WHEN is_author_trial = 0 THEN user_id END) AS readers,
+                SUM(CASE WHEN is_author_trial = 1 THEN 1 ELSE 0 END) AS trialGenerations,
+                COALESCE(SUM(CASE WHEN is_author_trial = 1 THEN total_tokens ELSE 0 END), 0) AS trialTokens,
                 COALESCE(SUM(prompt_tokens), 0) AS promptTokens,
                 COALESCE(SUM(completion_tokens), 0) AS completionTokens,
                 COALESCE(SUM(total_tokens), 0) AS totalTokens
@@ -192,6 +222,7 @@ export class UsageStore {
       )
       .all(usageDateKey(at), Math.max(1, Math.min(100, Math.trunc(limit)))) as unknown as StoryUsageBreakdown[];
   }
+
 }
 
 

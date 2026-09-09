@@ -952,7 +952,11 @@ export interface AdminUsageSummary {
     completionTokens: number;
     totalTokens: number;
     averageLatencyMs: number;
+    /** Of the day's generations, what authors spent trying out their own stories. */
+    trialGenerations: number;
+    trialTokens: number;
     byModel: Array<{ provider: string; model: string | null; generations: number; totalTokens: number }>;
+
   };
   dailyTurnQuota: number;
   pricing: { inputPerMillion: number; outputPerMillion: number };
@@ -969,7 +973,11 @@ export interface AdminUsageSummary {
     generations: number;
     successes: number;
     failures: number;
+    /** Accounts other than the author; the author's own trials are counted separately. */
     readers: number;
+    trialGenerations: number;
+    trialTokens: number;
+
     promptTokens: number;
     completionTokens: number;
     totalTokens: number;
