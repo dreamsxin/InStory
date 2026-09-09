@@ -1109,6 +1109,25 @@ export async function revokeAdminUserSessions(userId: string): Promise<number> {
   return data.revokedSessions;
 }
 
+/** One recorded operator action. Append-only server-side; read-only here. */
+export interface AdminActionRow {
+  id: string;
+  actorId: string | null;
+  /** Null when the call used ADMIN_TOKEN, which has no account behind it. */
+  actorEmail: string | null;
+  action: "story_takedown" | "revoke_sessions" | "role_change";
+  targetType: "story" | "user";
+  targetId: string;
+  targetLabel: string | null;
+  detail: string | null;
+  createdAt: string;
+}
+
+export async function getAdminActions(): Promise<AdminActionRow[]> {
+  const data = await adminGet<{ actions: AdminActionRow[] }>("/api/admin/actions");
+  return data.actions;
+}
+
 async function adminGet<T>(path: string): Promise<T> {
   return adminRequest<T>(path);
 }

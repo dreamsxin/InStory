@@ -323,8 +323,45 @@ export const migrations: Migration[] = [
       // Sessions whose story was already gone get the only honest label available.
       db.exec("UPDATE reader_sessions SET story_title = '已删除的故事' WHERE story_title IS NULL");
     }
+  },
+  {
+    id: 10,
+    name: "add_admin_actions",
+    up: `
+      -- What operators did to other people's things. The console had grown two real
+      -- powers - taking a story off the shelf and ending an account's logins - and
+      -- neither left anything a second operator could look up afterwards: one warn
+      -- line in a log that rotates, and for takedowns a sentence on the event row.
+      --
+      -- Append-only by intent: rows are never updated or deleted, because the point of
+      -- an audit trail is that it cannot be tidied up.
+      CREATE TABLE IF NOT EXISTS admin_actions (
+        id TEXT PRIMARY KEY,
+        -- Null when the caller authenticated with ADMIN_TOKEN instead of an account:
+        -- the shared credential has no person behind it, and pretending otherwise
+        -- would be the one lie an audit table must not tell.
+        actor_id TEXT,
+        actor_email TEXT,
+        action TEXT NOT NULL,
+        target_type TEXT NOT NULL,
+        target_id TEXT NOT NULL,
+        -- Human-readable, for the console: story titles and account addresses change
+        -- or disappear, and a row that only holds ids stops being readable.
+        target_label TEXT,
+        detail TEXT,
+        created_at TEXT NOT NULL,
+        created_date TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_admin_actions_created
+      ON admin_actions(created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_admin_actions_target
+      ON admin_actions(target_type, target_id, created_at DESC);
+    `
   }
 ];
+
 
 /**
  * Moves turns and timeline nodes out of the legacy reader_sessions.payload blob

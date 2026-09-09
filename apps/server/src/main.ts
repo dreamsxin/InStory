@@ -3,6 +3,7 @@ import { buildApp } from "./app.js";
 import { StoryCatalog } from "./data/story-catalog.js";
 import { bootstrapDemoData, DEMO_ACCOUNTS, DEMO_PASSWORD_FALLBACK } from "./data/demo-bootstrap.js";
 import { AppDatabase } from "./db/app-database.js";
+import { AdminActionStore } from "./db/admin-action-store.js";
 import { ModelConfigStore } from "./db/model-config-store.js";
 import { ReaderProfileStore } from "./db/reader-profile-store.js";
 import { SessionStore } from "./db/session-store.js";
@@ -127,6 +128,7 @@ const storyCatalog = new StoryCatalog(database);
 const userStore = new UserStore(database);
 const usageStore = new UsageStore(database);
 const moderationStore = new ModerationStore(database);
+const adminActionStore = new AdminActionStore(database);
 const app = await buildApp({
   sessionStore,
   readerProfileStore,
@@ -134,6 +136,7 @@ const app = await buildApp({
   userStore,
   usageStore,
   moderationStore,
+  adminActionStore,
   modelRuntime,
   adminToken,
   adminEmails: readAdminEmails(process.env.ADMIN_EMAILS),

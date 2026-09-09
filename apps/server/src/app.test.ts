@@ -30,6 +30,7 @@ import { SessionStore } from "./db/session-store.js";
 import { UserStore } from "./db/user-store.js";
 import { usageDayResetsAt, UsageStore } from "./db/usage-store.js";
 import { ModerationStore } from "./db/moderation-store.js";
+import { AdminActionStore } from "./db/admin-action-store.js";
 import { ModelRuntime } from "./model-runtime.js";
 
 type TestApp = Awaited<ReturnType<typeof buildApp>>;
@@ -50,6 +51,7 @@ beforeEach(async () => {
       userStore,
       usageStore: new UsageStore(database),
       moderationStore: new ModerationStore(database),
+      adminActionStore: new AdminActionStore(database),
       modelRuntime: new ModelRuntime(new ModelConfigStore(database), {
       provider: "mock",
       updatedAt: "2026-05-20T00:00:00.000Z"
@@ -454,6 +456,7 @@ describe("server API", () => {
       userStore,
       usageStore: new UsageStore(database),
       moderationStore: new ModerationStore(database),
+      adminActionStore: new AdminActionStore(database),
       modelRuntime: new ModelRuntime(new ModelConfigStore(database), {
         provider: "mock",
         updatedAt: "2026-05-20T00:00:00.000Z"
@@ -1093,6 +1096,7 @@ describe("generation quota and usage", () => {
       userStore: new UserStore(quotaDatabase),
       usageStore: quotaUsageStore,
       moderationStore: quotaModerationStore,
+      adminActionStore: new AdminActionStore(quotaDatabase),
       modelRuntime: new ModelRuntime(new ModelConfigStore(quotaDatabase), {
         provider: "mock",
         updatedAt: "2026-05-20T00:00:00.000Z"
@@ -1314,6 +1318,24 @@ describe("generation quota and usage", () => {
     const shelf = await quotaApp.inject({ method: "GET", url: "/api/stories" });
     expect(shelf.json<{ stories: Array<{ id: string }> }>().stories).toEqual([]);
 
+    // Written to the audit trail as well, because the moderation row explains the
+    // event and not the operator: a second operator asking "who hid this story"
+    // needs a place to look that is not a rotating log file.
+    const audit = await quotaApp.inject({
+      method: "GET",
+      url: "/api/admin/actions",
+      headers: { authorization: "Bearer secret" }
+    });
+    expect(audit.json<{ actions: Array<Record<string, unknown>> }>().actions[0]).toMatchObject({
+      action: "story_takedown",
+      targetType: "story",
+      targetId: "rain-mansion",
+      targetLabel: "雨夜旧宅",
+      detail: "含未成年人相关描写",
+      // The shared token has no account behind it, so the operator stays blank.
+      actorEmail: null
+    });
+
     // A reader already inside keeps reading: taking a story off the shelf is not
     // taking it away from the people who started it.
     const stillReadable = await quotaApp.inject({ method: "GET", url: `/api/sessions/${sessionId}` });
@@ -1406,6 +1428,7 @@ describe("authentication", () => {
       userStore: new UserStore(authDatabase),
       usageStore: new UsageStore(authDatabase),
       moderationStore: new ModerationStore(authDatabase),
+      adminActionStore: new AdminActionStore(authDatabase),
       modelRuntime: new ModelRuntime(new ModelConfigStore(authDatabase), {
         provider: "mock",
         updatedAt: "2026-05-20T00:00:00.000Z"
@@ -1682,6 +1705,7 @@ describe("authentication", () => {
       userStore: adminUserStore,
       usageStore: new UsageStore(authDatabase),
       moderationStore: new ModerationStore(authDatabase),
+      adminActionStore: new AdminActionStore(authDatabase),
       modelRuntime: new ModelRuntime(new ModelConfigStore(authDatabase), {
         provider: "mock",
         updatedAt: "2026-05-20T00:00:00.000Z"
@@ -1928,6 +1952,23 @@ describe("authentication", () => {
     });
     expect(self.statusCode).toBe(400);
     expect(self.json<{ error: string }>().error).toContain("退出登录");
+
+    // What was actually done is on the record, in order, with the operator named when
+    // there is one: the promotion above came through the shared token, the refused
+    // self-revoke wrote nothing.
+    const audit = await authApp.inject({
+      method: "GET",
+      url: "/api/admin/actions",
+      headers: { authorization: "Bearer shared-secret" }
+    });
+    const actions = audit.json<{ actions: Array<Record<string, unknown>> }>().actions;
+    expect(actions.map((row) => row.action)).toEqual(["role_change", "revoke_sessions"]);
+    expect(actions[1]).toMatchObject({
+      action: "revoke_sessions",
+      targetType: "user",
+      targetLabel: "revoked-reader@example.com",
+      detail: "吊销 2 个登录会话"
+    });
   });
 
 
@@ -1942,6 +1983,7 @@ describe("authentication", () => {
       userStore: listedUserStore,
       usageStore: new UsageStore(authDatabase),
       moderationStore: new ModerationStore(authDatabase),
+      adminActionStore: new AdminActionStore(authDatabase),
       modelRuntime: new ModelRuntime(new ModelConfigStore(authDatabase), {
         provider: "mock",
         updatedAt: "2026-05-20T00:00:00.000Z"
@@ -1978,6 +2020,7 @@ describe("authentication", () => {
       userStore: listedUserStore,
       usageStore: new UsageStore(authDatabase),
       moderationStore: new ModerationStore(authDatabase),
+      adminActionStore: new AdminActionStore(authDatabase),
       modelRuntime: new ModelRuntime(new ModelConfigStore(authDatabase), {
         provider: "mock",
         updatedAt: "2026-05-20T00:00:00.000Z"
@@ -2473,6 +2516,7 @@ describe("abuse limits", () => {
       userStore: new UserStore(limitDatabase),
       usageStore: new UsageStore(limitDatabase),
       moderationStore: new ModerationStore(limitDatabase),
+      adminActionStore: new AdminActionStore(limitDatabase),
       modelRuntime: new ModelRuntime(new ModelConfigStore(limitDatabase), {
         provider: "mock",
         updatedAt: "2026-05-20T00:00:00.000Z"
@@ -2755,6 +2799,7 @@ describe("key nodes when the model marks none", () => {
       userStore: new UserStore(silentDatabase),
       usageStore: new UsageStore(silentDatabase),
       moderationStore: new ModerationStore(silentDatabase),
+      adminActionStore: new AdminActionStore(silentDatabase),
       modelRuntime: new UnmarkedRuntime(new ModelConfigStore(silentDatabase), {
         provider: "mock",
         updatedAt: "2026-05-20T00:00:00.000Z"
@@ -2851,6 +2896,7 @@ describe("a reader who stops the generation", () => {
       userStore: new UserStore(abortDatabase),
       usageStore: abortUsage,
       moderationStore: new ModerationStore(abortDatabase),
+      adminActionStore: new AdminActionStore(abortDatabase),
       modelRuntime: new SlowRuntime(new ModelConfigStore(abortDatabase), {
         provider: "mock",
         updatedAt: "2026-05-20T00:00:00.000Z"

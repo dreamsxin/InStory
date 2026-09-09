@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import cors from "@fastify/cors";
 import Fastify from "fastify";
-import type { FastifyReply } from "fastify";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
   createReaderProfileRequestSchema,
@@ -54,6 +54,7 @@ import {
   type UsageStore
 } from "./db/usage-store.js";
 import type { ModerationStatus, ModerationStore } from "./db/moderation-store.js";
+import type { AdminActionStore } from "./db/admin-action-store.js";
 import {
   buildExcerpt,
   RuleBasedModerationChecker,
@@ -394,6 +395,12 @@ export interface BuildAppOptions {
   userStore: UserStore;
   usageStore: UsageStore;
   moderationStore: ModerationStore;
+  /**
+   * Where operator actions are written. Required rather than optional: the console can
+   * hide a story and end an account's logins, and an audit trail that a deployment can
+   * forget to wire up is not one.
+   */
+  adminActionStore: AdminActionStore;
   /** Defaults to the rule-based checker; swap for a real service in production. */
   moderationChecker?: ModerationChecker;
   modelRuntime: ModelRuntime;
@@ -699,6 +706,15 @@ export async function buildApp(options: BuildAppOptions) {
       return reply.code(404).send({ error: "User not found" });
     }
 
+    options.adminActionStore.record({
+      ...auditActor(request),
+      action: "role_change",
+      targetType: "user",
+      targetId: user.id,
+      targetLabel: user.email,
+      detail: `角色改为 ${parsed.data.role}`
+    });
+
     return { user: toAuthUser(user) };
   });
 
@@ -725,8 +741,17 @@ export async function buildApp(options: BuildAppOptions) {
 
     const revokedSessions = options.userStore.revokeAllSessions(userId);
 
-    // Logged because it is done to someone: an account that suddenly has to sign in
-    // again deserves an explanation that exists somewhere outside this response.
+    options.adminActionStore.record({
+      ...auditActor(request),
+      action: "revoke_sessions",
+      targetType: "user",
+      targetId: user.id,
+      targetLabel: user.email,
+      detail: `吊销 ${revokedSessions} 个登录会话`
+    });
+
+    // Logged as well as recorded: the table is the answer to "who did this", the log
+    // is what an operator watching the process sees at the moment it happens.
     app.log.warn(
       { adminId: request.authUser?.id ?? "admin-token", userId, email: user.email, revokedSessions },
       "revoked all sessions for an account"
@@ -872,7 +897,25 @@ export async function buildApp(options: BuildAppOptions) {
       resolution: note ? `已下架《${detail.story.title}》：${note}` : `已下架《${detail.story.title}》`
     });
 
+    options.adminActionStore.record({
+      ...auditActor(request),
+      action: "story_takedown",
+      targetType: "story",
+      targetId: event.storyId,
+      targetLabel: detail.story.title,
+      detail: note || null
+    });
+
     return { event: resolved, story };
+  });
+
+  /**
+   * What operators have done lately. Read-only and append-only underneath: the point
+   * of the trail is that the console cannot edit or clear it.
+   */
+  app.get("/api/admin/actions", async (request) => {
+    const query = request.query as { limit?: string };
+    return { actions: options.adminActionStore.list(Number(query.limit ?? 50)) };
   });
 
   /**
@@ -1834,6 +1877,20 @@ function createCastCharacters({
  * card that quietly vanishes leaves the reader wondering what happened to their
  * reading.
  */
+/**
+ * Who to credit an operator action to. The development anonymous fallback is not an
+ * identity - the same rule `/api/auth/me` follows - so an audit row leaves the operator
+ * blank rather than naming the seeded local reader. Blank also covers ADMIN_TOKEN,
+ * which is a shared credential with nobody behind it.
+ */
+function auditActor(request: FastifyRequest): { actorId: string | null; actorEmail: string | null } {
+  if (!request.authUser || request.authUserIsFallback) {
+    return { actorId: null, actorEmail: null };
+  }
+
+  return { actorId: request.authUser.id, actorEmail: request.authUser.email };
+}
+
 function createReaderSessionListItem(
   overview: SessionOverview,
   options: BuildAppOptions,

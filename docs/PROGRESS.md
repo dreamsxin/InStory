@@ -19,7 +19,7 @@ npm run dev:web            # Web  http://localhost:3000
 npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 schema
 ```
 
-最近一次全量结果：typecheck 通过；单测 server 171 / story-engine 12 / web 35；e2e 33 条通过。
+最近一次全量结果：typecheck 通过；单测 server 174 / story-engine 12 / web 35；e2e 33 条通过。
 
 ## 已实现
 
@@ -45,6 +45,7 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 - **试玩不再假装是阅读**：`ReaderSessionListItem` 多一个 `isAuthorTrial`（服务端用和 insights 相同的那次比较：会话所属故事的 `ownerId` 是不是当前查看者），`继续` 列表里作者自己的试玩带一枚「试玩」标签，悬停写明「试玩同样计入今日配额」。此前同一个会话在 insights 里被当作者试玩排除、在 `继续` 里却显示成普通阅读，两处口径相反。配额照扣是有意的：那几次生成真花了钱，而且不扣就等于给「建个故事无限生成」开了一条路——要修的是界面在说谎，不是把账免掉。
 - **审核队列能真的下架故事**：`POST /api/admin/moderation/events/:id/takedown` 把被举报的故事设为仅自己可见，同时把事件标为已处置，处置说明记成「已下架《标题》：…」。此前队列只能改自己那一行的颜色——运维判定越线后，还得记住故事 ID、去 `故事配置` 手动翻 `可见性`，唯一真正保护读者的那一步恰好是队列不做的。是隐藏不是删除：作者的内容仍归作者，已经进去的读者会话照样能读（测试里断言了这条）。事件不带 `storyId` 时返回 400 并保持 open——没有可下架的对象，就不该假装做了决定。
 - **能把一个账号的登录全部吊销**：`POST /api/admin/users/:userId/revoke-sessions` 删掉该账号的全部 `auth_sessions` 并返回吊销条数，管理台账号表每行多一个「吊销登录」。`revokeAllSessions` 早就存在，只是没有任何入口——被盗号或滥用的会话此前只能开数据库处理，而 Cookie 有 30 天。只结束会话：角色不变、内容不删、对方能重新登录。不允许对自己用（会在处理请求的同时结束你正在用的会话，和角色按钮不给自己降权同一个道理），要退自己就用 `退出登录`。动作会写一条 `warn` 日志（谁、对谁、吊销了几条）。
+- **管理操作有了可查的记录**：迁移 10 加 `admin_actions`（只追加，没有 update 和 delete），下架故事、吊销登录、发放/收回管理员都会写一行：谁、对什么、什么时候、说明。控制台多一个「操作记录」分区。故事名和邮箱是写进行里的快照——故事会改名会删除，只存 ID 的记录恰好在需要它的时候变得读不懂。操作者留空有两种情况：用 `ADMIN_TOKEN` 调的（共享凭证背后没有具体的人），以及开发匿名兜底（`authUserIsFallback`）——审计里写「本地读者干的」会是这张表最不该说的谎。`adminActionStore` 在 `BuildAppOptions` 里是必填而非可选：能被某条部署路径忘掉的审计不算审计。
 - **AI 编排**：`MockNarrativeProvider` 与 `OpenAICompatibleProvider`（超时、分类重试退避、流式 narration 增量提取、输出 Zod 校验）。
 
 ## 代码地图
@@ -73,6 +74,7 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 7. `add_moderation_events` — 审核队列与审计是同一张表
 8. `add_turn_intervention` — 回合上的关键节点
 9. `snapshot_story_title_on_sessions` — 会话自己记住故事名，故事删了卡片还能叫出名字
+10. `add_admin_actions` — 管理操作的审计表，只追加
 
 ## 工程约定（动手前先读）
 
@@ -113,7 +115,7 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 
 - 非 production 且未设 `ADMIN_TOKEN` 时 `/api/admin` 对所有人开放（`main.ts` 只在 production 下强制），而默认 `HOST=0.0.0.0`。
 - 作者试玩消耗作者自己的每日配额，这是有意的（生成真花钱，免掉就成了无限生成的路子），`继续` 列表已经标出「试玩」；但试玩仍然写进 `generation_usage` 的常规行里，管理台分不出「作者在调自己的故事」和「读者在读」。
-- 审核队列能下架故事、账号表能吊销某个账号的全部登录，但都还没有持久的管理操作审计：谁在什么时候下架了什么、吊销了谁，只有一条服务端日志和事件行里的处置说明，没有一张能查的表。封禁账号（禁止再次登录）也仍然没有。
+- 审核队列能下架故事、账号表能吊销登录，操作都写进 `admin_actions`；但封禁账号（禁止再次登录）仍然没有，admin 也不能删除他人的故事。
 - 角色库的 `公开可展示` 有 UI、有 schema、有存储，但没有任何消费者。
 - `npm audit` 有 2 个 moderate，来自 `next` 依赖的 `postcss`；`--force` 会降级到破坏性版本，暂不处理。
 - 故事、世界、演员、锚点仍以 JSON payload 存在各自表里，没有完全关系化。`story_anchors` 是整组替换，够用。

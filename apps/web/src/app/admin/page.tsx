@@ -1,6 +1,7 @@
 import { Card, Chip } from "@heroui/react";
 import { redirect } from "next/navigation";
 import {
+  getAdminActions,
   getAdminModelConfig,
   getAdminModerationEvents,
   getAdminSessions,
@@ -41,14 +42,15 @@ export default async function AdminPage({
   }
 
   const query = await searchParams;
-  const [status, modelConfig, stories, sessions, moderation, usage, users] = await Promise.all([
+  const [status, modelConfig, stories, sessions, moderation, usage, users, adminActions] = await Promise.all([
     getAdminStatus(),
     getAdminModelConfig(),
     getAdminStories(),
     getAdminSessions(),
     getAdminModerationEvents(),
     getAdminUsage(),
-    getAdminUsers()
+    getAdminUsers(),
+    getAdminActions()
   ]);
 
   return (
@@ -65,6 +67,7 @@ export default async function AdminPage({
           <a href="#model">模型</a>
           <a href="#usage">用量</a>
           <a href="#users">账号</a>
+          <a href="#actions">操作记录</a>
           <a href="#moderation">审核</a>
           <a href="#stories">故事</a>
           <a href="#sessions">会话</a>
@@ -370,6 +373,45 @@ export default async function AdminPage({
         </div>
       </section>
 
+      <section className="panel" id="actions">
+        <div className="admin-usage-head">
+          <h2>操作记录</h2>
+          <span className="muted">最近 {adminActions.length} 条</span>
+        </div>
+        <p className="muted admin-usage-note">
+          控制台对别人的东西做过什么：下架故事、吊销登录、发放或收回管理员。只追加，控制台不能修改或清空这张表。
+          用 `ADMIN_TOKEN` 调接口时没有账号，所以操作者留空——共享凭证背后没有具体的人，不该编一个。
+        </p>
+        {adminActions.length ? (
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>时间</th>
+                  <th>操作</th>
+                  <th>对象</th>
+                  <th>操作者</th>
+                  <th>说明</th>
+                </tr>
+              </thead>
+              <tbody>
+                {adminActions.map((row) => (
+                  <tr key={row.id}>
+                    <td>{formatDate(row.createdAt)}</td>
+                    <td>{ADMIN_ACTION_LABELS[row.action] ?? row.action}</td>
+                    <td>{row.targetLabel ?? row.targetId}</td>
+                    <td>{row.actorEmail ?? "ADMIN_TOKEN"}</td>
+                    <td>{row.detail ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="muted">还没有操作记录。</p>
+        )}
+      </section>
+
       <section className="panel" id="moderation">
         <div className="admin-usage-head">
           <h2>审核队列</h2>
@@ -454,6 +496,14 @@ const ACTION_LABELS: Record<string, string> = {
   flagged: "待复审",
   allowed: "通过"
 };
+
+/** Operator actions, kept separate from moderation verdicts: different vocabulary. */
+const ADMIN_ACTION_LABELS: Record<string, string> = {
+  story_takedown: "下架故事",
+  revoke_sessions: "吊销登录",
+  role_change: "调整角色"
+};
+
 
 const SURFACE_LABELS: Record<string, string> = {
   reader_input: "读者输入",
