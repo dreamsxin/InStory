@@ -72,8 +72,18 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      # Advisory only for now: the known moderate findings come from a transitive
-      # postcss pinned by next, and downgrading would pull in a worse version.
-      - name: Audit dependencies
-        run: npm audit --audit-level=high
+      # This step gates the build. It used to be advisory-only *and* filtered to
+      # high, which together meant nothing could ever fail it - which is how a
+      # critical in the tree went unnoticed. The level is 'critical' rather than
+      # 'high' only because three high findings are still open and tracked in
+      # docs/PROGRESS.md 已知问题; tighten it to high once they are bumped.
+      - name: Audit dependencies (critical fails the build)
+        run: npm audit --audit-level=critical
+      # Everything else, printed but not blocking, so the open findings stay
+      # visible instead of being filtered out of the log.
+      - name: Full advisory report
+        if: always()
+        run: npm audit
         continue-on-error: true
+
+

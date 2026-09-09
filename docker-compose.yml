@@ -19,8 +19,12 @@ services:
       LLM_MODEL: ${LLM_MODEL:-}
       LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS:-45000}
       # The web container proxies /api, so the API sees the proxy's address unless it
-      # is told to read X-Forwarded-For. Exactly one hop sits in front here.
-      TRUST_PROXY: '1'
+      # is told to read X-Forwarded-For. Trust the compose network's range rather than
+      # a hop count: fastify 5.12 dropped hop-count trust (GHSA-3m5p-2c4r-xxw2 was
+      # about spoofing under exactly that), and an address range is what this really
+      # means. Adjust if your compose network uses a different subnet.
+      TRUST_PROXY: '172.16.0.0/12'
+
     ports:
       - '4000:4000'
     volumes:

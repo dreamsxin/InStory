@@ -50,6 +50,7 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 - **撤掉了角色库那个什么都不做的开关**：入戏角色的 `公开可展示` 从两处表单、卡片标签和请求 schema（`createReaderProfileRequestSchema`，POST 与 PUT 共用）里一并删除。它有 UI、有 schema、有存储，却没有任何消费者：没有地方能浏览别人的入戏角色，作者也不能把别人的角色请进自己的故事，选「公开」和选「私有」对读者来说完全一样。留着一个不生效的选项，是界面在替一个不存在的功能许诺。存储层的 `visibility` 列保留，但 `ReaderProfileStore` 不再收这个入参：新建和保存一律写 `private`，接口收到 `visibility: "public"` 也只会得到私有角色（服务端和 store 两层测试都断言了这条）。老数据里已有的 `public` 行不做批量改写，反正没有任何读取方，下一次保存自然归位。让它成真（公开角色可以被作者选入故事）是一次产品决定，不是顺手补上的缺口——真要做，需要一个能浏览的入口、作者选角时的授权语义，以及别人拿走你的身份之后你还能不能改它。
 - **账面上分得出「作者在调自己的故事」和「有人在读」**：迁移 12 给 `generation_usage` 加 `is_author_trial`，两条推进路径（普通与流式，成功与失败）都按同一个 `isAuthorTrial(ownerId, viewerId)` 判定填进去——和 `继续` 列表的「试玩」标签、作者 insights 的排除用的是同一次比较，一次阅读不会在一个屏幕上算试玩、在另一个屏幕上算读者。`GET /api/admin/usage` 的 `byStory` 多 `trialGenerations` / `trialTokens`，`today` 也带同一对数字，控制台「按故事」表多一列「作者试玩」，说明行写出「其中 N 次是作者试玩自己的故事，照常计入作者本人的配额」。`readers` 的含义同时被修正成「除作者以外的账号数」——它此前把作者自己算成读者，和书架上同名的那个数字对不上。历史行不留空：迁移按故事 payload 里的 `ownerId` 回填，已删除的故事和平台故事（没有作者）留 0，迁移测试把这四种情况都钉住了。配额照扣不变。
 - **没上锁的管理台只服务本机**：没设 `ADMIN_TOKEN` 时 `/api/admin` 此前对任何能连上端口的人开放，而默认 `HOST=0.0.0.0`——一台开着 `npm run dev` 的笔记本，在咖啡馆的 Wi-Fi 上就把用量、账号列表、故事下架全都交出去了，而且没有任何提示。现在两处一起改：非生产默认只监听 `127.0.0.1`（容器需要 `0.0.0.0`，生产保持原样，其他情况显式设 `HOST`），并且免鉴权这条路径只对 loopback 放行，其他来源一律 401 并打一条 `warn`。判定读的是 socket 的对端地址而不是 `request.ip`——后者在 `trustProxy` 下会采信 `X-Forwarded-For`，一个调用方自己写的头绝不能声称自己是本机；代价是经过代理的请求永远不算本机，这个方向上错是安全的。测试把三种情况钉住：本机 200、外部 401、伪造 `X-Forwarded-For: 127.0.0.1` 仍然 401。
+- **依赖的安全状态从「一句暂不处理」变成一份对得上的清单**：文档此前写「`npm audit` 有 2 个 moderate，来自 `next` 依赖的 `postcss`，`--force` 会降级，暂不处理」——三处都不对。对着官方源实跑一次是 9 条：1 critical、4 high、3 moderate、1 low，涉及 `next`、`fastify`、`find-my-way`、`fast-uri`、`sharp`、`vite`、`esbuild`、`vitest`、`postcss`；而 postcss 那条现在是 high（`GHSA-6g55-p6wh-862q`，通过 `sourceMappingURL` 任意读文件），修法是升级不是降级。这一轮升了 `fastify` 5.6.2 → 5.12.3（其中一条正是 `trustProxy` 跳数下的 `X-Forwarded-*` 伪造，和上一条改动同一个代码路径）、`next` 16.0.4 → 16.3.4、`postcss` → `^8.5.28`，并用 root `overrides` 让 `next` 内部那份 postcss 也跟上：9 条降到 6 条，critical 清零。CI 的 audit 从此能真的失败：以前它同时写着 `--audit-level=high` 和 `continue-on-error: true`，两个加起来等于永远不会红，这正是那条 critical 一直没人看见的原因。升 fastify 还带出一个配置上的破坏性变化：`trustProxy` 不再接受「信任 N 层代理」这种跳数写法（正是那条 advisory 的成因），所以 `TRUST_PROXY` 现在只收地址或 CIDR 列表，填数字会被忽略并打一条警告——被忽略等于「谁都不信」，宁可把所有读者挤进同一个限流桶，也不能采信调用方自己写的 `X-Forwarded-For`。`docker-compose.yml` 相应从 `TRUST_PROXY: '1'` 改成 compose 网段。
 - **AI 编排**：`MockNarrativeProvider` 与 `OpenAICompatibleProvider`（超时、分类重试退避、流式 narration 增量提取、输出 Zod 校验）。
 
 ## 代码地图
@@ -104,6 +105,7 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 ## 本机排错
 
 - **e2e 有自己的端口和数据库。** API 4100 / Web 3100 / `data/e2e.sqlite`，dev server 可以一直开着。以前共用 4000/3000，代价有两个：跑之前得先杀掉开发服务器（而且杀掉后台任务并不会杀掉 `tsx watch` / `next dev` 的子进程，只能按端口 `Get-NetTCPConnection` → `Stop-Process`），以及浏览器里开着的 localhost:3000 会在那段时间里悄悄显示测试数据库——测试故事出现又消失，看起来和"数据被清空"一模一样。`reuseExistingServer: false` 仍然保留：这两个端口是 e2e 自己的，上面还在监听的只可能是上一轮没退干净的进程。另外换端口不够——Next 一个构建目录只允许一个 dev server，所以 e2e 还带 `NEXT_DIST_DIR=.next-e2e`（`next.config.ts` 读它）。
+- **`npm audit` 在国内镜像源上跑不了，`npm update` 干脆会崩。** 镜像（`registry.npmmirror.com` / `registry.npm.taobao.org`）没实现 `/-/npm/v1/security/*`，报 `[NOT_IMPLEMENTED]`，看起来像项目坏了；要本地查就临时指定官方源：`npm audit --registry=https://registry.npmjs.org`。另外本机的 npm 在这个 workspace 上跑 `npm update` 一定会崩（`Cannot read properties of null (reading 'edgesOut')`），把 `vitest` 的 range 从 `^4.0.13` 提到 `^4.1.11` 也会触发同一个崩溃——已复现两次，改回去就好。崩掉的 `npm update` 还会写坏 `package-lock.json`，症状是之后每条 npm 命令都崩；解法是 `git checkout -- package-lock.json` 再 `npm install`。要升这些依赖，用 CI 或另一台 npm 正常的机器。
 - **想用手机连本机的 dev server，要显式设 `HOST=0.0.0.0`。** 非生产默认只监听 `127.0.0.1`（见上一节的理由）；症状是同一 Wi-Fi 下的另一台设备连不上，而本机 `localhost` 一切正常。
 - **PowerShell 不支持 `&&`**，命令要分开发；提交信息用 `git commit -F .git/COMMIT_MSG_TMP.txt`，避免引号和 `<>` 破坏解析。
 - **`apps/web/next-env.d.ts` 会来回抖动**（dev 与 build 写的路径不同），提交前 `git checkout -- apps/web/next-env.d.ts`。
@@ -128,7 +130,10 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 
 - 审核队列能下架故事，账号表能吊销登录、停用与恢复账号，操作都写进 `admin_actions`；但 admin 仍不能删除他人的故事（只能设为仅自己可见）。
 - 入戏角色仍有 `visibility` 列，但所有写入都是 `private`，也没有任何界面或接口能改它；老库里遗留的 `public` 行不影响任何行为（没有读取方），下一次保存会写回 `private`。
-- `npm audit` 有 2 个 moderate，来自 `next` 依赖的 `postcss`；`--force` 会降级到破坏性版本，暂不处理。
+- 依赖里仍有 3 个 high 和 2 个 moderate（`find-my-way` 9.6.0 → 9.9.0、root 的 `fast-uri` 3.1.2 → 3.1.7、`esbuild` 0.28.0 → 0.28.2、`vite` 8.0.13 → 8.2.2、`vitest`/`@vitest/mocker` 4.1.6 → 4.1.11）。每个父包的 range 都允许修好的版本，只是 lock 钉低了；但本机 npm 一动这些就崩（见下条），所以这一轮没动。`sharp` 0.35.4 已经是最新版，那条暂时无解。CI 的 audit 门槛因此暂设在 critical，等这几个升上去再收紧到 high。
+- `postcss` 被 root `overrides` 钉在 `^8.5.28`，因为 `next` 自己把它锁在 `8.4.31`。这条 override 是临时的：等 `next` 升上去就该删掉，留着会掩盖 `next` 将来对 postcss 的真实要求。
+
+
 - 故事、世界、演员、锚点仍以 JSON payload 存在各自表里，没有完全关系化。`story_anchors` 是整组替换，够用。
 - `node:sqlite` 在 Node 24 下会打实验性 API 提示。
 - 默认 Mock Provider；真实模型的输出质量只能靠 `verify:llm` 和手动阅读判断，没有自动评测。

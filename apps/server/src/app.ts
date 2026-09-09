@@ -452,7 +452,8 @@ export interface BuildAppOptions {
    * otherwise every request appears to come from the proxy. Must stay off when
    * nothing trusted is in front, since a client can forge X-Forwarded-For.
    */
-  trustProxy?: boolean | number | string | string[];
+  trustProxy?: boolean | string | string[];
+
   logger?: boolean;
 }
 

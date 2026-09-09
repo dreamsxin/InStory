@@ -33,17 +33,17 @@ const defaultDatabasePath = join(process.env.INIT_CWD ?? process.cwd(), "data", 
  * Per-address rate limits are only meaningful if the address is real. Behind a
  * proxy every request arrives from the proxy, so the limiter would either lock all
  * readers out together or (worse) let one reader exhaust everyone's budget. Set
- * TRUST_PROXY to the number of proxy hops, or to a trusted address/CIDR list.
- * Leaving it unset is the safe default: X-Forwarded-For is client-controlled.
+ * TRUST_PROXY to the trusted proxy address or CIDR list.
+ *
+ * A hop count is deliberately not accepted any more. fastify 5.12 dropped it (the
+ * advisory GHSA-3m5p-2c4r-xxw2 was precisely about X-Forwarded-* spoofing under
+ * hop-count trust), and a number here would now be a silently wrong configuration.
+ * A refused value falls back to "trust nothing", which over-limits rather than
+ * trusting a header the client writes.
  */
-function readTrustProxy(value: string | undefined): boolean | number | string[] {
+function readTrustProxy(value: string | undefined): boolean | string[] {
   if (!value) {
     return false;
-  }
-
-  const hops = Number(value);
-  if (Number.isInteger(hops) && hops > 0) {
-    return hops;
   }
 
   const addresses = value
@@ -51,8 +51,16 @@ function readTrustProxy(value: string | undefined): boolean | number | string[] 
     .map((entry) => entry.trim())
     .filter(Boolean);
 
+  if (addresses.every((entry) => /^\d+$/.test(entry))) {
+    console.warn(
+      `TRUST_PROXY=${value} 被忽略：不再支持"信任 N 层代理"，请改成代理的地址或 CIDR（例如 172.16.0.0/12）。`
+    );
+    return false;
+  }
+
   return addresses.length > 0 ? addresses : false;
 }
+
 
 /**
  * Abuse limits are tunable because the right number depends on the deployment: an
