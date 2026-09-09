@@ -903,7 +903,7 @@ export async function buildApp(options: BuildAppOptions) {
         continue;
       }
 
-      const sessionItem = createReaderSessionListItem(overview, options);
+      const sessionItem = createReaderSessionListItem(overview, options, request.authUser.id);
 
       seenStoryIds.add(sessionItem.storyId);
       sessions.push(sessionItem);
@@ -1757,7 +1757,8 @@ function createCastCharacters({
  */
 function createReaderSessionListItem(
   overview: SessionOverview,
-  options: BuildAppOptions
+  options: BuildAppOptions,
+  viewerId: string
 ): ReaderSessionListItem {
   const story = options.storyCatalog.findStory(overview.storyId)?.story ?? null;
 
@@ -1769,6 +1770,9 @@ function createReaderSessionListItem(
     readerRoleName: overview.readerRoleName,
     latestSummary: overview.latestNarration ?? "刚刚进入故事。",
     turnCount: overview.turnCount,
+    // Same comparison the shelf insights make when they exclude an author's own
+    // trials, so the two surfaces cannot disagree about what counts as reading.
+    isAuthorTrial: story?.ownerId !== null && story?.ownerId === viewerId,
     createdAt: overview.createdAt,
     updatedAt: overview.updatedAt
   };

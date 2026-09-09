@@ -132,6 +132,12 @@ test.describe("creation console", () => {
     await reopened.locator("summary").click();
     await expect(reopened.getByRole("button", { name: /回到上次试玩/ })).toBeVisible();
     await expect(reopened.getByRole("button", { name: "从开场重新试玩" })).toBeVisible();
+
+    // And the progress card says it is a trial. It used to look exactly like reading
+    // someone else's story, while the story's own reader count already excluded it.
+    await page.locator(".app-topbar").getByRole("button", { name: "继续" }).click();
+    const card = page.locator(".story-card", { hasText: "守灯人" });
+    await expect(card.locator(".trial-chip")).toHaveText("试玩");
   });
 
   test("re-sets an actor inside one story without touching the profile", async ({ page, request }) => {

@@ -2252,6 +2252,15 @@ describe("authentication", () => {
     // A private story is not on the shelf, so it has no business on the shelf's numbers.
     expect(beforeList).not.toContainEqual(expect.objectContaining({ storyId: "hidden-ferry" }));
 
+    // And the author's own shelf says the same thing about that session: it is a
+    // trial. The two surfaces used to disagree - insights excluded it while the
+    // 继续 list showed it as ordinary reading.
+    const authorShelf = await authApp.inject({ method: "GET", url: "/api/me/sessions", headers: asAuthor });
+    expect(authorShelf.json<{ sessions: ReaderSessionListItem[] }>().sessions).toEqual([
+      expect.objectContaining({ storyId: "lantern-ferry", isAuthorTrial: true })
+    ]);
+
+
     const session = await authApp.inject({
       method: "POST",
       url: "/api/stories/lantern-ferry/sessions",
@@ -2270,6 +2279,12 @@ describe("authentication", () => {
     expect(afterReaders.json<{ insights: StoryReadingInsight[] }>().insights).toContainEqual(
       expect.objectContaining({ storyId: "lantern-ferry", readers: 1, deepestTurns: 2 })
     );
+
+    // The reader is reading someone else's story, so nothing on their shelf is a trial.
+    const readerShelf = await authApp.inject({ method: "GET", url: "/api/me/sessions", headers: asReader });
+    expect(readerShelf.json<{ sessions: ReaderSessionListItem[] }>().sessions).toEqual([
+      expect.objectContaining({ storyId: "lantern-ferry", isAuthorTrial: false })
+    ]);
   });
 });
 

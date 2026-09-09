@@ -360,6 +360,13 @@ export interface ReaderSessionListItem {
   readerRoleName: string;
   latestSummary: string;
   turnCount: number;
+  /**
+   * True when the viewer is the story's author, so this session is a trial of their
+   * own work rather than reading. The list used to mix the two with nothing to tell
+   * them apart, which matters because insights already exclude an author's trials -
+   * the same session counted as reading here and not there.
+   */
+  isAuthorTrial: boolean;
   createdAt: string;
   updatedAt: string;
 }

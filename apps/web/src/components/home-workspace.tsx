@@ -444,6 +444,14 @@ function ContinueStoryCard({ session }: { session: ReaderSessionListItem }) {
           <Chip size="sm" variant="soft">身份：{session.readerRoleName}</Chip>
           <Chip size="sm" variant="soft">{session.turnCount} 回合</Chip>
           <Chip size="sm" variant="soft">{formatUpdatedAt(session.updatedAt)}</Chip>
+          {/* An author's own trial sat here looking exactly like reading, while the
+              story's reader numbers already excluded it. Marked, not hidden: the
+              generations were real and came out of the same daily budget. */}
+          {session.isAuthorTrial ? (
+            <Chip className="trial-chip" size="sm" title="你自己的故事，这段是试玩；试玩同样计入今日配额" variant="soft">
+              试玩
+            </Chip>
+          ) : null}
         </div>
         <p className="continue-summary">{session.latestSummary}</p>
         <div className="continue-actions">

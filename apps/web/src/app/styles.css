@@ -1574,6 +1574,13 @@ a {
   gap: 6px;
 }
 
+/* A label, not another fact about the story: it says whose session this is. */
+.trial-chip {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--accent);
+}
+
+
 .story-management-chips {
   display: flex;
   flex-wrap: wrap;
