@@ -408,7 +408,7 @@ MVP 不做：
 Authorization: Bearer dev-admin-token
 ```
 
-本地开发未设置 `ADMIN_TOKEN` 时，默认允许访问 Admin API；部署环境必须设置。
+未设置 `ADMIN_TOKEN` 时，Admin API 只对来自本机（loopback）的请求免鉴权，其他来源返回 401；判定取 socket 对端地址，不采信 `X-Forwarded-For`。非生产环境默认也只监听 `127.0.0.1`。部署环境必须设置 `ADMIN_TOKEN`（生产缺失或过弱时拒绝启动）。已登录的 `admin` 角色账号同样可以访问。
 
 ### 3.3 服务端目录建议
 

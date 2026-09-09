@@ -117,6 +117,23 @@ function matchesBearerToken(authorization: string, expectedToken: string): boole
   return expected.length === provided.length && timingSafeEqual(expected, provided);
 }
 
+/**
+ * Whether the connection came from this machine. Used to keep the token-less
+ * admin console (local development only) from being reachable over the network.
+ * Takes the socket's own address, never a forwarded header.
+ */
+function isLoopbackAddress(address: string | undefined): boolean {
+  if (!address) {
+    return false;
+  }
+
+  // Node reports IPv4 clients on a dual-stack socket as ::ffff:127.0.0.1.
+  const plain = address.startsWith("::ffff:") ? address.slice("::ffff:".length) : address;
+
+  return plain === "::1" || plain === "localhost" || plain.startsWith("127.");
+}
+
+
 /** Prefers an explicit bearer token, falling back to the browser session cookie. */
 function readSessionToken(authorization?: string, cookieHeader?: string): string | null {
   if (authorization?.startsWith("Bearer ")) {
@@ -520,8 +537,28 @@ export async function buildApp(options: BuildAppOptions) {
     }
 
     if (!options.adminToken) {
-      return;
+      /**
+       * No token means the console has no lock at all. That is a local-development
+       * convenience, and it has to stay local: without this, a laptop dev server on
+       * the default HOST=0.0.0.0 handed the whole console - usage, accounts, story
+       * takedowns - to anyone on the same network.
+       *
+       * The raw socket address is used rather than `request.ip`, which honours
+       * X-Forwarded-For under trustProxy: a header the caller writes must never be
+       * able to claim loopback. A proxied request therefore never counts as local,
+       * which is the safe direction to be wrong in.
+       */
+      if (isLoopbackAddress(request.socket.remoteAddress)) {
+        return;
+      }
+
+      request.log.warn(
+        { remoteAddress: request.socket.remoteAddress },
+        "refused an unauthenticated /api/admin request from a non-local address; set ADMIN_TOKEN or sign in as an admin"
+      );
+      return reply.code(401).send({ error: "Unauthorized" });
     }
+
 
     const authorization = request.headers.authorization;
     if (!authorization || !matchesBearerToken(authorization, options.adminToken)) {

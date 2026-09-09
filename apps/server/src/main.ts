@@ -155,8 +155,9 @@ if (database.appliedMigrations.length > 0) {
 }
 
 if (!adminToken) {
-  app.log.warn("ADMIN_TOKEN 未设置：/api/admin 当前无鉴权，仅供本地开发使用。");
+  app.log.warn("ADMIN_TOKEN 未设置：/api/admin 只接受来自本机（loopback）的请求，其他来源一律 401。");
 }
+
 
 if (seedDemoData) {
   const demo = bootstrapDemoData({ userStore, storyCatalog, readerProfileStore, password: demoPassword });
@@ -180,7 +181,16 @@ if (seedDemoData) {
 }
 
 const port = Number(process.env.PORT ?? 4000);
-const host = process.env.HOST ?? "0.0.0.0";
+
+/**
+ * Local development binds loopback only. The old default was 0.0.0.0 everywhere,
+ * which put a dev server - including a console with no ADMIN_TOKEN behind it - on
+ * every interface of the machine, café Wi-Fi included. A container needs 0.0.0.0
+ * to be reachable at all, so production keeps it; anything else can say so with
+ * HOST explicitly.
+ */
+const host = process.env.HOST ?? (isProduction ? "0.0.0.0" : "127.0.0.1");
+
 
 process.on("SIGINT", () => {
   void app

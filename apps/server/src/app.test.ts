@@ -484,7 +484,36 @@ describe("server API", () => {
     expect(authorized.statusCode).toBe(200);
   });
 
+  it("serves an unlocked admin console only to this machine", async () => {
+    // This app was built without an admin token, the local-development shape.
+    const local = await app.inject({
+      method: "GET",
+      url: "/api/admin/status"
+    });
+    expect(local.statusCode).toBe(200);
+
+    // Same request from anywhere else on the network. Without this, a dev server on
+    // the old default HOST=0.0.0.0 handed out usage, accounts and takedowns.
+    const remote = await app.inject({
+      method: "GET",
+      url: "/api/admin/status",
+      remoteAddress: "203.0.113.5"
+    });
+    expect(remote.statusCode).toBe(401);
+
+    // A forwarded header must not be able to claim loopback: the check reads the
+    // socket, not X-Forwarded-For.
+    const spoofed = await app.inject({
+      method: "GET",
+      url: "/api/admin/status",
+      remoteAddress: "203.0.113.5",
+      headers: { "x-forwarded-for": "127.0.0.1" }
+    });
+    expect(spoofed.statusCode).toBe(401);
+  });
+
   it("updates model config through admin API without exposing API key", async () => {
+
     const updated = await app.inject({
       method: "PUT",
       url: "/api/admin/models",

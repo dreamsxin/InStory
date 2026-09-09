@@ -49,6 +49,7 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 - **能停用账号，不只是踢下线**：迁移 11 给 `users` 加 `disabled_at`（时间戳而非布尔——「从什么时候起」是被停用的人第一个会问的事），`PUT /api/admin/users/:id/access` 收 `{ disabled }`：停用会同时吊销全部会话（不吊销就等于封禁要等 Cookie 自己过期，最长 30 天），恢复只是开门、不返还旧会话。登录路径在密码校验通过之后才看停用状态，返回 403「这个账号已被停用」——放在校验之前等于告诉未认证的人这个邮箱存在，而回一句「密码错误」会让持有正确密码的人反复去改一个没问题的密码。`findUserBySessionToken` 也拒绝已停用账号，作为吊销之外的第二道。控制台账号表多一列「状态」和「停用账号 / 恢复账号」，不能停用自己，两种决定都写进 `admin_actions`。
 - **撤掉了角色库那个什么都不做的开关**：入戏角色的 `公开可展示` 从两处表单、卡片标签和请求 schema（`createReaderProfileRequestSchema`，POST 与 PUT 共用）里一并删除。它有 UI、有 schema、有存储，却没有任何消费者：没有地方能浏览别人的入戏角色，作者也不能把别人的角色请进自己的故事，选「公开」和选「私有」对读者来说完全一样。留着一个不生效的选项，是界面在替一个不存在的功能许诺。存储层的 `visibility` 列保留，但 `ReaderProfileStore` 不再收这个入参：新建和保存一律写 `private`，接口收到 `visibility: "public"` 也只会得到私有角色（服务端和 store 两层测试都断言了这条）。老数据里已有的 `public` 行不做批量改写，反正没有任何读取方，下一次保存自然归位。让它成真（公开角色可以被作者选入故事）是一次产品决定，不是顺手补上的缺口——真要做，需要一个能浏览的入口、作者选角时的授权语义，以及别人拿走你的身份之后你还能不能改它。
 - **账面上分得出「作者在调自己的故事」和「有人在读」**：迁移 12 给 `generation_usage` 加 `is_author_trial`，两条推进路径（普通与流式，成功与失败）都按同一个 `isAuthorTrial(ownerId, viewerId)` 判定填进去——和 `继续` 列表的「试玩」标签、作者 insights 的排除用的是同一次比较，一次阅读不会在一个屏幕上算试玩、在另一个屏幕上算读者。`GET /api/admin/usage` 的 `byStory` 多 `trialGenerations` / `trialTokens`，`today` 也带同一对数字，控制台「按故事」表多一列「作者试玩」，说明行写出「其中 N 次是作者试玩自己的故事，照常计入作者本人的配额」。`readers` 的含义同时被修正成「除作者以外的账号数」——它此前把作者自己算成读者，和书架上同名的那个数字对不上。历史行不留空：迁移按故事 payload 里的 `ownerId` 回填，已删除的故事和平台故事（没有作者）留 0，迁移测试把这四种情况都钉住了。配额照扣不变。
+- **没上锁的管理台只服务本机**：没设 `ADMIN_TOKEN` 时 `/api/admin` 此前对任何能连上端口的人开放，而默认 `HOST=0.0.0.0`——一台开着 `npm run dev` 的笔记本，在咖啡馆的 Wi-Fi 上就把用量、账号列表、故事下架全都交出去了，而且没有任何提示。现在两处一起改：非生产默认只监听 `127.0.0.1`（容器需要 `0.0.0.0`，生产保持原样，其他情况显式设 `HOST`），并且免鉴权这条路径只对 loopback 放行，其他来源一律 401 并打一条 `warn`。判定读的是 socket 的对端地址而不是 `request.ip`——后者在 `trustProxy` 下会采信 `X-Forwarded-For`，一个调用方自己写的头绝不能声称自己是本机；代价是经过代理的请求永远不算本机，这个方向上错是安全的。测试把三种情况钉住：本机 200、外部 401、伪造 `X-Forwarded-For: 127.0.0.1` 仍然 401。
 - **AI 编排**：`MockNarrativeProvider` 与 `OpenAICompatibleProvider`（超时、分类重试退避、流式 narration 增量提取、输出 Zod 校验）。
 
 ## 代码地图
@@ -103,6 +104,7 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 ## 本机排错
 
 - **e2e 有自己的端口和数据库。** API 4100 / Web 3100 / `data/e2e.sqlite`，dev server 可以一直开着。以前共用 4000/3000，代价有两个：跑之前得先杀掉开发服务器（而且杀掉后台任务并不会杀掉 `tsx watch` / `next dev` 的子进程，只能按端口 `Get-NetTCPConnection` → `Stop-Process`），以及浏览器里开着的 localhost:3000 会在那段时间里悄悄显示测试数据库——测试故事出现又消失，看起来和"数据被清空"一模一样。`reuseExistingServer: false` 仍然保留：这两个端口是 e2e 自己的，上面还在监听的只可能是上一轮没退干净的进程。另外换端口不够——Next 一个构建目录只允许一个 dev server，所以 e2e 还带 `NEXT_DIST_DIR=.next-e2e`（`next.config.ts` 读它）。
+- **想用手机连本机的 dev server，要显式设 `HOST=0.0.0.0`。** 非生产默认只监听 `127.0.0.1`（见上一节的理由）；症状是同一 Wi-Fi 下的另一台设备连不上，而本机 `localhost` 一切正常。
 - **PowerShell 不支持 `&&`**，命令要分开发；提交信息用 `git commit -F .git/COMMIT_MSG_TMP.txt`，避免引号和 `<>` 破坏解析。
 - **`apps/web/next-env.d.ts` 会来回抖动**（dev 与 build 写的路径不同），提交前 `git checkout -- apps/web/next-env.d.ts`。
 - **`.env` 只有服务端读，而且是通过启动参数读的。** `apps/server` 的 dev/start 脚本带 `--env-file-if-exists=../../.env`；在此之前根目录 `.env` 根本没人读，README 让人复制的那份文件一直是摆设，所有变量只有导出到 shell 里才生效。已导出的环境变量优先级高于文件，所以 e2e 显式传的配置不会被开发用的 `.env` 覆盖。Web 侧的变量要放 `apps/web/.env`——Next 只读自己目录。
@@ -120,7 +122,8 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 
 ## 已知问题
 
-- 非 production 且未设 `ADMIN_TOKEN` 时 `/api/admin` 对所有人开放（`main.ts` 只在 production 下强制），而默认 `HOST=0.0.0.0`。
+- 没设 `ADMIN_TOKEN` 时 `/api/admin` 仍然是「本机免鉴权」，只是被限制在 loopback；同机器上的另一个用户或任何本地进程仍然进得去，这是本地开发的取舍。要真正上锁就设 `ADMIN_TOKEN` 或用 admin 账号登录。
+
 - 作者试玩消耗作者自己的每日配额，这是有意的（生成真花钱，免掉就成了无限生成的路子）；账面上现在分得出来了（`is_author_trial`），但配额本身仍不区分——如果以后要给作者一份单独的试玩额度，那是产品决定。
 
 - 审核队列能下架故事，账号表能吊销登录、停用与恢复账号，操作都写进 `admin_actions`；但 admin 仍不能删除他人的故事（只能设为仅自己可见）。
