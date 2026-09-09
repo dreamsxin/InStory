@@ -70,6 +70,9 @@ export default defineConfig({
         PORT: String(API_PORT),
         HOST: "127.0.0.1",
         SQLITE_DATABASE_PATH: E2E_DATABASE_PATH,
+        // Explicit even though production defaults it off: the suite counts the cards
+        // on the shelf, so demo stories appearing would break unrelated tests.
+        SEED_DEMO_DATA: "false",
         ADMIN_TOKEN: "e2e-admin-token-0123456789abcdef0123456789abcdef",
         LLM_PROVIDER: "mock",
         // Without a pause the mock finishes within a frame and the in-progress

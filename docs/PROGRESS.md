@@ -19,7 +19,7 @@ npm run dev:web            # Web  http://localhost:3000
 npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 schema
 ```
 
-最近一次全量结果：typecheck 通过；单测 server 163 / story-engine 12 / web 35；e2e 32 条通过。
+最近一次全量结果：typecheck 通过；单测 server 167 / story-engine 12 / web 35；e2e 32 条通过。
 
 ## 已实现
 
@@ -40,6 +40,7 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 - **配额说得出什么时候恢复**：`TurnQuota` 多一个 `resetsAt`（下一个 UTC 零点的绝对时刻，`usageDayResetsAt()`），阅读器把它按浏览器时区渲染——配额用完时直接写在标签里，平时挂在 `title` 上。此前只说「请明天再来」，而配额按 UTC 日切，东八区的「明天」其实是当天早上 8 点。管理台的用量说明也写清了这一点。同时 `DAILY_TURN_QUOTA` 填成非数字不再变成 `NaN`（那会让配额检查永不拒绝，是最不容易被发现的一种失效），落回默认值 20。
 - **书架有了秩序**：`探索故事` 上方多了搜索（标题 / 钩子 / 类型）、类型筛选和排序（最近有人读 / 读者最多 / 按标题），默认按最近有人读——读者数和 `lastReadAt` 早就算出来印在卡片上了，却一直没当排序键用。筛不到结果时给的是「没有符合条件的故事」＋`清空筛选`，不是「这里还没有公开的故事」＋去创作：后者对只是打错关键词的人来说是句假话。都在客户端做（`StoriesView`，数据本来就整份传给了客户端组件）。
 - **卡片说得出这故事有多长**：`GET /api/stories` 现在每条带 `plannedBeats`（作者标了「必经」或「可作为结局」的锚点条数）和 `segmentTargetWords`（那档篇幅真正写进提示词的字数，`SEGMENT_LENGTH_GUIDES` 是唯一来源），卡片上写成「主线 3 个节点 · 每段约 1200 字 · 约 9 分钟起」。是「起」而不是估算总量：一个节点读者可能来回几段，所以这是下限。没有预设节点的故事不编数字，直说长度由读者和 AI 一起决定。给的是计数和字数，锚点标题与说明仍然只在作者视图里——那是大纲，等于结局。
+- **装完就有东西可读，也有人可登**：服务端启动时按需补一份示例数据（`data/demo-bootstrap.ts`）——三个账号 `admin@instory.local` / `author@instory.local` / `reader@instory.local`（密码 `instory-demo-2026`，`DEMO_PASSWORD` 可覆盖），示例作者名下两个公开故事「月下市集」（3 个主线节点）与「虚空邮差」（没有节点，正好覆盖长度未知那一种卡片），示例读者带一个入戏角色。逐项判重：邮箱或故事 ID 已存在就原样保留，绝不改动已注册账号的密码和角色——那会是后门，不是便利。`SEED_DEMO_DATA` 非生产默认开、生产默认关；生产显式打开时必须给 `DEMO_PASSWORD`，否则拒绝启动。e2e 显式关掉它（否则书架上的卡片数会变）。
 - **AI 编排**：`MockNarrativeProvider` 与 `OpenAICompatibleProvider`（超时、分类重试退避、流式 narration 增量提取、输出 Zod 校验）。
 
 ## 代码地图
