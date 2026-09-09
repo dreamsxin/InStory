@@ -702,6 +702,40 @@ export async function buildApp(options: BuildAppOptions) {
     return { user: toAuthUser(user) };
   });
 
+  /**
+   * Signs one account out everywhere. The store could already do it; nothing exposed
+   * it, so the only way to end a stolen or abusive session was to open the database.
+   *
+   * Not the operator's own account: the whole point is to act on someone else, and
+   * ending your own session mid-request would log you out of the page you are using -
+   * the same reason the role button refuses self-demotion. 退出登录 is the way to
+   * leave your own session.
+   */
+  app.post("/api/admin/users/:userId/revoke-sessions", async (request, reply) => {
+    const { userId } = request.params as { userId: string };
+    const user = options.userStore.findById(userId);
+
+    if (!user) {
+      return reply.code(404).send({ error: "User not found" });
+    }
+
+    if (request.authUser?.id === userId) {
+      return reply.code(400).send({ error: "这是你自己的账号，请用「退出登录」结束自己的会话。" });
+    }
+
+    const revokedSessions = options.userStore.revokeAllSessions(userId);
+
+    // Logged because it is done to someone: an account that suddenly has to sign in
+    // again deserves an explanation that exists somewhere outside this response.
+    app.log.warn(
+      { adminId: request.authUser?.id ?? "admin-token", userId, email: user.email, revokedSessions },
+      "revoked all sessions for an account"
+    );
+
+    return { userId, email: user.email, revokedSessions };
+  });
+
+
   app.put("/api/admin/models", async (request, reply) => {
     const parsed = updateModelConfigSchema.safeParse(request.body);
     if (!parsed.success) {

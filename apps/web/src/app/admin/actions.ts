@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { parseReadingTheme } from "@/lib/reading-themes";
 import {
   resolveAdminModerationEvent,
+  revokeAdminUserSessions,
   takedownModeratedStory,
   updateAdminModelConfig,
   updateAdminStorySummary,
@@ -23,6 +24,21 @@ export async function updateUserRoleAction(formData: FormData) {
   }
 
   await updateAdminUserRole(userId, formData.get("role") === "admin" ? "admin" : "reader");
+
+  revalidatePath("/admin");
+}
+
+/**
+ * Ends every login an account has. Kept out of the role form: one changes what
+ * someone may do, this one throws them out of where they already are.
+ */
+export async function revokeUserSessionsAction(formData: FormData) {
+  const userId = String(formData.get("userId") ?? "");
+  if (!userId) {
+    return;
+  }
+
+  await revokeAdminUserSessions(userId);
 
   revalidatePath("/admin");
 }

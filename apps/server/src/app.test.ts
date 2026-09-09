@@ -1823,6 +1823,114 @@ describe("authentication", () => {
   });
 
 
+  it("ends every login one account has, and refuses to do it to the operator", async () => {
+    await buildAuthApp(false, "shared-secret");
+    const firstToken = await register("revoked-reader@example.com", "被吊销的读者");
+    const bystanderToken = await register("revoked-bystander@example.com", "旁观读者");
+    const listed = await authApp.inject({
+      method: "GET",
+      url: "/api/admin/users",
+      headers: { authorization: "Bearer shared-secret" }
+    });
+    const target = listed
+      .json<{ users: Array<{ id: string; email: string }> }>()
+      .users.find((account) => account.email === "revoked-reader@example.com");
+
+    // Two live sessions for one account: signing in again does not replace the first
+    // token, which is exactly why signing out on one device is not enough.
+    const secondSignIn = await authApp.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "revoked-reader@example.com", password: "pw-12345678" }
+    });
+    expect(secondSignIn.statusCode).toBe(200);
+    const otherDevice = secondSignIn.json<{ token: string }>().token;
+
+    const revoked = await authApp.inject({
+      method: "POST",
+      url: `/api/admin/users/${String(target?.id)}/revoke-sessions`,
+      headers: { authorization: "Bearer shared-secret" }
+    });
+
+    expect(revoked.statusCode).toBe(200);
+    expect(revoked.json<{ revokedSessions: number; email: string }>()).toMatchObject({
+      email: "revoked-reader@example.com",
+      revokedSessions: 2
+    });
+
+    // Both tokens are dead now, and the account itself is untouched: it can sign in
+    // again, because this ends sessions rather than banning anyone.
+    for (const token of [firstToken, otherDevice]) {
+      const after = await authApp.inject({
+        method: "GET",
+        url: "/api/auth/me",
+        headers: { authorization: `Bearer ${token}` }
+      });
+      expect(after.statusCode).toBe(401);
+    }
+    expect(
+      (
+        await authApp.inject({
+          method: "POST",
+          url: "/api/auth/login",
+          payload: { email: "revoked-reader@example.com", password: "pw-12345678" }
+        })
+      ).statusCode
+    ).toBe(200);
+
+    // Another account's sessions are not collateral damage.
+    expect(
+      (
+        await authApp.inject({
+          method: "GET",
+          url: "/api/auth/me",
+          headers: { authorization: `Bearer ${bystanderToken}` }
+        })
+      ).statusCode
+    ).toBe(200);
+
+    // An unknown id is a 404, and the operator cannot do this to themselves: that
+    // would end the session they are holding, mid-request. 退出登录 is the way out of
+    // one's own session.
+    expect(
+      (
+        await authApp.inject({
+          method: "POST",
+          url: "/api/admin/users/missing/revoke-sessions",
+          headers: { authorization: "Bearer shared-secret" }
+        })
+      ).statusCode
+    ).toBe(404);
+
+    const operatorToken = await register("revoking-admin@example.com", "管理员");
+    const operatorId = (
+      await authApp.inject({
+        method: "GET",
+        url: "/api/auth/me",
+        headers: { authorization: `Bearer ${operatorToken}` }
+      })
+    ).json<{ user: { id: string } }>().user.id;
+    expect(
+      (
+        await authApp.inject({
+          method: "PUT",
+          url: `/api/admin/users/${operatorId}/role`,
+          headers: { authorization: "Bearer shared-secret" },
+          payload: { role: "admin" }
+        })
+      ).statusCode
+    ).toBe(200);
+
+    const self = await authApp.inject({
+      method: "POST",
+      url: `/api/admin/users/${operatorId}/revoke-sessions`,
+      headers: { authorization: `Bearer ${operatorToken}` }
+    });
+    expect(self.statusCode).toBe(400);
+    expect(self.json<{ error: string }>().error).toContain("退出登录");
+  });
+
+
   it("keeps configured operator addresses on the admin role", async () => {
     authTempDir = mkdtempSync(join(tmpdir(), "instory-auth-"));
     authDatabase = new AppDatabase(join(authTempDir, "auth.sqlite"));

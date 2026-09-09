@@ -1097,6 +1097,18 @@ export async function takedownModeratedStory(
   return data.event;
 }
 
+/**
+ * Ends every session an account has, so a stolen or abusive login stops working now
+ * rather than in thirty days. Refused on the operator's own account.
+ */
+export async function revokeAdminUserSessions(userId: string): Promise<number> {
+  const data = await adminRequest<{ revokedSessions: number }>(
+    `/api/admin/users/${userId}/revoke-sessions`,
+    { method: "POST" }
+  );
+  return data.revokedSessions;
+}
+
 async function adminGet<T>(path: string): Promise<T> {
   return adminRequest<T>(path);
 }

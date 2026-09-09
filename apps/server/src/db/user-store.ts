@@ -175,8 +175,13 @@ export class UserStore {
     this.database.db.prepare("DELETE FROM auth_sessions WHERE token_hash = ?").run(hashToken(token));
   }
 
-  revokeAllSessions(userId: string): void {
-    this.database.db.prepare("DELETE FROM auth_sessions WHERE user_id = ?").run(userId);
+  /**
+   * Signs the account out everywhere. Returns how many sessions were ended, so an
+   * operator gets told what happened instead of a silent success.
+   */
+  revokeAllSessions(userId: string): number {
+    const result = this.database.db.prepare("DELETE FROM auth_sessions WHERE user_id = ?").run(userId);
+    return Number(result.changes);
   }
 
   deleteExpiredSessions(now = new Date()): number {

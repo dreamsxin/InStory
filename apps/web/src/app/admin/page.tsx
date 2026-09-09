@@ -14,6 +14,7 @@ import { ModelConfigForm, StorySummaryForm } from "@/components/admin-console-fo
 import { AccountBar } from "@/components/account-bar";
 import {
   resolveModerationEventAction,
+  revokeUserSessionsAction,
   takedownModeratedStoryAction,
   updateUserRoleAction
 } from "@/app/admin/actions";
@@ -308,8 +309,8 @@ export default async function AdminPage({
           <span className="muted">最近 {users.length} 个账号</span>
         </div>
         <p className="muted admin-usage-note">
-          只读加一个动作：把角色发给别人，或收回来。这里不显示密码相关的任何数据，也不显示谁读了什么。
-          `ADMIN_EMAILS` 里的地址注册即为管理员，收回后下次登录会再次被提权。
+          两个动作：把角色发给别人或收回来，以及吊销某个账号的全部登录（对方需要重新登录，角色和内容都不变）。
+          这里不显示密码相关的任何数据，也不显示谁读了什么。`ADMIN_EMAILS` 里的地址注册即为管理员，收回后下次登录会再次被提权。
         </p>
         <div className="admin-table-wrap">
           <table className="admin-table">
@@ -335,17 +336,31 @@ export default async function AdminPage({
                     {account.id === user.id ? (
                       <span className="muted">当前登录</span>
                     ) : (
-                      <form action={updateUserRoleAction}>
-                        <input name="userId" type="hidden" value={account.id} />
-                        <input
-                          name="role"
-                          type="hidden"
-                          value={account.role === "admin" ? "reader" : "admin"}
-                        />
-                        <button className="admin-inline-button" type="submit">
-                          {account.role === "admin" ? "收回管理员" : "设为管理员"}
-                        </button>
-                      </form>
+                      <div className="admin-row-actions">
+                        <form action={updateUserRoleAction}>
+                          <input name="userId" type="hidden" value={account.id} />
+                          <input
+                            name="role"
+                            type="hidden"
+                            value={account.role === "admin" ? "reader" : "admin"}
+                          />
+                          <button className="admin-inline-button" type="submit">
+                            {account.role === "admin" ? "收回管理员" : "设为管理员"}
+                          </button>
+                        </form>
+                        {/* The store could always do this; nothing exposed it, so ending
+                            a stolen or abusive login meant opening the database. */}
+                        <form action={revokeUserSessionsAction}>
+                          <input name="userId" type="hidden" value={account.id} />
+                          <button
+                            className="admin-inline-button"
+                            title="结束这个账号的全部登录，对方需要重新登录；不改角色，也不删除内容"
+                            type="submit"
+                          >
+                            吊销登录
+                          </button>
+                        </form>
+                      </div>
                     )}
                   </td>
                 </tr>

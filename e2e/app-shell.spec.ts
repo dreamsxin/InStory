@@ -210,6 +210,12 @@ test.describe("app-like shell", () => {
     await expect(users.locator("tr", { hasText: "e2e-shell-admin@example.com" })).toContainText(
       "当前登录"
     );
+    // Ending someone else's login is now a button here; it used to require opening the
+    // database. Never offered on the operator's own row - that row says 当前登录.
+    await expect(users.getByRole("button", { name: "吊销登录" }).first()).toBeVisible();
+    await expect(
+      users.locator("tr", { hasText: "e2e-shell-admin@example.com" }).getByRole("button", { name: "吊销登录" })
+    ).toHaveCount(0);
 
     // And it says who is using it, with a way out: signing out used to mean going
     // back to the client first, because the console had no account bar at all.
