@@ -50,7 +50,6 @@ export async function createReaderProfileAction(_state: FormResult, formData: Fo
   const personality = String(formData.get("personality") ?? "").trim();
   const avatarUrl = String(formData.get("avatarUrl") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
-  const visibility = formData.get("visibility") === "public" ? "public" : "private";
 
   try {
     await createReaderProfile({
@@ -58,8 +57,7 @@ export async function createReaderProfileAction(_state: FormResult, formData: Fo
       gender: gender || null,
       personality,
       avatarUrl: avatarUrl || null,
-      description,
-      visibility
+      description
     });
   } catch (error) {
     return { ...failed(error, "创建角色失败，请稍后重试。"), values: submittedValues(formData) };
@@ -76,7 +74,6 @@ export async function updateReaderProfileAction(_state: FormResult, formData: Fo
   const personality = String(formData.get("personality") ?? "").trim();
   const avatarUrl = String(formData.get("avatarUrl") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
-  const visibility = formData.get("visibility") === "public" ? "public" : "private";
 
   try {
     await updateReaderProfile(profileId, {
@@ -84,8 +81,7 @@ export async function updateReaderProfileAction(_state: FormResult, formData: Fo
       gender: gender || null,
       personality,
       avatarUrl: avatarUrl || null,
-      description,
-      visibility
+      description
     });
   } catch (error) {
     return { ...failed(error, "保存角色失败，请稍后重试。"), values: submittedValues(formData) };

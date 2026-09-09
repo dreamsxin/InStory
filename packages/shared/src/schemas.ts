@@ -52,19 +52,25 @@ export const readerProfileSchema = z.object({
   updatedAt: z.string().min(1)
 });
 
+/**
+ * Deliberately without `visibility`. A reader profile is stored with one and nothing
+ * ever read it: there is no way to browse other people's personas and no way to cast
+ * one into a story. Accepting the field kept the promise alive in the API, so it is
+ * gone from the request; new profiles are private, which is what they always were in
+ * practice. Making it mean something (public personas an author may cast) is a product
+ * decision, not a gap to be quietly filled.
+ */
 export const createReaderProfileRequestSchema = readerProfileSchema
   .pick({
     name: true,
     gender: true,
     personality: true,
     avatarUrl: true,
-    description: true,
-    visibility: true
+    description: true
   })
   .extend({
     gender: z.string().max(40).nullish(),
-    avatarUrl: z.string().max(2000).nullish(),
-    visibility: visibilitySchema.default("private")
+    avatarUrl: z.string().max(2000).nullish()
   });
 
 export const createTurnRequestSchema = z.object({

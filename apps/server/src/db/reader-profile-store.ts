@@ -3,13 +3,13 @@ import type { AppDatabase } from "./app-database.js";
 
 export interface CreateReaderProfileInput {
   ownerId: string;
-  visibility?: ReaderProfile["visibility"];
   name: string;
   gender?: string | null;
   personality: string;
   avatarUrl?: string | null;
   description: string;
 }
+
 
 export type UpdateReaderProfileInput = Omit<CreateReaderProfileInput, "ownerId">;
 
@@ -25,7 +25,11 @@ export class ReaderProfileStore {
     const profile: ReaderProfile = {
       id: `profile_${crypto.randomUUID()}`,
       ownerId: input.ownerId,
-      visibility: input.visibility ?? "private",
+      // Always private, and no caller may ask otherwise: nothing can browse or cast
+      // someone else's persona, so a "public" profile would be a promise with no
+      // behaviour behind it. The column stays for the day that becomes a real feature.
+      visibility: "private",
+
       name: input.name,
       gender: input.gender?.trim() || null,
       personality: input.personality,
@@ -69,7 +73,8 @@ export class ReaderProfileStore {
     const now = new Date().toISOString();
     const updated: ReaderProfile = {
       ...current,
-      visibility: input.visibility ?? "private",
+      visibility: "private",
+
       name: input.name,
       gender: input.gender?.trim() || null,
       personality: input.personality,

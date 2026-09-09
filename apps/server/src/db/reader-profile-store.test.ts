@@ -14,7 +14,6 @@ describe("ReaderProfileStore", () => {
     try {
       const profile = store.create({
         ownerId: "local-reader",
-        visibility: "private",
         name: "林向晚",
         gender: "女",
         personality: "冷静、好奇、习惯先观察再行动。",
@@ -34,14 +33,14 @@ describe("ReaderProfileStore", () => {
       const updated = store.update(profile.id, "local-reader", {
         name: "林向晚修订",
         gender: null,
-        visibility: "public",
         personality: "冷静、果断。",
         avatarUrl: null,
         description: "重新设定后的入戏角色。"
       });
       expect(updated).toMatchObject({
         id: profile.id,
-        visibility: "public",
+        // Personas are private and stay private: nothing browses or casts them.
+        visibility: "private",
         name: "林向晚修订",
         gender: null,
         avatarUrl: null
@@ -49,11 +48,11 @@ describe("ReaderProfileStore", () => {
       expect(store.update(profile.id, "other-reader", {
         name: "越权",
         gender: null,
-        visibility: "public",
         personality: "越权",
         avatarUrl: null,
         description: "越权"
       })).toBeNull();
+
       expect(store.delete(profile.id, "other-reader")).toBe(false);
       expect(store.delete(profile.id, "local-reader")).toBe(true);
       expect(store.findById(profile.id)).toBeNull();

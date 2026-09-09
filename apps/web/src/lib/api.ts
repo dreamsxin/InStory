@@ -268,7 +268,6 @@ export async function listReaderSessions(limit = 20): Promise<ReaderSessionListI
 export async function createReaderProfile(input: {
   name: string;
   gender?: string | null;
-  visibility?: ReaderProfile["visibility"];
   personality: string;
   avatarUrl?: string | null;
   description: string;
@@ -295,7 +294,6 @@ export async function updateReaderProfile(
   input: {
     name: string;
     gender?: string | null;
-    visibility?: ReaderProfile["visibility"];
     personality: string;
     avatarUrl?: string | null;
     description: string;

@@ -205,9 +205,9 @@ export function bootstrapDemoData(options: {
       name: "江照",
       gender: "女",
       personality: "好奇，胆子比自己以为的大",
-      description: "一个刚学会在别人的故事里说话的读者。",
-      visibility: "private"
+      description: "一个刚学会在别人的故事里说话的读者。"
     });
+
   }
 
   return result;

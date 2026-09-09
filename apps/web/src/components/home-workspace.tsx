@@ -551,8 +551,8 @@ function CreatorProfilesPanel({ profiles }: { profiles: ReaderProfile[] }) {
                       <p>{profile.description}</p>
                       <div className="tag-row compact">
                         <Chip color="accent" size="sm" variant="soft">{profile.gender ?? "未设定性别"}</Chip>
-                        <Chip size="sm" variant="soft">{visibilityLabel(profile.visibility)}</Chip>
                       </div>
+
                     </div>
                   </summary>
                   <ProfileEditForm profile={profile} />
@@ -678,20 +678,8 @@ function ProfileEditForm({ profile }: { profile: ReaderProfile }) {
           <Label>头像 URL</Label>
           <Input />
         </TextField>
-        <Select defaultSelectedKey={kept(result, "visibility", profile.visibility)} name="visibility">
-          <Label>可见性</Label>
-          <Select.Trigger>
-            <Select.Value />
-            <Select.Indicator />
-          </Select.Trigger>
-          <Select.Popover>
-            <ListBox>
-              <ListBox.Item id="private" textValue="仅自己可见">仅自己可见<ListBox.ItemIndicator /></ListBox.Item>
-              <ListBox.Item id="public" textValue="公开可展示">公开可展示<ListBox.ItemIndicator /></ListBox.Item>
-            </ListBox>
-          </Select.Popover>
-        </Select>
         <TextField defaultValue={kept(result, "description", profile.description)} isRequired name="description">
+
           <Label>身份背景</Label>
           <TextArea maxLength={2000} rows={3} />
         </TextField>
@@ -1363,20 +1351,8 @@ function CreateProfilePanel() {
             <Label>头像 URL</Label>
             <Input placeholder="后续可接 AI 生成形象" />
           </TextField>
-          <Select defaultSelectedKey="private" name="visibility">
-            <Label>可见性</Label>
-            <Select.Trigger>
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                <ListBox.Item id="private" textValue="仅自己可见">仅自己可见<ListBox.ItemIndicator /></ListBox.Item>
-                <ListBox.Item id="public" textValue="公开可展示">公开可展示<ListBox.ItemIndicator /></ListBox.Item>
-              </ListBox>
-            </Select.Popover>
-          </Select>
           <TextField isRequired name="description">
+
             <Label>身份背景</Label>
             <TextArea maxLength={2000} placeholder="一句话交代来历、动机和最在意的事，例如：退役军医，为寻回失踪的妹妹而来。" rows={3} />
           </TextField>

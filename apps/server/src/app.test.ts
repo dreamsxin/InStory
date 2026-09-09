@@ -303,11 +303,11 @@ describe("server API", () => {
       payload: {
         name: "林向晚",
         gender: "女",
-        visibility: "private",
         personality: "冷静、敏感、习惯先观察再行动。",
         avatarUrl: "https://example.com/avatar.png",
         description: "现代法医，被卷入雨夜旧宅。"
       }
+
     });
 
     expect(createdProfile.statusCode).toBe(201);
@@ -346,6 +346,8 @@ describe("server API", () => {
       payload: {
         name: "林向晚修订",
         gender: null,
+        // Nothing can browse or cast someone else's persona, so the API no longer
+        // takes a visibility: a client asking for "public" still gets a private one.
         visibility: "public",
         personality: "冷静、果断。",
         avatarUrl: null,
@@ -356,12 +358,13 @@ describe("server API", () => {
     expect(updatedProfile.json()).toMatchObject({
       profile: {
         id: profile.id,
-        visibility: "public",
+        visibility: "private",
         name: "林向晚修订",
         gender: null,
         avatarUrl: null
       }
     });
+
 
     const deletedProfile = await app.inject({
       method: "DELETE",
