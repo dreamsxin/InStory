@@ -2476,6 +2476,30 @@ describe("authentication", () => {
       headers: asReader
     });
     expect(JSON.stringify(readerView.json())).not.toContain(reach[0]?.anchorId ?? "__none__");
+
+    // Rewinding branches into a new session that copies the passages read so far. The
+    // beat markers have to come with them: the reader is expected to drop the session
+    // they branched away from, and without the copy the author's report would lose a
+    // beat that the surviving transcript still shows.
+    const nodeId = advanced.json<CreateTurnResponse>().timelineNode?.id ?? "";
+    expect(nodeId).not.toBe("");
+    const branched = await authApp.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/rewind`,
+      headers: asReader,
+      payload: { timelineNodeId: nodeId }
+    });
+    expect(branched.statusCode).toBe(200);
+
+    const dropped = await authApp.inject({
+      method: "DELETE",
+      url: `/api/sessions/${sessionId}`,
+      headers: asReader
+    });
+    expect(dropped.statusCode).toBe(204);
+
+    const afterBranch = await authApp.inject({ method: "GET", url: "/api/me/story-insights", headers: asAuthor });
+    expect(afterBranch.json<{ insights: StoryReadingInsight[] }>().insights[0]?.anchorReach).toEqual(reach);
   });
 
   it("keeps a private story private, and keeps a reader who is already inside", async () => {

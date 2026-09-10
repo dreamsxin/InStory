@@ -1903,6 +1903,8 @@ export async function buildApp(options: BuildAppOptions) {
     };
 
     options.sessionStore.create(branch, request.authUser.id, options.sessionStore.findStoryTitle(sessionId) ?? "");
+    // The branch keeps the passages, so it keeps which beat each one advanced.
+    options.sessionStore.copyTurnAnchors(sessionId, branch.id);
 
     return {
       session: branch

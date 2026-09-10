@@ -135,6 +135,24 @@ export class SessionStore {
   }
 
   /**
+   * Carries the beat markers of copied turns onto a branch, matching on turn id.
+   * A rewind copies the passages themselves, so leaving their `anchor_id` null would
+   * let the author's reach report lose a beat the surviving transcript still shows:
+   * the record would live only in the session the reader branched away from, and
+   * disappear the moment they delete it. Never overwrites a marker already there.
+   */
+  copyTurnAnchors(fromSessionId: string, toSessionId: string): void {
+    this.database.db
+      .prepare(
+        `UPDATE session_turns
+            SET anchor_id = (SELECT source.anchor_id FROM session_turns AS source
+                              WHERE source.session_id = ? AND source.id = session_turns.id)
+          WHERE session_id = ? AND anchor_id IS NULL`
+      )
+      .run(fromSessionId, toSessionId);
+  }
+
+  /**
    * Reads a session. Pass ownerId to require the session to belong to that user;
    * omitting it is only appropriate for admin-facing reads. Pass a window to load
    * only the newest turns and timeline nodes; without one the whole history is read.
