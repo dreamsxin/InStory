@@ -178,6 +178,47 @@ describe("story state engine", () => {
   describe("deriveIntervention", () => {
     const read = "read_continue" as const;
 
+    it("reads an actor's question to the reader, and names who asked", () => {
+      const cue = deriveIntervention({
+        result: createNarrativeResult({
+          dialogues: [{ speaker: "陆清河", text: "你到底是谁派来的？" }]
+        }),
+        previous: createState({ emotion: { fear: 1 } }),
+        // Fear climbed too: the question is the more concrete thing to answer, so it
+        // wins over the crisis reading.
+        next: createState({ emotion: { fear: 8 } }),
+        inputType: read
+      });
+
+      expect(cue?.kind).toBe("npc_question");
+      expect(cue?.prompt).toContain("陆清河");
+      expect(cue?.prompt).toContain("你到底是谁派来的？");
+    });
+
+    it("does not read a question the reader was not asked", () => {
+      const betweenActors = deriveIntervention({
+        result: createNarrativeResult({
+          cluesAdded: [],
+          dialogues: [{ speaker: "陆清河", text: "谁把灯留在廊下了？" }]
+        }),
+        previous: createState(),
+        next: createState(),
+        inputType: read
+      });
+      const notAQuestion = deriveIntervention({
+        result: createNarrativeResult({
+          cluesAdded: [],
+          dialogues: [{ speaker: "陆清河", text: "你已经让局面变了。" }]
+        }),
+        previous: createState(),
+        next: createState(),
+        inputType: read
+      });
+
+      expect(betweenActors).toBeNull();
+      expect(notAQuestion).toBeNull();
+    });
+
     it("reads a crisis out of a sharp jump in fear", () => {
       const cue = deriveIntervention({
         result: createNarrativeResult(),

@@ -72,9 +72,13 @@ export function shouldCreateTimelineNode(state: WorldState, result: NarrativeRes
  *
  * Only for passages the reader chose to read on from. A passage that answered
  * their own action was already their turn to act, so naming it as an opening to
- * act is noise. Two of the six kinds are never derived here - a fork and an
- * actor's question live in the prose, not in the state - so those stay the
- * model's to report.
+ * act is noise.
+ *
+ * A fork is still never derived: the model contract makes `choices` mandatory on
+ * every passage (2 to 4 of them), so their presence says nothing about whether the
+ * story actually branches here - deriving 路线分歧 from them would stamp the label on
+ * every uneventful passage and drain it of meaning. That one stays the model's to
+ * report.
  */
 export function deriveIntervention(params: {
   result: NarrativeResult;
@@ -87,6 +91,18 @@ export function deriveIntervention(params: {
   }
 
   const delta = params.result.stateDelta;
+
+  // Read before the state readings: when an actor has just asked the reader
+  // something, that is the most concrete thing to answer in the passage - more so
+  // than fear having climbed. A question mark alone is not enough (actors ask each
+  // other things too), so the line also has to address the reader.
+  const question = params.result.dialogues.find((line) => asksTheReader(line.text));
+  if (question) {
+    return {
+      kind: "npc_question",
+      prompt: `${question.speaker}问了你一句：「${trim(question.text, 24)}」你可以继续读下去，也可以现在回答。`
+    };
+  }
 
   if (rose(params.previous.emotion, params.next.emotion, ["fear", "alertness"], 3)) {
     return { kind: "crisis", prompt: "局势在这一段收紧了。你可以继续读下去，也可以现在就动。" };
@@ -106,6 +122,15 @@ export function deriveIntervention(params: {
   }
 
   return null;
+}
+
+/**
+ * Whether a spoken line is a question put to the reader. Both halves matter: the
+ * question mark alone would catch actors questioning each other, and the second
+ * person alone would catch every line that merely mentions the reader.
+ */
+function asksTheReader(text: string): boolean {
+  return /[?？]/.test(text) && text.includes("你");
 }
 
 /** Whether any of the named readings climbed by at least `by`. */
