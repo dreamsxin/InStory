@@ -62,6 +62,8 @@ import {
   type ModerationSurface
 } from "./moderation/checker.js";
 import type { ModelRuntime } from "./model-runtime.js";
+import { isLoopbackAddress } from "./security/addresses.js";
+
 import {
   DEFAULT_ABUSE_LIMITS,
   SlidingWindowRateLimiter,
@@ -117,21 +119,6 @@ function matchesBearerToken(authorization: string, expectedToken: string): boole
   return expected.length === provided.length && timingSafeEqual(expected, provided);
 }
 
-/**
- * Whether the connection came from this machine. Used to keep the token-less
- * admin console (local development only) from being reachable over the network.
- * Takes the socket's own address, never a forwarded header.
- */
-function isLoopbackAddress(address: string | undefined): boolean {
-  if (!address) {
-    return false;
-  }
-
-  // Node reports IPv4 clients on a dual-stack socket as ::ffff:127.0.0.1.
-  const plain = address.startsWith("::ffff:") ? address.slice("::ffff:".length) : address;
-
-  return plain === "::1" || plain === "localhost" || plain.startsWith("127.");
-}
 
 
 /** Prefers an explicit bearer token, falling back to the browser session cookie. */

@@ -25,13 +25,5 @@
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "vitest": "^4.0.13"
-
-  },
-  "//overrides": "next pins postcss at 8.4.31, below the fix for GHSA-6g55-p6wh-862q (High: arbitrary file read via sourceMappingURL, patched in 8.5.12). 8.5.x is semver-compatible with that pin, so this dedupes the tree onto one current copy. Remove once next ships a patched pin.",
-  "overrides": {
-    "postcss": "^8.5.28"
   }
 }
-
-
-
