@@ -86,4 +86,37 @@ jobs:
         run: npm audit
         continue-on-error: true
 
+  # Every open finding has a fixed version inside its parent's range, so a plain
+  # re-resolve should clear them - but npm's resolver crashes on this workspace on the
+  # maintainer's machine ('Cannot read properties of null (reading edgesOut)'), for any
+  # range change, with or without --package-lock-only, on either registry. So the
+  # refresh happens here instead: this job resolves a new lockfile, audits it, and
+  # uploads it. Downloading that artifact and committing it is then the whole upgrade.
+  # Advisory only - it must never block a PR on a version published this morning.
+  lockfile-refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Re-resolve the lockfile within the declared ranges
+        run: npm install --package-lock-only
+
+      - name: Show what moved
+        run: git --no-pager diff --stat package-lock.json
+
+      - name: Audit the refreshed lockfile
+        run: npm audit
+        continue-on-error: true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: refreshed-package-lock
+          path: package-lock.json
+          retention-days: 7
+
+
 

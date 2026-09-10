@@ -105,7 +105,7 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 ## 本机排错
 
 - **e2e 有自己的端口和数据库。** API 4100 / Web 3100 / `data/e2e.sqlite`，dev server 可以一直开着。以前共用 4000/3000，代价有两个：跑之前得先杀掉开发服务器（而且杀掉后台任务并不会杀掉 `tsx watch` / `next dev` 的子进程，只能按端口 `Get-NetTCPConnection` → `Stop-Process`），以及浏览器里开着的 localhost:3000 会在那段时间里悄悄显示测试数据库——测试故事出现又消失，看起来和"数据被清空"一模一样。`reuseExistingServer: false` 仍然保留：这两个端口是 e2e 自己的，上面还在监听的只可能是上一轮没退干净的进程。另外换端口不够——Next 一个构建目录只允许一个 dev server，所以 e2e 还带 `NEXT_DIST_DIR=.next-e2e`（`next.config.ts` 读它）。
-- **`npm audit` 在国内镜像源上跑不了，`npm update` 干脆会崩。** 镜像（`registry.npmmirror.com` / `registry.npm.taobao.org`）没实现 `/-/npm/v1/security/*`，报 `[NOT_IMPLEMENTED]`，看起来像项目坏了；要本地查就临时指定官方源：`npm audit --registry=https://registry.npmjs.org`。另外本机的 npm 在这个 workspace 上跑 `npm update` 一定会崩（`Cannot read properties of null (reading 'edgesOut')`），把 `vitest` 的 range 从 `^4.0.13` 提到 `^4.1.11` 也会触发同一个崩溃——已复现两次，改回去就好。崩掉的 `npm update` 还会写坏 `package-lock.json`，症状是之后每条 npm 命令都崩；解法是 `git checkout -- package-lock.json` 再 `npm install`。要升这些依赖，用 CI 或另一台 npm 正常的机器。
+- **`npm audit` 在国内镜像源上跑不了，`npm update` 干脆会崩。** 镜像（`registry.npmmirror.com` / `registry.npm.taobao.org`）没实现 `/-/npm/v1/security/*`，报 `[NOT_IMPLEMENTED]`，看起来像项目坏了；要本地查就临时指定官方源：`npm audit --registry=https://registry.npmjs.org`。另外本机的 npm 在这个 workspace 上解析不了新的依赖树：任何 range 改动（例如把 `vitest` 从 `^4.0.13` 提到 `^4.1.11`）都会崩在 `Cannot read properties of null (reading 'edgesOut')`，`npm update`、`npm install`、`npm install --package-lock-only` 都一样，换官方源也一样——已逐一试过，所以别再在这台机器上试。崩掉的 `npm update` 还会写坏 `package-lock.json`，症状是之后每条 npm 命令都崩；解法是 `git checkout -- package-lock.json` 再 `npm install`。`npm ci` 不受影响（它只按 lock 安装，不做解析）。要升依赖走 CI 的 `lockfile-refresh` job：它在 Ubuntu 上重新解析并把新 lock 当 artifact 传出来，下载提交即可。
 - **想用手机连本机的 dev server，要显式设 `HOST=0.0.0.0`。** 非生产默认只监听 `127.0.0.1`（见上一节的理由）；症状是同一 Wi-Fi 下的另一台设备连不上，而本机 `localhost` 一切正常。
 - **PowerShell 不支持 `&&`**，命令要分开发；提交信息用 `git commit -F .git/COMMIT_MSG_TMP.txt`，避免引号和 `<>` 破坏解析。
 - **`apps/web/next-env.d.ts` 会来回抖动**（dev 与 build 写的路径不同），提交前 `git checkout -- apps/web/next-env.d.ts`。
@@ -130,7 +130,13 @@ npm run verify:llm         # 用当前 Provider 跑一次最小生成并校验 s
 
 - 审核队列能下架故事，账号表能吊销登录、停用与恢复账号，操作都写进 `admin_actions`；但 admin 仍不能删除他人的故事（只能设为仅自己可见）。
 - 入戏角色仍有 `visibility` 列，但所有写入都是 `private`，也没有任何界面或接口能改它；老库里遗留的 `public` 行不影响任何行为（没有读取方），下一次保存会写回 `private`。
-- 依赖里仍有 3 个 high 和 2 个 moderate（`find-my-way` 9.6.0 → 9.9.0、root 的 `fast-uri` 3.1.2 → 3.1.7、`esbuild` 0.28.0 → 0.28.2、`vite` 8.0.13 → 8.2.2、`vitest`/`@vitest/mocker` 4.1.6 → 4.1.11）。每个父包的 range 都允许修好的版本，只是 lock 钉低了；但本机 npm 一动这些就崩（见下条），所以这一轮没动。`sharp` 0.35.4 已经是最新版，那条暂时无解。CI 的 audit 门槛因此暂设在 critical，等这几个升上去再收紧到 high。
+- 依赖里还有 6 条未修（1 low / 2 moderate / 3 high），每一条的修复版本都落在父包 range 之内，`npm audit fix` 就能解决，只是本机 npm 解析不了（见下条）：
+  - `fast-uri` 3.1.2（high，6 条 host confusion / SSRF）。唯一一条真在请求路径上的——它来自 fastify 的 URI 解析。
+  - `find-my-way` 9.6.0（high，`GHSA-c96f-x56v-gq3h`，HTTP/2 下的 DDoS）。我们没开 HTTP/2，所以当前不可触发，但路由器就该跟着升。
+  - `vite` 8.0.13（high，`launch-editor` 的 NTLM 泄露与 `server.fs.deny` 绕过，都限 Windows）、`esbuild` 0.28.0（low，Windows 上 dev server 任意读文件）、`vitest`/`@vitest/mocker` 4.1.6（moderate，`GHSA-82fw-gwwq-j7x9`）。这三条只在开发机的构建链上，不进产物。
+  - `sharp` 那条已经随 `next` 16.3.4 消失了——此前这里写"最新版仍无解"，是升级前的旧结论，已作废。
+  CI 的 audit 门槛因此暂设在 critical，等这几个升上去再收紧到 high；`lockfile-refresh` 那个 job 每次都会产出一份重新解析过的 `package-lock.json` 作为 artifact，下载提交即可完成升级。
+
 - `postcss` 曾用 root `overrides` 顶到 `^8.5.28`（当时 `next` 锁在 8.4.31）；升到 `next` 16.3.4 之后它自己钉的是已修复的 8.5.23，那条 override 就不再改变任何解析结果，已删除——留着等于悄悄冻结 `next` 将来对 postcss 的要求。现在树里是 root 8.5.28 加 `next` 内部 8.5.23，两份都在修复线以上。
 
 
