@@ -207,9 +207,17 @@ describe("server API", () => {
     });
   });
 
-  it("creates a rewind branch from a timeline node", async () => {
+  it("creates a rewind branch from a timeline node, and drops the reading it left", async () => {
     const created = await createSession();
     const sessionId = created.session.id;
+
+    // Asked before the branch is made: after it, this session is gone on purpose.
+    const missingNode = await app.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/rewind`,
+      payload: {}
+    });
+    expect(missingNode.statusCode).toBe(400);
 
     const rewind = await app.inject({
       method: "POST",
@@ -232,12 +240,11 @@ describe("server API", () => {
 
     expect(loadedBranch.statusCode).toBe(200);
 
-    const missingNode = await app.inject({
-      method: "POST",
-      url: `/api/sessions/${sessionId}/rewind`,
-      payload: {}
-    });
-    expect(missingNode.statusCode).toBe(400);
+    // The reader was told the turns after this point are discarded and that it cannot
+    // be undone. The shelf only ever shows the newest session per story, so leaving the
+    // old one would keep an unreachable copy of exactly what they threw away.
+    const loadedOld = await app.inject({ method: "GET", url: `/api/sessions/${sessionId}` });
+    expect(loadedOld.statusCode).toBe(404);
   });
 
   it("resets a session with the same reader role", async () => {
@@ -256,6 +263,11 @@ describe("server API", () => {
     expect(body.session.turns).toHaveLength(1);
     expect(body.session.timeline).toHaveLength(1);
     expect(body.session.turns[0]?.input).toBe("重新开始");
+
+    // 「全部回合与存档都会清空」: the reading that was reset does not survive as an
+    // unreachable session that still counts towards the author's numbers.
+    const loadedOld = await app.inject({ method: "GET", url: `/api/sessions/${created.session.id}` });
+    expect(loadedOld.statusCode).toBe(404);
   });
 
   it("deletes a session and then reports it as missing", async () => {
@@ -2477,10 +2489,10 @@ describe("authentication", () => {
     });
     expect(JSON.stringify(readerView.json())).not.toContain(reach[0]?.anchorId ?? "__none__");
 
-    // Rewinding branches into a new session that copies the passages read so far. The
-    // beat markers have to come with them: the reader is expected to drop the session
-    // they branched away from, and without the copy the author's report would lose a
-    // beat that the surviving transcript still shows.
+    // Rewinding branches into a new session that copies the passages read so far, and
+    // drops the session it branched away from. The beat markers have to come with the
+    // copy, or the author's report would lose a beat that the surviving transcript
+    // still shows.
     const nodeId = advanced.json<CreateTurnResponse>().timelineNode?.id ?? "";
     expect(nodeId).not.toBe("");
     const branched = await authApp.inject({
@@ -2490,13 +2502,9 @@ describe("authentication", () => {
       payload: { timelineNodeId: nodeId }
     });
     expect(branched.statusCode).toBe(200);
-
-    const dropped = await authApp.inject({
-      method: "DELETE",
-      url: `/api/sessions/${sessionId}`,
-      headers: asReader
-    });
-    expect(dropped.statusCode).toBe(204);
+    expect(
+      (await authApp.inject({ method: "GET", url: `/api/sessions/${sessionId}`, headers: asReader })).statusCode
+    ).toBe(404);
 
     const afterBranch = await authApp.inject({ method: "GET", url: "/api/me/story-insights", headers: asAuthor });
     expect(afterBranch.json<{ insights: StoryReadingInsight[] }>().insights[0]?.anchorReach).toEqual(reach);

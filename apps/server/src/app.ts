@@ -1905,6 +1905,11 @@ export async function buildApp(options: BuildAppOptions) {
     options.sessionStore.create(branch, request.authUser.id, options.sessionStore.findStoryTitle(sessionId) ?? "");
     // The branch keeps the passages, so it keeps which beat each one advanced.
     options.sessionStore.copyTurnAnchors(sessionId, branch.id);
+    // The reader was told these turns are discarded and it cannot be undone. Keeping
+    // the old session would make that false twice over: the shelf lists only the newest
+    // session per story, so it would sit there unreachable, while its turns kept
+    // counting in the author's "N 位读者读了 M 段".
+    options.sessionStore.deleteOwned(sessionId, request.authUser.id);
 
     return {
       session: branch
@@ -1957,6 +1962,10 @@ export async function buildApp(options: BuildAppOptions) {
     };
 
     options.sessionStore.create(resetSession, request.authUser.id, storyDetail.story.title);
+    // "全部回合与存档都会清空" - so they are. Left behind, the old session would be
+    // unreachable (the shelf lists only the newest session per story) yet still counted
+    // in the author's reading numbers, which is the opposite of what the reader asked for.
+    options.sessionStore.deleteOwned(sessionId, request.authUser.id);
 
     return {
       session: resetSession
