@@ -335,4 +335,37 @@ test.describe("reader", () => {
     await page.getByRole("link", { name: "回到书架" }).click();
     await expect(page).toHaveURL(/\/$/);
   });
+
+  // Last in the file on purpose: it spends a whole day's budget, and the account is
+  // its own, but keeping it after the other reader specs keeps their numbers stable.
+  test("warns on the card that today's turns are gone, before one is opened", async ({ page, request }) => {
+    const { token } = await signInViaApi(page, request, "e2e-spent@example.com", "E2E 用完");
+    const sessionId = await startSession(request, token);
+
+    // Spent through the API: the subject is the shelf, and driving twenty passages
+    // through the reader would only make the test slow.
+    for (let index = 0; index < 20; index += 1) {
+      const response = await request.post(`${API_BASE}/api/sessions/${sessionId}/turns`, {
+        headers: { authorization: `Bearer ${token}` },
+        data: { inputType: "read_continue", content: "继续阅读" }
+      });
+      expect(response.status()).toBe(200);
+    }
+
+    await page.goto("/");
+    await expect(page.locator(".hero-quota-line")).toContainText("已经用完");
+
+    // The card says what the button will do now, rather than letting the reader find
+    // out from an error after the opening.
+    const card = page.locator(".story-card", { hasText: "雨夜旧宅" }).first();
+    await expect(card.locator(".story-quota-note")).toContainText("接着往下读");
+    // Still enabled: the opening costs nothing, so a spent budget must not take away
+    // the look at a story.
+    await expect(card.getByRole("button", { name: "继续故事" })).toBeEnabled();
+
+    // Same warning where a returning reader actually clicks.
+    await page.locator(".app-topbar").getByRole("button", { name: "继续" }).click();
+    await expect(page.locator(".story-quota-note").first()).toContainText("接着往下读");
+  });
+
 });

@@ -2,23 +2,33 @@
 
 import { Button, Card, Chip, Label, ListBox, Select } from "@heroui/react";
 import { useRouter } from "next/navigation";
-import type { ReaderProfile, ReaderSessionListItem, ShelfStory, StoryReadingInsight } from "@instory/shared";
-import { createSession } from "@/lib/api";
+import type {
+  ReaderProfile,
+  ReaderSessionListItem,
+  ShelfStory,
+  StoryReadingInsight,
+  TurnQuota
+} from "@instory/shared";
+import { createSession, formatQuotaReset } from "@/lib/api";
 import { readingThemeLabel } from "@/lib/reading-themes";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export function StoryLauncher({
   existingSession,
   insight,
   profiles,
+  quota,
   story
 }: {
   existingSession?: ReaderSessionListItem;
   /** Aggregate reader counts, or undefined before anyone has read anything. */
   insight?: StoryReadingInsight;
   profiles: ReaderProfile[];
+  /** Today's budget, so the button can say what pressing it will and will not do. */
+  quota: TurnQuota;
   story: ShelfStory;
 }) {
+
   const router = useRouter();
   const [readerProfileId, setReaderProfileId] = useState(profiles[0]?.id ?? DEFAULT_ROLE_KEY);
   const [loading, setLoading] = useState(false);
@@ -94,15 +104,52 @@ export function StoryLauncher({
           </Select>
         )}
         {error ? <p className="error">{error}</p> : null}
+        <QuotaExhaustedNote continuing={Boolean(existingSession)} quota={quota} />
         <Button isDisabled={loading} type="button" onPress={startStory}>
           {loading ? "进入中..." : existingSession ? "继续故事" : "进入故事"}
         </Button>
+
       </Card.Content>
     </Card>
   );
 }
 
 const DEFAULT_ROLE_KEY = "__default__";
+
+/**
+ * What pressing the button will and will not do once today's turns are gone. The
+ * opening passage costs nothing - it comes from the story's own configuration - so
+ * entering is still allowed and still worth doing to see what a story is like. What
+ * used to happen is that a reader entered, read the opening, pressed 继续阅读 and only
+ * then learned the budget was spent. Blocking the button instead would take away the
+ * free look; saying so beforehand is the honest version.
+ *
+ * The reset instant is formatted in an effect so it lands in the reader's timezone
+ * rather than the server's; the quota day is a UTC day.
+ */
+export function QuotaExhaustedNote({ continuing, quota }: { continuing: boolean; quota: TurnQuota }) {
+
+  const [resetLabel, setResetLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    setResetLabel(formatQuotaReset(quota.resetsAt));
+  }, [quota.resetsAt]);
+
+  if (quota.remainingTurnsToday > 0) {
+    return null;
+  }
+
+  const when = resetLabel ? `${resetLabel} 后` : "配额恢复后";
+
+  return (
+    <p className="story-quota-note muted">
+      {continuing
+        ? `今天的 ${quota.dailyLimit} 次推进已经用完，${when}才能接着往下读。`
+        : `今天的 ${quota.dailyLimit} 次推进已经用完，现在进去只能看开场，${when}才能往下读。`}
+    </p>
+  );
+}
+
 
 /**
  * What other readers have done with this story. Aggregates only, and the author's

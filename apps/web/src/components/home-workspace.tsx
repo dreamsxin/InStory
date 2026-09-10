@@ -17,7 +17,8 @@ import type {
 import { BrandMark } from "@/components/brand-mark";
 import { ReadingThemeSelect } from "@/components/reading-theme-select";
 import { DEFAULT_READING_THEME, parseReadingTheme } from "@/lib/reading-themes";
-import { StoryLauncher } from "@/components/story-launcher";
+import { QuotaExhaustedNote, StoryLauncher } from "@/components/story-launcher";
+
 import { createSession, formatQuotaReset } from "@/lib/api";
 
 import {
@@ -139,12 +140,14 @@ export function HomeWorkspace({
           <StoriesView
             insights={shelfInsights}
             profiles={profiles}
+            quota={quota}
             sessions={sessions}
             stories={stories}
             onCreateStory={() => setActiveTab("create")}
           />
         ) : null}
-        {activeTab === "continue" ? <ContinueView sessions={sessions} /> : null}
+        {activeTab === "continue" ? <ContinueView quota={quota} sessions={sessions} /> : null}
+
         {activeTab === "create" ? (
           <CreateView
             myStoryDetails={myStoryDetails}
@@ -193,15 +196,18 @@ function StoriesView({
   insights,
   onCreateStory,
   profiles,
+  quota,
   sessions,
   stories
 }: {
   insights: StoryReadingInsight[];
   onCreateStory: () => void;
   profiles: ReaderProfile[];
+  quota: TurnQuota;
   sessions: ReaderSessionListItem[];
   stories: ShelfStory[];
 }) {
+
   const [query, setQuery] = useState("");
   const [genre, setGenre] = useState<string>(ALL_GENRES);
   const [sort, setSort] = useState<ShelfSort>("recent");
@@ -296,8 +302,10 @@ function StoriesView({
                   insight={insightsByStoryId.get(story.id)}
                   key={story.id}
                   profiles={profiles}
+                  quota={quota}
                   story={story}
                 />
+
               ))}
             </div>
           ) : (
@@ -374,7 +382,8 @@ function compareForShelf(
 }
 
 
-function ContinueView({ sessions }: { sessions: ReaderSessionListItem[] }) {
+function ContinueView({ quota, sessions }: { quota: TurnQuota; sessions: ReaderSessionListItem[] }) {
+
   return (
     <div className="app-section">
       <div className="section-heading">
@@ -387,7 +396,8 @@ function ContinueView({ sessions }: { sessions: ReaderSessionListItem[] }) {
       {sessions.length ? (
         <div className="story-grid">
           {sessions.map((session) => (
-            <ContinueStoryCard key={session.id} session={session} />
+            <ContinueStoryCard key={session.id} quota={quota} session={session} />
+
           ))}
         </div>
       ) : (
@@ -402,7 +412,8 @@ function ContinueView({ sessions }: { sessions: ReaderSessionListItem[] }) {
   );
 }
 
-function ContinueStoryCard({ session }: { session: ReaderSessionListItem }) {
+function ContinueStoryCard({ quota, session }: { quota: TurnQuota; session: ReaderSessionListItem }) {
+
   const story = session.story;
 
   // The story is gone, so the only honest card says so. It used to disappear from
@@ -426,6 +437,7 @@ function ContinueStoryCard({ session }: { session: ReaderSessionListItem }) {
           <p className="continue-summary">{session.latestSummary}</p>
           <div className="continue-actions">
             <form action={deleteSessionAction}>
+
               <input name="sessionId" type="hidden" value={session.id} />
               <Button className="danger-button" size="sm" type="submit" variant="outline">
                 移除这张卡片
@@ -467,8 +479,10 @@ function ContinueStoryCard({ session }: { session: ReaderSessionListItem }) {
           ) : null}
         </div>
         <p className="continue-summary">{session.latestSummary}</p>
+        <QuotaExhaustedNote continuing quota={quota} />
         <div className="continue-actions">
           <a className="button-link" href={`/story/${session.id}`}>继续阅读</a>
+
           {/* Sessions only ever accumulated - every trial run of a story you are
               writing leaves one behind - and nothing could remove them. */}
           <form
