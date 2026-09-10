@@ -725,7 +725,9 @@ a {
 .story-insight,
 /* And on the explore card, where they answer "is this worth starting". */
 .story-read-count,
-.story-expectation {
+.story-expectation,
+/* And beside the beat itself, where the author can rewrite it. */
+.anchor-row-reach {
   display: block;
   margin-top: 6px;
   font-size: 12px;

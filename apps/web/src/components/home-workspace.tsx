@@ -751,6 +751,7 @@ function CreatorStoriesPanel({
                   <StoryEditForm
                     detail={detail}
                     existingSession={sessionsByStoryId.get(detail.story.id)}
+                    insight={insightsByStoryId.get(detail.story.id)}
                     profiles={profiles}
                   />
                 </details>
@@ -821,10 +822,13 @@ function ProfileEditForm({ profile }: { profile: ReaderProfile }) {
 function StoryEditForm({
   detail,
   existingSession,
+  insight,
   profiles
 }: {
   detail: StoryDetail;
   existingSession?: ReaderSessionListItem;
+  /** Reading aggregates for this story, so the anchor rows can say who reached them. */
+  insight?: StoryReadingInsight;
   profiles: ReaderProfile[];
 }) {
   const openingLocation = detail.world.locations[0];
@@ -975,7 +979,7 @@ function StoryEditForm({
             这是你对 AI 唯一的硬约束：必须发生的、禁止提前发生的、可以用来收尾的。写下来之后每一段生成都要照着走。
           </p>
         </div>
-        <AnchorsEditForm detail={detail} />
+        <AnchorsEditForm detail={detail} insight={insight} />
       </section>
       {detail.characters.length ? (
         <section className="cast-editor">
@@ -1012,7 +1016,7 @@ function StoryEditForm({
  * adding and removing one cannot shift a description onto the wrong anchor, and a
  * failed save leaves the table exactly as the author left it.
  */
-function AnchorsEditForm({ detail }: { detail: StoryDetail }) {
+function AnchorsEditForm({ detail, insight }: { detail: StoryDetail; insight?: StoryReadingInsight }) {
   const [result, action, pending] = useActionState(updateStoryAnchorsAction, IDLE_FORM);
   const [rows, setRows] = useState<AnchorDraft[]>(() =>
     detail.anchors.map((anchor, index) => ({
@@ -1027,6 +1031,13 @@ function AnchorsEditForm({ detail }: { detail: StoryDetail }) {
   );
 
   const [nextKey, setNextKey] = useState(0);
+
+  // Silent until someone has read the story: "还没有人走到" is true of every beat in an
+  // unread story, and printing it on each row reads like a verdict on the writing.
+  const readersByAnchorId =
+    insight && insight.readers > 0
+      ? new Map(insight.anchorReach.map((row) => [row.anchorId, row.readers]))
+      : null;
 
   function update(key: string, patch: Partial<AnchorDraft>) {
     setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)));
@@ -1076,6 +1087,7 @@ function AnchorsEditForm({ detail }: { detail: StoryDetail }) {
               <Label>说明</Label>
               <TextArea maxLength={2000} placeholder="写清这件事的条件和后果，AI 会按它推进或回避。" rows={2} />
             </TextField>
+            <AnchorRowReach readers={row.id ? readersByAnchorId?.get(row.id) ?? 0 : null} type={row.type} />
             <Button
               className="danger-button"
               size="sm"
@@ -1123,6 +1135,34 @@ interface AnchorDraft {
   description: string;
 }
 
+
+/**
+ * Whether readers are reaching this one beat, said where the author can act on it -
+ * next to the beat's own text, not only in the summary line on the story row.
+ *
+ * `readers` is null when there is nothing to say: the story has no readers yet, or the
+ * row was added in this session and has no id to count against. A zero only speaks for
+ * 必经 / 结局 beats, which are promises about the path; a 可选 beat nobody took and a
+ * 禁止 beat nobody was led into are both the expected state, and saying so would be
+ * noise. A 禁止 beat that was reached is the one number worth flagging.
+ */
+function AnchorRowReach({ readers, type }: { readers: number | null; type: StoryAnchor["type"] }) {
+  if (readers === null) {
+    return null;
+  }
+
+  if (readers === 0) {
+    return type === "required" || type === "ending" ? (
+      <span className="anchor-row-reach muted">还没有人走到这里</span>
+    ) : null;
+  }
+
+  return (
+    <span className="anchor-row-reach" title="按模型标注统计：没标注的段落不计入">
+      {readers} 位读者到过这里{type === "forbidden" ? "，而这条写的是禁止提前发生" : ""}
+    </span>
+  );
+}
 
 function parseAnchorType(key: unknown): StoryAnchor["type"] {
   return key === "optional" || key === "forbidden" || key === "ending" ? key : "required";

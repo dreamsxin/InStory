@@ -303,6 +303,12 @@ test.describe("creation console", () => {
     // could never tell them.
     await expect(page.locator(".story-anchor-reach")).toContainText("1 位读者读了 2 段");
     await expect(page.locator(".story-anchor-reach")).toContainText("提灯人现身 1 人到过");
+
+    // The same number where it can be acted on: beside the beat's own text, in the
+    // editor the author would use to rewrite it.
+    const managed = page.locator(".story-management-list .management-details");
+    await managed.locator("summary").click();
+    await expect(managed.locator(".anchors-form .anchor-row-reach")).toHaveText("1 位读者到过这里");
   });
 
 

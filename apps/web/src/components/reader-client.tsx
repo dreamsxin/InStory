@@ -443,7 +443,9 @@ export function ReaderClient({
 
     try {
       const branch = await rewindSession(session.id, timelineNodeId);
-      router.push(`/story/${branch.id}`);
+      // replace, not push: the session this branched from is deleted server-side, so
+      // leaving it in history would hand the reader a 404 when they press Back.
+      router.replace(`/story/${branch.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "回退失败");
     } finally {
@@ -457,7 +459,9 @@ export function ReaderClient({
 
     try {
       const nextSession = await resetSession(session.id);
-      router.push(`/story/${nextSession.id}`);
+      // Same as the rewind: the reading that was reset no longer exists, so it does not
+      // belong in the back stack either.
+      router.replace(`/story/${nextSession.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "重置失败");
     } finally {
