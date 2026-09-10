@@ -1,7 +1,7 @@
 "use client";
 
 import { Avatar, Button, Card, Chip, Input, Label, ListBox, Select, TextArea, TextField } from "@heroui/react";
-import { useActionState, useState, type ReactNode } from "react";
+import { useActionState, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type {
   CharacterProfile,
@@ -11,13 +11,15 @@ import type {
   StoryAnchor,
   StoryDetail,
   StoryReadingInsight,
-  StorySummary
+  StorySummary,
+  TurnQuota
 } from "@instory/shared";
 import { BrandMark } from "@/components/brand-mark";
 import { ReadingThemeSelect } from "@/components/reading-theme-select";
 import { DEFAULT_READING_THEME, parseReadingTheme } from "@/lib/reading-themes";
 import { StoryLauncher } from "@/components/story-launcher";
-import { createSession } from "@/lib/api";
+import { createSession, formatQuotaReset } from "@/lib/api";
+
 import {
   createReaderProfileAction,
   createStoryAction,
@@ -46,6 +48,7 @@ export function HomeWorkspace({
   accountBar,
   myStoryDetails,
   profiles,
+  quota,
   sessions,
   shelfInsights,
   stories,
@@ -56,7 +59,10 @@ export function HomeWorkspace({
   accountBar?: ReactNode;
   myStoryDetails: StoryDetail[];
   profiles: ReaderProfile[];
+  /** Today's budget for this reader, so the card can stop quoting the allowance. */
+  quota: TurnQuota;
   sessions: ReaderSessionListItem[];
+
   /** Reader counts for the public shelf, so a story can show it has been read. */
   shelfInsights: StoryReadingInsight[];
   stories: ShelfStory[];
@@ -106,7 +112,7 @@ export function HomeWorkspace({
           <h2>翻开下一章，主角就是你。</h2>
           <p>
             读一段故事，随时以角色身份介入：说一句话、做一个动作，AI 接着往下写。也可以自己搭一个世界，
-            让别人进来演。每天 20 次推进，够读完一个晚上。
+            让别人进来演。<QuotaSentence quota={quota} />
           </p>
         </div>
         <div className="hero-stat-grid" aria-label="InStory stats">
@@ -118,7 +124,14 @@ export function HomeWorkspace({
             <strong>{profiles.length}</strong>
             <span>我的角色</span>
           </div>
+          {/* The reader's own number, not the product's promise: 20 次/天 told someone
+              with two left nothing, and they found out from an error mid-passage. */}
+          <div className="hero-quota">
+            <strong>{quota.remainingTurnsToday}</strong>
+            <span>今日剩余</span>
+          </div>
         </div>
+
       </Card>
 
       <section className="mobile-tab-panel">
@@ -570,7 +583,39 @@ function CreatorProfilesPanel({ profiles }: { profiles: ReaderProfile[] }) {
 }
 
 /**
+ * The daily budget as this reader's own number. The card used to state the allowance
+ * ("每天 20 次推进，够读完一个晚上"), which is true of the product and silent about the
+ * person reading it: someone with two turns left was told the same thing as someone
+ * who had not started, and found out the difference from an error halfway through a
+ * passage. The reset instant is formatted in the browser's timezone from an effect,
+ * the same way the reader's toolbar does it - the quota day is a UTC day, so the
+ * server's "tomorrow" is not the reader's.
+ */
+function QuotaSentence({ quota }: { quota: TurnQuota }) {
+  const [resetLabel, setResetLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    setResetLabel(formatQuotaReset(quota.resetsAt));
+  }, [quota.resetsAt]);
+
+  if (quota.remainingTurnsToday > 0) {
+    return (
+      <span className="hero-quota-line">
+        每天 {quota.dailyLimit} 次推进，你今天还剩 {quota.remainingTurnsToday} 次。
+      </span>
+    );
+  }
+
+  return (
+    <span className="hero-quota-line">
+      今天的 {quota.dailyLimit} 次推进已经用完{resetLabel ? `，${resetLabel} 后恢复` : ""}。
+    </span>
+  );
+}
+
+/**
  * What the story has done with readers, on the row the author already looks at.
+
  * A story nobody has opened says so plainly rather than showing four zeros: the
  * author's own trials are excluded upstream, so zero really means zero.
  */

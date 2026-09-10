@@ -96,7 +96,15 @@ test.describe("reader", () => {
     // Visible, not merely present: the bar used to carry the hidden-chrome class
     // unconditionally with no button to turn it back on.
     await expect(quota).toBeVisible();
+
+    // And the home card says the same number. It used to quote the allowance
+    // ("每天 20 次推进") to everyone, so a reader with one turn left read the same
+    // sentence as a reader who had not started.
+    await page.goto("/");
+    await expect(page.locator(".hero-quota-line")).toContainText("你今天还剩 19 次");
+    await expect(page.locator(".hero-quota strong")).toHaveText("19");
   });
+
 
   test("marks a key node in the transcript and opens 入戏 from it", async ({ page, request }) => {
     const { token } = await signInViaApi(page, request, "e2e-cue@example.com", "E2E 节点");

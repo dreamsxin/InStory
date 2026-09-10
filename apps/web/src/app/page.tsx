@@ -3,6 +3,7 @@ import { AccountBar } from "@/components/account-bar";
 import { HomeWorkspace } from "@/components/home-workspace";
 import {
   getCurrentUser,
+  getMyQuota,
   listMyStoryDetails,
   listMyStoryInsights,
   listReaderProfiles,
@@ -17,13 +18,14 @@ export default async function HomePage() {
     redirect("/login");
   }
 
-  const [stories, profiles, myStoryDetails, sessions, storyInsights, shelfInsights] = await Promise.all([
+  const [stories, profiles, myStoryDetails, sessions, storyInsights, shelfInsights, quota] = await Promise.all([
     listStories(),
     listReaderProfiles(),
     listMyStoryDetails(),
     listReaderSessions(),
     listMyStoryInsights(),
-    listStoryInsights()
+    listStoryInsights(),
+    getMyQuota()
   ]);
 
   return (
@@ -31,6 +33,7 @@ export default async function HomePage() {
       accountBar={<AccountBar user={user} />}
       myStoryDetails={myStoryDetails}
       profiles={profiles}
+      quota={quota}
       sessions={sessions}
       shelfInsights={shelfInsights}
       stories={stories}
@@ -38,4 +41,5 @@ export default async function HomePage() {
     />
   );
 }
+
 

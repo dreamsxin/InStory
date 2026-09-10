@@ -1221,7 +1221,32 @@ describe("generation quota and usage", () => {
     expect(summary.byModel[0]?.provider).toBe("mock");
   });
 
+  it("reports the day's budget without opening a story", async () => {
+    // The shelf needs this before there is any session to read it from: quoting the
+    // allowance at a reader who has two turns left is the interface talking about the
+    // product instead of about them.
+    const before = await quotaApp.inject({ method: "GET", url: "/api/me/quota" });
+    expect(before.statusCode).toBe(200);
+    expect(before.json<{ quota: TurnQuota }>().quota).toMatchObject({
+      dailyLimit: 2,
+      usedToday: 0,
+      remainingTurnsToday: 2
+    });
+    expect(before.json<{ quota: TurnQuota }>().quota.resetsAt).toMatch(/T00:00:00\.000Z$/);
+
+    const sessionId = await startSession();
+    await advance(sessionId);
+
+    const after = await quotaApp.inject({ method: "GET", url: "/api/me/quota" });
+    expect(after.json<{ quota: TurnQuota }>().quota).toMatchObject({
+      dailyLimit: 2,
+      usedToday: 1,
+      remainingTurnsToday: 1
+    });
+  });
+
   it("refuses a blocked reader input without spending quota", async () => {
+
     const sessionId = await startSession();
 
     const blocked = await quotaApp.inject({
@@ -1572,7 +1597,8 @@ describe("authentication", () => {
   it("requires a session for owner-scoped routes when anonymous access is off", async () => {
     await buildAuthApp(false);
 
-    for (const url of ["/api/me/stories", "/api/me/sessions", "/api/reader/profiles"]) {
+    for (const url of ["/api/me/stories", "/api/me/sessions", "/api/me/quota", "/api/reader/profiles"]) {
+
       const response = await authApp.inject({ method: "GET", url });
       expect(response.statusCode).toBe(401);
     }

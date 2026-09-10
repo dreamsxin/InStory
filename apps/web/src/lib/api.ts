@@ -253,7 +253,26 @@ export async function listReaderProfiles(): Promise<ReaderProfile[]> {
   return data.profiles;
 }
 
+/**
+ * Today's remaining turns, without opening a story. The home card used to state the
+ * daily allowance as a fact about the product ("每天 20 次") while saying nothing
+ * about the reader's own count, so someone with two left learned it from an error
+ * halfway through a passage.
+ */
+export async function getMyQuota(): Promise<TurnQuota> {
+  const response = await apiFetch("/api/me/quota");
+  if (response.status === 401) {
+    throw new UnauthenticatedError();
+  }
+  if (!response.ok) {
+    throw new Error("加载今日额度失败");
+  }
+  const data = (await response.json()) as { quota: TurnQuota };
+  return data.quota;
+}
+
 export async function listReaderSessions(limit = 20): Promise<ReaderSessionListItem[]> {
+
   const response = await apiFetch(`/api/me/sessions?limit=${limit}`);
   if (response.status === 401) {
     throw new UnauthenticatedError();

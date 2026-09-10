@@ -1091,7 +1091,21 @@ export async function buildApp(options: BuildAppOptions) {
   });
 
 
+  /**
+   * Today's budget on its own. The quota used to be readable only from inside a
+   * session, so the shelf could promise "每天 20 次" while the reader had two left,
+   * and they found out mid-passage. One reader, one number, no story needed.
+   */
+  app.get("/api/me/quota", async (request, reply) => {
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
+    }
+
+    return { quota: resolveQuota(options.usageStore, request.authUser.id, options.dailyTurnQuota ?? 20) };
+  });
+
   app.get("/api/me/sessions", async (request, reply) => {
+
     if (!request.authUser) {
       return reply.code(401).send({ error: "请先登录" });
     }
