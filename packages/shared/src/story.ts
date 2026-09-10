@@ -162,17 +162,23 @@ export interface StoryAnchor {
 }
 
 /**
- * The plot anchors of one story, replaced as a whole. Ids are the server's to
- * assign: an author reorders and rewrites these freely, and stable ids would only
- * invite a diffing protocol that buys nothing here.
+ * The plot anchors of one story, replaced as a whole. A row that already exists sends
+ * its `id` back so the server can keep it: ids were positional
+ * (`story-anchor-1`, `-2`, …), and now that turns record which anchor they advanced,
+ * a positional id would hand one beat's readers to whichever beat later took that
+ * slot. Deleting a beat drops its counts, which is what deleting a beat means; a new
+ * row gets a fresh id that no future insert can shadow.
  */
 export interface UpdateStoryAnchorsRequest {
   anchors: Array<{
+    /** The existing anchor's id, or omitted for a row the author just added. */
+    id?: string | null;
     title: string;
     type: StoryAnchorType;
     description: string;
   }>;
 }
+
 
 
 export interface WorldProfile {

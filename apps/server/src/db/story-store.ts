@@ -294,8 +294,14 @@ export class StoryStore {
 
   /**
    * Replaces the story's plot anchors. Whole-set replacement rather than per-row
-   * edits: an author rewrites and reorders these together, and the ids only ever
-   * served to key the rows.
+   * edits: an author rewrites and reorders these together.
+   *
+   * A row that carries an id this story already has keeps it. Ids used to be
+   * positional (`story-anchor-1`, `-2`, …), which was harmless while nothing pointed
+   * at them; now that a turn records the anchor it advanced, deleting the first beat
+   * would have slid every later beat one slot down and handed each one the previous
+   * occupant's readers. New rows get a random suffix instead, so no future insert can
+   * ever take over an id that a turn already refers to.
    */
   replaceOwnedAnchors(
     storyId: string,
@@ -307,23 +313,35 @@ export class StoryStore {
       return null;
     }
 
-    const anchors: StoryAnchor[] = input.anchors.map((anchor, index) => ({
-      id: `${storyId}-anchor-${index + 1}`,
-      storyId,
-      title: anchor.title,
-      type: anchor.type,
-      description: anchor.description
-    }));
+    const existingIds = new Set(this.findAnchors(storyId).map((anchor) => anchor.id));
+    const keptIds = new Set<string>();
+    const anchors: StoryAnchor[] = input.anchors.map((anchor) => {
+      // Only an id this story really has, and only once: a client that repeats one
+      // must not collapse two beats onto a single row.
+      const reusable = anchor.id && existingIds.has(anchor.id) && !keptIds.has(anchor.id);
+      const id = reusable ? anchor.id! : `${storyId}-anchor-${crypto.randomUUID().slice(0, 8)}`;
+      keptIds.add(id);
+
+      return {
+        id,
+        storyId,
+        title: anchor.title,
+        type: anchor.type,
+        description: anchor.description
+      };
+    });
+
 
     this.database.db.exec("BEGIN");
     try {
       this.database.db.prepare("DELETE FROM story_anchors WHERE story_id = ?").run(storyId);
-      for (const anchor of anchors) {
+      anchors.forEach((anchor, index) => {
         this.database.db
-          .prepare("INSERT INTO story_anchors (id, story_id, payload) VALUES (?, ?, ?)")
-          .run(anchor.id, storyId, JSON.stringify(anchor));
-      }
+          .prepare("INSERT INTO story_anchors (id, story_id, payload, seq) VALUES (?, ?, ?, ?)")
+          .run(anchor.id, storyId, JSON.stringify(anchor), index);
+      });
       this.database.db.exec("COMMIT");
+
     } catch (error) {
       this.database.db.exec("ROLLBACK");
       throw error;
@@ -384,11 +402,14 @@ export class StoryStore {
   }
 
   private findAnchors(storyId: string): StoryAnchor[] {
+    // seq is the author's order; id breaks ties for rows written before seq existed,
+    // which is exactly the order they had then.
     const rows = this.database.db
-      .prepare("SELECT payload FROM story_anchors WHERE story_id = ? ORDER BY id ASC")
+      .prepare("SELECT payload FROM story_anchors WHERE story_id = ? ORDER BY seq ASC, id ASC")
       .all(storyId) as Array<{ payload: string }>;
     return rows.map((row) => JSON.parse(row.payload) as StoryAnchor);
   }
+
 }
 
 function normalizeCharacter(character: CharacterProfile): CharacterProfile {

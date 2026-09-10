@@ -224,6 +224,83 @@ describe("StoryStore", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("keeps an anchor's id when the author saves the set again", () => {
+    const dir = mkdtempSync(join(tmpdir(), "instory-story-store-"));
+    const database = new AppDatabase(join(dir, "story.sqlite"));
+    const store = new StoryStore(database);
+
+    try {
+      store.createStory(
+        {
+          id: "ferry",
+          title: "提灯渡",
+          tagline: "船只在有人提灯时才靠岸。",
+          genre: "民俗奇谈",
+          coverUrl: null,
+          visibility: "private",
+          readingTheme: "classic",
+          aiFreedom: "medium",
+          experienceMode: "coauthored",
+          defaultSegmentLength: "standard",
+          premise: "一条只在夜里摆渡的河。",
+          openingLocationName: "渡口",
+          openingLocationDescription: "灯在水面上晃。",
+          worldRules: []
+        },
+        [],
+        "author"
+      );
+
+      const first = store.replaceOwnedAnchors("ferry", "author", {
+        anchors: [
+          { title: "提灯人现身", type: "required", description: "第一夜有人提灯。" },
+          { title: "河水退去", type: "ending", description: "结局：账清了。" }
+        ]
+      });
+      const lanternId = first?.[0]?.id;
+      const riverId = first?.[1]?.id;
+      expect(lanternId).toBeTruthy();
+      expect(riverId).toBeTruthy();
+
+      // Dropping the first beat used to slide the second one into `-anchor-1`, which
+      // now means inheriting the readers a turn recorded against the beat that is
+      // gone. The surviving row sends its id back and keeps it.
+      const second = store.replaceOwnedAnchors("ferry", "author", {
+        anchors: [
+          { id: riverId, title: "河水退去", type: "ending", description: "结局：账清了。" },
+          { title: "新加的一幕", type: "required", description: "后来才想到的。" }
+        ]
+      });
+
+      expect(second?.[0]?.id).toBe(riverId);
+      // And the new row is handed neither the deleted beat's id nor the kept one's.
+      expect(second?.[1]?.id).not.toBe(lanternId);
+      expect(second?.[1]?.id).not.toBe(riverId);
+
+      // The author's order survives, even though the ids no longer sort that way.
+      expect(store.findStory("ferry")?.anchors.map((anchor) => anchor.title)).toEqual([
+        "河水退去",
+        "新加的一幕"
+      ]);
+
+      // A repeated id, or one from another story, cannot be claimed.
+      const third = store.replaceOwnedAnchors("ferry", "author", {
+        anchors: [
+          { id: riverId, title: "河水退去", type: "ending", description: "结局：账清了。" },
+          { id: riverId, title: "冒名的一幕", type: "required", description: "重复的 id。" },
+          { id: "rain-mansion-anchor-1", title: "别人的锚点", type: "required", description: "不属于这个故事。" }
+        ]
+      });
+      expect(third?.[0]?.id).toBe(riverId);
+      expect(third?.[1]?.id).not.toBe(riverId);
+      expect(third?.[2]?.id).not.toBe("rain-mansion-anchor-1");
+    } finally {
+      database.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
+
 
 

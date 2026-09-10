@@ -414,7 +414,23 @@ export const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_session_turns_anchor
       ON session_turns(anchor_id);
     `
+  },
+  {
+    id: 14,
+    name: "add_anchor_seq",
+    up: `
+      -- Anchors were read back in id order, which worked only because the ids were
+      -- positional. They no longer are: a saved row keeps its id so the reader counts
+      -- attached to it survive a reorder, and new rows get a random suffix. Order has
+      -- to be stored rather than inferred from the id, or the author's outline would
+      -- come back sorted alphabetically by a random string.
+      --
+      -- Defaulting to 0 leaves every existing row tied, and the read still falls back
+      -- to id order, so nothing written before this migration changes position.
+      ALTER TABLE story_anchors ADD COLUMN seq INTEGER NOT NULL DEFAULT 0;
+    `
   }
+
 ];
 
 

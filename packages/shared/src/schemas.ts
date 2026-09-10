@@ -194,6 +194,9 @@ export const updateStoryAnchorsRequestSchema = z.object({
   anchors: z
     .array(
       z.object({
+        // Sent back for a row that already exists, so its id - and the reader counts
+        // hanging off it - survive a reorder or an unrelated edit.
+        id: z.string().min(1).max(200).nullish(),
         title: z.string().min(1).max(80),
         type: z.enum(["required", "optional", "forbidden", "ending"]),
         description: z.string().min(1).max(2000)
@@ -201,6 +204,7 @@ export const updateStoryAnchorsRequestSchema = z.object({
     )
     .max(20)
 });
+
 
 
 export const worldProfileSchema = z.object({

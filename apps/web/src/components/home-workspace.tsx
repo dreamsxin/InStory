@@ -1017,11 +1017,15 @@ function AnchorsEditForm({ detail }: { detail: StoryDetail }) {
   const [rows, setRows] = useState<AnchorDraft[]>(() =>
     detail.anchors.map((anchor, index) => ({
       key: `${anchor.id}_${index}`,
+      // Carried through the save so the beat keeps its id, and with it the count of
+      // readers who reached it. A row the author just added has none yet.
+      id: anchor.id,
       title: anchor.title,
       type: anchor.type,
       description: anchor.description
     }))
   );
+
   const [nextKey, setNextKey] = useState(0);
 
   function update(key: string, patch: Partial<AnchorDraft>) {
@@ -1035,8 +1039,9 @@ function AnchorsEditForm({ detail }: { detail: StoryDetail }) {
         name="anchors"
         type="hidden"
         value={JSON.stringify(
-          rows.map((row) => ({ title: row.title, type: row.type, description: row.description }))
+          rows.map((row) => ({ id: row.id, title: row.title, type: row.type, description: row.description }))
         )}
+
       />
       {rows.length ? (
         rows.map((row, index) => (
@@ -1111,10 +1116,13 @@ function AnchorsEditForm({ detail }: { detail: StoryDetail }) {
 
 interface AnchorDraft {
   key: string;
+  /** The stored anchor's id, absent for a row added in this session. */
+  id?: string;
   title: string;
   type: StoryAnchor["type"];
   description: string;
 }
+
 
 function parseAnchorType(key: unknown): StoryAnchor["type"] {
   return key === "optional" || key === "forbidden" || key === "ending" ? key : "required";

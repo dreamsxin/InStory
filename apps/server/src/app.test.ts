@@ -896,13 +896,36 @@ describe("server API", () => {
       }
     });
     expect(anchored.statusCode).toBe(200);
-    expect(anchored.json<{ anchors: StoryAnchor[] }>().anchors).toMatchObject([
-      { id: "moon-market-anchor-1", storyId: "moon-market", type: "required" },
-      { id: "moon-market-anchor-2", storyId: "moon-market", type: "forbidden" }
+    // Ids are minted, not positional: the author's order is kept by `seq`, so a
+    // deleted beat cannot hand its identity - and its reader counts - to the next one.
+    const anchorRows = anchored.json<{ anchors: StoryAnchor[] }>().anchors;
+    expect(anchorRows).toMatchObject([
+      { storyId: "moon-market", title: "名字被换走", type: "required" },
+      { storyId: "moon-market", title: "提前离场", type: "forbidden" }
     ]);
+    expect(new Set(anchorRows.map((anchor) => anchor.id)).size).toBe(2);
 
     const withAnchors = await app.inject({ method: "GET", url: "/api/stories/moon-market" });
     expect(withAnchors.json<StoryDetail>().anchors).toHaveLength(2);
+
+    // Editing the wording of a beat keeps its id, so the reach report keeps counting
+    // the same beat instead of starting over.
+    const rewritten = await app.inject({
+      method: "PUT",
+      url: "/api/me/stories/moon-market/anchors",
+      payload: {
+        anchors: [
+          { id: anchorRows[1]?.id, title: "提前离场", type: "forbidden", description: "天亮之前不能走出市集，一步都不行。" },
+          { id: anchorRows[0]?.id, title: "名字被换走", type: "required", description: "读者必须发现自己的名字已经被交易过。" }
+        ]
+      }
+    });
+    expect(rewritten.statusCode).toBe(200);
+    expect(rewritten.json<{ anchors: StoryAnchor[] }>().anchors.map((anchor) => anchor.id)).toEqual([
+      anchorRows[1]?.id,
+      anchorRows[0]?.id
+    ]);
+
 
     // The set is replaced, not appended to.
     const replaced = await app.inject({
