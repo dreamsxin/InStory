@@ -397,8 +397,26 @@ export const migrations: Migration[] = [
          );
 
     `
+  },
+  {
+    id: 13,
+    name: "add_turn_anchor",
+    up: `
+      -- An author can write plot anchors but had no way to learn whether readers ever
+      -- reach them: the anchors went into the prompt and nothing came back. The model
+      -- now reports which anchor a passage advanced, and it is kept here per turn.
+      --
+      -- Nullable, and null means "no beat reported" rather than "no beat happened":
+      -- most passages advance nothing in particular, and every turn written before
+      -- this column reported nothing at all.
+      ALTER TABLE session_turns ADD COLUMN anchor_id TEXT;
+
+      CREATE INDEX IF NOT EXISTS idx_session_turns_anchor
+      ON session_turns(anchor_id);
+    `
   }
 ];
+
 
 
 

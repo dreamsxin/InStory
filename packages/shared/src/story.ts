@@ -307,7 +307,15 @@ export interface NarrativeResult {
   memoryEvents: string[];
   /** Null on an ordinary passage; set only at a key node. */
   intervention: InterventionCue | null;
+  /**
+   * Which plot anchor this passage advanced, as the model reports it, or null when it
+   * advanced none. The server keeps it only when the id really belongs to that story,
+   * so an invented id becomes null instead of a phantom beat. Never returned to a
+   * reader: the anchor list is the author's outline.
+   */
+  anchorId: string | null;
 }
+
 
 export interface SessionTurn {
   id: string;
@@ -390,7 +398,18 @@ export interface StoryReadingInsight {
   deepestTurns: number;
   /** When the story was last read, or null if it never was. */
   lastReadAt: string | null;
+  /**
+   * How many readers each plot anchor was actually reached by, so an author can see
+   * whether the beats they planned happen at all. Only anchors some passage claimed
+   * appear here; the author's own view knows the full list and shows the rest as
+   * "nobody yet". Distinct readers with the author excluded, like `readers`.
+   *
+   * This counts what the model reported, not ground truth: a passage that advanced a
+   * beat without saying so is missing from it.
+   */
+  anchorReach: Array<{ anchorId: string; readers: number }>;
 }
+
 
 export interface CreateSessionRequest {
   entryMode: EntryMode;

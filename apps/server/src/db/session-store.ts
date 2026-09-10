@@ -33,7 +33,14 @@ export interface AppendTurnInput {
   state: WorldState;
   timelineNode?: TimelineNode | null;
   updatedAt: string;
+  /**
+   * The plot anchor this passage advanced, when the model named a real one. Kept
+   * beside the turn rather than on `SessionTurn`, because that type goes to readers
+   * and the anchor list is the author's outline.
+   */
+  anchorId?: string | null;
 }
+
 
 /**
  * How much of a session's history to materialise. Omitting a field loads all of it,
@@ -109,7 +116,8 @@ export class SessionStore {
     this.database.db.exec("BEGIN");
     try {
       const turnSeq = this.nextSeq("session_turns", sessionId);
-      this.insertTurn(sessionId, input.turn, turnSeq);
+      this.insertTurn(sessionId, input.turn, turnSeq, input.anchorId ?? null);
+
 
       if (input.timelineNode) {
         this.insertTimelineNode(sessionId, input.timelineNode, this.nextSeq("session_timeline_nodes", sessionId));
@@ -299,8 +307,10 @@ export class SessionStore {
       sessions: 0,
       turns: 0,
       deepestTurns: 0,
-      lastReadAt: null
+      lastReadAt: null,
+      anchorReach: []
     });
+
 
     if (entries.length === 0) {
       return [];
@@ -332,11 +342,43 @@ export class SessionStore {
     }>;
 
     const byStoryId = new Map(rows.map((row) => [row.storyId, row]));
+
+    /**
+     * Which planned beats readers actually reached, by the same per-story author
+     * exclusion. Joined through the session so one reader who hit a beat in three
+     * sessions still counts once.
+     */
+    const reachConditions = entries.map(() => "(s.story_id = ? AND s.user_id <> ?)").join(" OR ");
+    const reachRows = this.database.db
+      .prepare(
+        `SELECT s.story_id AS storyId,
+                t.anchor_id AS anchorId,
+                COUNT(DISTINCT s.user_id) AS readers
+           FROM session_turns t
+           JOIN reader_sessions s ON s.id = t.session_id
+          WHERE t.anchor_id IS NOT NULL AND (${reachConditions})
+          GROUP BY s.story_id, t.anchor_id
+          ORDER BY readers DESC`
+      )
+      .all(...params) as Array<{ storyId: string; anchorId: string; readers: number }>;
+
+
+    const reachByStoryId = new Map<string, Array<{ anchorId: string; readers: number }>>();
+    for (const row of reachRows) {
+      const list = reachByStoryId.get(row.storyId) ?? [];
+      list.push({ anchorId: row.anchorId, readers: row.readers });
+      reachByStoryId.set(row.storyId, list);
+    }
+
     return entries.map((entry) => {
       const row = byStoryId.get(entry.storyId);
-      return row ? { ...row, lastReadAt: row.lastReadAt ?? null } : empty(entry.storyId);
+      const anchorReach = reachByStoryId.get(entry.storyId) ?? [];
+      return row
+        ? { ...row, lastReadAt: row.lastReadAt ?? null, anchorReach }
+        : { ...empty(entry.storyId), anchorReach };
     });
   }
+
 
 
 
@@ -450,12 +492,12 @@ export class SessionStore {
     return row.nextSeq;
   }
 
-  private insertTurn(sessionId: string, turn: SessionTurn, seq: number): void {
+  private insertTurn(sessionId: string, turn: SessionTurn, seq: number, anchorId: string | null = null): void {
     this.database.db
       .prepare(
         `INSERT INTO session_turns
-           (session_id, id, seq, input_type, input, narration, dialogues, choices, state_snapshot, intervention, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           (session_id, id, seq, input_type, input, narration, dialogues, choices, state_snapshot, intervention, anchor_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(session_id, id) DO UPDATE SET
            seq = excluded.seq,
            input_type = excluded.input_type,
@@ -465,6 +507,9 @@ export class SessionStore {
            choices = excluded.choices,
            state_snapshot = excluded.state_snapshot,
            intervention = excluded.intervention,
+           -- Rewriting a session (rewind, reset) re-inserts the turns it keeps without
+           -- knowing their beats, so a missing value must not erase what was reported.
+           anchor_id = COALESCE(excluded.anchor_id, session_turns.anchor_id),
            created_at = excluded.created_at`
       )
       .run(
@@ -480,7 +525,9 @@ export class SessionStore {
         // NULL rather than "null": an ordinary passage has no cue, and the column
         // should say so without a reader having to parse it.
         turn.intervention ? JSON.stringify(turn.intervention) : null,
+        anchorId,
         turn.createdAt
+
       );
   }
 

@@ -114,8 +114,13 @@ export class MockNarrativeProvider implements LLMProvider {
             kind: "clue_found",
             prompt: `${hostName}的视线在那件被磨白的东西上停了一下。你可以继续读下去，也可以现在就问。`
           }
-        : null
+        : null,
+      // The anchor describeStage just used as this passage's act label. Reporting it
+      // keeps the author-facing beat counts meaningful on a mock install, instead of
+      // a feature that shows nothing but zeros until a real model is configured.
+      anchorId: pickAnchorId(input.story, turn)
     };
+
   }
 }
 
@@ -159,6 +164,13 @@ function describeStage(story: StoryDetail | undefined, turn: number): string {
   const anchor = anchors[(turn - 1) % Math.max(1, anchors.length)];
   return anchor ? `第 ${turn} 回合（${anchor.title}）` : `第 ${turn} 回合`;
 }
+
+/** The anchor describeStage labels a passage with, by the same index math. */
+function pickAnchorId(story: StoryDetail | undefined, turn: number): string | null {
+  const anchors = story?.anchors ?? [];
+  return anchors[(turn - 1) % Math.max(1, anchors.length)]?.id ?? null;
+}
+
 
 function buildSegment({
   location,

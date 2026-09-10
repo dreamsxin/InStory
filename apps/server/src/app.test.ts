@@ -2375,7 +2375,88 @@ describe("authentication", () => {
     expect(body.byStory[0]?.trialTokens).toBeGreaterThan(0);
   });
 
+  it("tells the author which planned beats readers actually reach", async () => {
+    await buildAuthApp(false);
+    const author = await register("beats-author@example.com", "作者");
+    const reader = await register("beats-reader@example.com", "读者");
+    const asAuthor = { authorization: `Bearer ${author}` };
+    const asReader = { authorization: `Bearer ${reader}` };
+
+    const created = await authApp.inject({
+      method: "POST",
+      url: "/api/stories",
+      headers: asAuthor,
+      payload: {
+        id: "lantern-ledger",
+        title: "提灯账",
+        tagline: "有人替这条河记账。",
+        genre: "民俗奇谈",
+        coverUrl: null,
+        premise: "一条夜里才摆渡的河。",
+        openingLocationName: "渡口",
+        openingLocationDescription: "灯在水面上晃。",
+        worldRules: [],
+        visibility: "public",
+        aiFreedom: "medium",
+        experienceMode: "coauthored",
+        defaultSegmentLength: "standard"
+      }
+    });
+    expect(created.statusCode).toBe(201);
+
+    const anchors = await authApp.inject({
+      method: "PUT",
+      url: "/api/me/stories/lantern-ledger/anchors",
+      headers: asAuthor,
+      payload: {
+        anchors: [
+          { title: "提灯人现身", type: "required", description: "第一夜必须有人提灯出现。" },
+          { title: "河水退去", type: "ending", description: "结局：河水退去，账清了。" }
+        ]
+      }
+    });
+    expect(anchors.statusCode).toBe(200);
+    const anchorIds = anchors.json<{ anchors: StoryAnchor[] }>().anchors.map((anchor) => anchor.id);
+
+    // Before anyone reads it, every beat honestly reads as unreached rather than absent.
+    const before = await authApp.inject({ method: "GET", url: "/api/me/story-insights", headers: asAuthor });
+    expect(before.json<{ insights: StoryReadingInsight[] }>().insights[0]?.anchorReach).toEqual([]);
+
+    const session = await authApp.inject({
+      method: "POST",
+      url: "/api/stories/lantern-ledger/sessions",
+      headers: asReader,
+      payload: { entryMode: "existing_character", characterId: null }
+    });
+    const sessionId = session.json<CreateSessionResponse>().session.id;
+    const advanced = await authApp.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/turns`,
+      headers: asReader,
+      payload: { inputType: "read_continue", content: "继续阅读" }
+    });
+    expect(advanced.statusCode).toBe(200);
+
+    const after = await authApp.inject({ method: "GET", url: "/api/me/story-insights", headers: asAuthor });
+    const reach = after.json<{ insights: StoryReadingInsight[] }>().insights[0]?.anchorReach ?? [];
+
+    // The passage named a beat of this story, so it counts - and it counts as one
+    // reader, not one turn.
+    expect(reach).toHaveLength(1);
+    expect(anchorIds).toContain(reach[0]?.anchorId);
+    expect(reach[0]?.readers).toBe(1);
+
+    // A reader must never be told which beat they are on: that is the author's outline.
+    const readerView = await authApp.inject({
+      method: "GET",
+      url: `/api/sessions/${sessionId}`,
+      headers: asReader
+    });
+    expect(JSON.stringify(readerView.json())).not.toContain(reach[0]?.anchorId ?? "__none__");
+  });
+
   it("keeps a private story private, and keeps a reader who is already inside", async () => {
+
 
     await buildAuthApp(false);
     const author = await register("private-author@example.com", "作者");

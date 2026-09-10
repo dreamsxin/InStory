@@ -114,8 +114,13 @@ export const narrativeResultSchema = z.object({
   memoryEvents: z.array(z.string()),
   // A malformed cue must not cost the reader the whole passage, so anything the
   // model gets wrong here degrades to "no cue" instead of failing validation.
-  intervention: interventionCueSchema.nullable().catch(null).default(null)
+  intervention: interventionCueSchema.nullable().catch(null).default(null),
+  // Same treatment for the anchor the model claims to have advanced: anything wrong
+  // or missing means "no beat reported", never a lost passage. The server checks the
+  // id against the story's real anchors before storing it.
+  anchorId: z.string().nullable().catch(null).default(null)
 });
+
 
 export const storySummarySchema = z.object({
   id: z.string().min(1),

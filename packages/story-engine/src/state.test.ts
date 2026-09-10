@@ -292,7 +292,9 @@ function createNarrativeResult(
     },
     memoryEvents: [],
     intervention: null,
+    anchorId: null,
     ...resultOverrides
+
   };
 }
 

@@ -206,7 +206,14 @@ function commitTurn(params: {
   result: NarrativeResult;
   sessionStore: SessionStore;
   quota: TurnQuota;
+  /**
+   * The ids of this story's plot anchors. The model's reported anchor is kept only if
+   * it is one of these: an invented id would otherwise show up in the author's beat
+   * counts as a node they never wrote.
+   */
+  anchorIds?: string[];
 }): CreateTurnResponse {
+
   const { session, sessionId, result } = params;
   const nextState = applyStateDelta(session.state, result.stateDelta);
   const now = new Date().toISOString();
@@ -255,8 +262,11 @@ function commitTurn(params: {
     turn,
     state: nextState,
     timelineNode,
-    updatedAt: now
+    updatedAt: now,
+    anchorId:
+      result.anchorId && params.anchorIds?.includes(result.anchorId) ? result.anchorId : null
   });
+
 
   return {
     turn,
@@ -1649,8 +1659,10 @@ export async function buildApp(options: BuildAppOptions) {
       input: parsed.data.content,
       result: generation.result,
       sessionStore: options.sessionStore,
+      anchorIds: storyDetail?.anchors.map((anchor) => anchor.id),
       quota: resolveQuota(options.usageStore, request.authUser.id, dailyTurnQuota)
     });
+
   });
 
   /**
@@ -1827,8 +1839,10 @@ export async function buildApp(options: BuildAppOptions) {
           input: parsed.data.content,
           result: event.result,
           sessionStore: options.sessionStore,
+          anchorIds: storyDetail?.anchors.map((anchor) => anchor.id),
           quota: resolveQuota(options.usageStore, authUserId, dailyTurnQuota)
         });
+
         send("complete", response);
         completed = true;
       }

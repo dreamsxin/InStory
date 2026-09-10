@@ -628,7 +628,42 @@ function QuotaSentence({ quota }: { quota: TurnQuota }) {
 }
 
 /**
+ * Whether the beats the author planned are actually being reached. An author could
+ * write 必经 anchors and never learn if a reader got to one: the anchors went into the
+ * prompt and nothing came back. The passage now names the beat it advanced, and this
+ * counts the readers per beat - a beat nobody has reached says so, which is the whole
+ * point of asking.
+ *
+ * Only 必经 and 结局 anchors are listed: those are the ones the shelf counts as the
+ * main line, and 可选 / 禁止 anchors are not promises about the path.
+ *
+ * The number is what the model reported, not ground truth - a passage that advanced a
+ * beat without saying so is missing from it. Said plainly here so the count is not
+ * read as more than it is.
+ */
+function AnchorReachLine({ anchors, insight }: { anchors: StoryAnchor[]; insight?: StoryReadingInsight }) {
+  const mainLine = anchors.filter((anchor) => anchor.type === "required" || anchor.type === "ending");
+  if (mainLine.length === 0) {
+    return null;
+  }
+
+  const readersByAnchorId = new Map((insight?.anchorReach ?? []).map((row) => [row.anchorId, row.readers]));
+
+  return (
+    <span className="story-anchor-reach muted" title="按模型标注统计：没标注的段落不计入">
+      {mainLine
+        .map((anchor) => {
+          const readers = readersByAnchorId.get(anchor.id) ?? 0;
+          return `${anchor.title}：${readers === 0 ? "还没有人到过" : `${readers} 人到过`}`;
+        })
+        .join(" · ")}
+    </span>
+  );
+}
+
+/**
  * What the story has done with readers, on the row the author already looks at.
+
 
  * A story nobody has opened says so plainly rather than showing four zeros: the
  * author's own trials are excluded upstream, so zero really means zero.
@@ -688,6 +723,8 @@ function CreatorStoriesPanel({
                       <strong>{detail.story.title}</strong>
                       <p>{detail.story.tagline}</p>
                       <ReadingInsightLine insight={insightsByStoryId.get(detail.story.id)} />
+                      <AnchorReachLine anchors={detail.anchors} insight={insightsByStoryId.get(detail.story.id)} />
+
                     </div>
                     <div className="story-management-chips">
                       <Chip size="sm" variant="soft">{detail.story.genre}</Chip>
