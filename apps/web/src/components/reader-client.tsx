@@ -78,6 +78,13 @@ export function ReaderClient({
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const latestTurn = session.turns.at(-1);
+  /**
+   * Advancing is the only thing a spent budget takes away. Reading what is already
+   * written, rewinding, resetting and changing the type size all cost nothing, so
+   * only the controls that call the model are turned off.
+   */
+  const quotaSpent = quota.remainingTurnsToday <= 0;
+
 
   useEffect(() => {
     setPrefs(loadReadingPrefs());
@@ -336,10 +343,10 @@ export function ReaderClient({
           <div className="reading-intervention-bar w-full sm:w-auto sm:min-w-[360px] md:min-w-96">
             <Button
               className="continue-reading-button w-full min-w-0 sm:w-auto md:min-w-48"
-              isDisabled={loading}
+              isDisabled={loading || quotaSpent}
               onPress={() => void submit("阅读推进", "read_continue")}
             >
-              {loading ? "生成中..." : "继续阅读"}
+              {loading ? "生成中..." : quotaSpent ? "今日次数已用完" : "继续阅读"}
             </Button>
             <Button
               className="w-full min-w-0 sm:w-auto md:min-w-36"
@@ -349,8 +356,18 @@ export function ReaderClient({
             >
               入戏行动
             </Button>
+            {/* Said before the press, not after it. The button used to look ready with
+                nothing behind it, so the reader spent a click - and sometimes a typed
+                action - to be told the day's budget was gone. */}
+            {quotaSpent ? (
+              <p className="quota-spent-note muted">
+                今天的 {quota.dailyLimit} 次推进已经用完
+                {quotaResetLabel ? `，${quotaResetLabel} 后可以接着读` : ""}。已经写好的这些段落随时能重看。
+              </p>
+            ) : null}
           </div>
         ) : null}
+
       </section>
 
       {/* Panel and dock share one fixed column so they can never cover each other.
@@ -380,7 +397,10 @@ export function ReaderClient({
                 error={error}
                 latestTurn={latestTurn}
                 loading={loading}
+                quotaResetLabel={quotaResetLabel}
+                quotaSpent={quotaSpent}
                 text={text}
+
                 onChoice={(choiceText, choiceId) => void submit(choiceText, "choice", choiceId)}
                 onPresetAction={(content) => void submit(content, "free_text")}
                 onSubmitText={() => void submit(text, "free_text")}
@@ -759,6 +779,8 @@ function ActionPanel({
   onPresetAction,
   onSubmitText,
   onTextChange,
+  quotaResetLabel,
+  quotaSpent,
   text
 }: {
   error: string | null;
@@ -768,13 +790,27 @@ function ActionPanel({
   onPresetAction: (content: string) => void;
   onSubmitText: () => void;
   onTextChange: (value: string) => void;
+  /** Local-time label for when the budget comes back, or null if it is unknown. */
+  quotaResetLabel: string | null;
+  /** True when today's turns are gone: everything here would be refused. */
+  quotaSpent: boolean;
   text: string;
 }) {
-  const canSubmit = !loading && text.trim().length > 0;
+  const blocked = loading || quotaSpent;
+  const canSubmit = !blocked && text.trim().length > 0;
 
   return (
     <div className="action-panel">
-      <p className="action-panel-intro">选一个快捷动作，或者自己写下想说的话、想做的事。</p>
+      {/* Up front, because this panel is where a reader types a whole sentence before
+          pressing anything. Being refused after writing it was the worst version. */}
+      {quotaSpent ? (
+        <p className="action-panel-intro action-quota-spent" role="status">
+          今天的推进次数已经用完{quotaResetLabel ? `，${quotaResetLabel} 后恢复` : ""}，现在不能再往下写。
+        </p>
+      ) : (
+        <p className="action-panel-intro">选一个快捷动作，或者自己写下想说的话、想做的事。</p>
+      )}
+
 
       <section className="action-section">
         <div className="action-section-head">
@@ -784,8 +820,9 @@ function ActionPanel({
           {ACTION_PRESETS.map((action) => (
             <button
               className="action-preset"
-              disabled={loading}
+              disabled={blocked}
               key={action.id}
+
               type="button"
               onClick={() => onPresetAction(action.prompt)}
             >
@@ -806,8 +843,9 @@ function ActionPanel({
             {latestTurn.choices.map((choice) => (
               <button
                 className="action-choice"
-                disabled={loading}
+                disabled={blocked}
                 key={choice.id}
+
                 type="button"
                 onClick={() => onChoice(choice.text, choice.id)}
               >
@@ -835,7 +873,8 @@ function ActionPanel({
           </div>
           <textarea
             className="action-textarea"
-            disabled={loading}
+            disabled={blocked}
+
             maxLength={MAX_ACTION_LENGTH}
             name="action"
             placeholder="例如：我压低声音问陆清河，昨夜谁最后见过父亲。"

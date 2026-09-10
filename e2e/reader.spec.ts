@@ -366,6 +366,21 @@ test.describe("reader", () => {
     // Same warning where a returning reader actually clicks.
     await page.locator(".app-topbar").getByRole("button", { name: "继续" }).click();
     await expect(page.locator(".story-quota-note").first()).toContainText("接着往下读");
+
+    // And inside the reader: the controls that call the model say so before being
+    // pressed. 继续阅读 used to look ready, and the action panel let a reader type a
+    // whole sentence before refusing it.
+    await page.goto(`/story/${sessionId}`);
+    const advance = page.getByRole("button", { name: "今日次数已用完" });
+    await expect(advance).toBeVisible();
+    await expect(advance).toBeDisabled();
+    await expect(page.locator(".quota-spent-note")).toContainText("已经用完");
+
+    await page.getByRole("button", { name: "入戏行动" }).click();
+    await expect(page.locator(".action-quota-spent")).toContainText("不能再往下写");
+    await expect(page.locator(".action-textarea")).toBeDisabled();
+    await expect(page.locator(".action-preset").first()).toBeDisabled();
   });
+
 
 });
