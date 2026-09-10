@@ -639,27 +639,44 @@ function QuotaSentence({ quota }: { quota: TurnQuota }) {
  *
  * The number is what the model reported, not ground truth - a passage that advanced a
  * beat without saying so is missing from it. Said plainly here so the count is not
- * read as more than it is.
+ * read as more than it is. And a story nobody has opened gets no per-beat numbers at
+ * all: "nobody reached this beat" would be true of every unread story and tells the
+ * author nothing about the beat they wrote.
  */
+
 function AnchorReachLine({ anchors, insight }: { anchors: StoryAnchor[]; insight?: StoryReadingInsight }) {
   const mainLine = anchors.filter((anchor) => anchor.type === "required" || anchor.type === "ending");
   if (mainLine.length === 0) {
     return null;
   }
 
-  const readersByAnchorId = new Map((insight?.anchorReach ?? []).map((row) => [row.anchorId, row.readers]));
+  // Two very different silences used to render identically. "Nobody reached this beat"
+  // when nobody has opened the story says nothing about the beat; the author only
+  // learns something once there is reading to compare against, so the numbers wait
+  // until then instead of pointing at the anchors.
+  if (!insight || insight.readers === 0) {
+    return (
+      <span className="story-anchor-reach muted">
+        主线 {mainLine.length} 个节点 · 还没有人读过，无从谈到过没到过
+      </span>
+    );
+  }
+
+  const readersByAnchorId = new Map(insight.anchorReach.map((row) => [row.anchorId, row.readers]));
 
   return (
     <span className="story-anchor-reach muted" title="按模型标注统计：没标注的段落不计入">
+      {insight.readers} 位读者读了 {insight.turns} 段：
       {mainLine
         .map((anchor) => {
           const readers = readersByAnchorId.get(anchor.id) ?? 0;
-          return `${anchor.title}：${readers === 0 ? "还没有人到过" : `${readers} 人到过`}`;
+          return `${anchor.title} ${readers === 0 ? "还没有人走到" : `${readers} 人到过`}`;
         })
         .join(" · ")}
     </span>
   );
 }
+
 
 /**
  * What the story has done with readers, on the row the author already looks at.

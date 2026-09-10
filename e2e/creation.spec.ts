@@ -261,6 +261,20 @@ test.describe("creation console", () => {
     await row.getByRole("button", { name: "保存故事" }).click();
     await expect(row.locator(".management-edit .form-feedback").first()).toHaveClass(/is-ok/);
 
+    // Give it a beat to reach, so the row can answer "did anyone get there".
+    const anchors = row.locator(".anchors-form");
+    await anchors.getByRole("button", { name: "添加锚点" }).click();
+    await anchors.getByLabel("锚点 1").fill("提灯人现身");
+    await anchors.getByLabel("说明").fill("第一夜必须有人提灯出现在对岸。");
+    await anchors.getByRole("button", { name: "保存锚点" }).click();
+    await expect(anchors.locator(".form-feedback")).toHaveClass(/is-ok/);
+
+    // With nobody reading yet, the beat gets no number: "nobody reached it" would be
+    // true of every unread story and says nothing about the beat itself.
+    await page.reload();
+    await page.locator(".app-topbar").getByRole("button", { name: "创作" }).click();
+    await expect(page.locator(".story-anchor-reach")).toContainText("还没有人读过");
+
     // Someone else reads one passage of it.
     const registered = await request.post(`${API_BASE}/api/auth/register`, {
       data: { email: `e2e-insight-reader-${Date.now()}@example.com`, displayName: "E2E 读者", password: PASSWORD }
@@ -284,7 +298,13 @@ test.describe("creation console", () => {
     const insight = page.locator(".story-management-list .management-details .story-insight");
     await expect(insight).toContainText("1 位读者");
     await expect(insight).toContainText("最深 2 回合");
+
+    // And whether the beat they planned actually happened, which the anchors alone
+    // could never tell them.
+    await expect(page.locator(".story-anchor-reach")).toContainText("1 位读者读了 2 段");
+    await expect(page.locator(".story-anchor-reach")).toContainText("提灯人现身 1 人到过");
   });
+
 
   test("leaves a tombstone card instead of losing the reading silently", async ({ page, request }) => {
     await signIn(page, request, "e2e-tombstone@example.com");
