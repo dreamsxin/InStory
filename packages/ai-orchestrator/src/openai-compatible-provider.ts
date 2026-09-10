@@ -1,4 +1,8 @@
-import { narrativeResultSchema, type NarrativeResult } from "@instory/shared";
+import {
+  narrativeResultSchema,
+  type NarrativeResult,
+  type StorySummary
+} from "@instory/shared";
 import { NarrationExtractor, readUsage, SseContentReader } from "./narration-stream.js";
 import type {
   GenerateNarrativeInput,
@@ -241,7 +245,7 @@ export class OpenAICompatibleNarrativeProvider implements LLMProvider {
       messages: [
         {
           role: "system",
-          content: buildSystemPrompt()
+          content: buildSystemPrompt(input.story?.story)
         },
         {
           role: "user",
@@ -304,7 +308,13 @@ function isRetryableStatus(status: number): boolean {
   return status === 408 || status === 409 || status === 429 || status >= 500;
 }
 
-function buildSystemPrompt(): string {
+/**
+ * The rules the model writes under. The last two are the author's own two dials, and
+ * until now they were only sent along inside the story summary with nothing saying what
+ * they mean - so a story marked 剧本 read exactly like one marked 即兴, while the shelf
+ * card told readers otherwise. They are spelled out here instead of left to inference.
+ */
+export function buildSystemPrompt(story?: StorySummary): string {
   return [
     "你是 InStory 的 AI 叙事编排器，负责生成受控的互动小说下一回合。",
     "必须使用第二人称“你”推进故事，保持悬疑感和明确行动压力。",
@@ -322,8 +332,35 @@ function buildSystemPrompt(): string {
     "memoryEvents 必须是字符串数组，例如 [\"你记住了门外脚步声异常。\"]，禁止输出对象数组。",
     "choices 必须包含 2 到 4 个选项，每个选项有 id、text、risk，risk 只能是 low、medium、high。",
     "stateDelta 只能描述本回合变化，不能凭空清空已有状态。",
-    "玩家行为超出当前世界能力时，给出合理失败或代价，不要直接满足。"
+    "玩家行为超出当前世界能力时，给出合理失败或代价，不要直接满足。",
+    ...(story ? [experienceModeRule(story.experienceMode), aiFreedomRule(story.aiFreedom)] : [])
   ].join("\n");
+}
+
+/** How much the reader's own actions may bend the main line. */
+function experienceModeRule(mode: StorySummary["experienceMode"]): string {
+  if (mode === "scripted") {
+    return "本故事是剧本模式：主线完全由 story.anchors 决定，读者的行动只改变细节、语气与节奏，不改变主线的走向和先后顺序；读者想岔开时，用情节把他带回既定路径，而不是照他改写主线。";
+  }
+
+  if (mode === "improvised") {
+    return "本故事是即兴模式：读者的行动可以改变主线走向，也可以绕开原定路径；required 锚点仍然必须以某种形式发生，但何时、以什么形式发生由这一局的走势决定。";
+  }
+
+  return "本故事是共创模式：读者的行动可以改变支线、顺序和谁在场，但每一个 required 锚点仍然必须发生；不要为了迁就读者而跳过它们。";
+}
+
+/** How much the model may invent beyond what the author wrote down. */
+function aiFreedomRule(freedom: StorySummary["aiFreedom"]): string {
+  if (freedom === "low") {
+    return "AI 自由度为 low：只能使用 story.world 与 story.characters 里已经写下的地点和人物，不要新增人物、地点或支线，缺少的部分靠已有元素的细节来写。";
+  }
+
+  if (freedom === "high") {
+    return "AI 自由度为 high：可以引入新的场景、次要人物和支线，只要不违反 story.world.rules 与 story.anchors。";
+  }
+
+  return "AI 自由度为 medium：可以补充环境细节与临时的次要人物，但不要新增会改变世界规则或主线结构的元素。";
 }
 
 function isAbortError(error: unknown): boolean {
