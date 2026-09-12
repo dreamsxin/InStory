@@ -8,7 +8,8 @@ import type {
   ReaderProfile,
   ReaderSessionListItem,
   SessionTurn,
-  ShelfStory,
+  ShelfPage,
+  ShelfSort,
   StoryAnchor,
   StoryDetail,
   StoryReadingInsight,
@@ -162,14 +163,42 @@ export interface AdminModelVerificationResult {
   checkedAt: string;
 }
 
-export async function listStories(): Promise<ShelfStory[]> {
-  const response = await apiFetch("/api/stories");
+/**
+ * One page of the public shelf. The keyword, the genre and the order all travel to
+ * the server: the shelf used to be filtered in the browser, which only worked while
+ * every public story was shipped with the first screen.
+ *
+ * Reader counts arrive with the page rather than from a second call, so the numbers
+ * on a card always belong to the query that put it there.
+ */
+export async function listShelf(
+  query: { q?: string; genre?: string; sort?: ShelfSort; limit?: number; offset?: number } = {}
+): Promise<ShelfPage> {
+  const params = new URLSearchParams();
+  if (query.q?.trim()) {
+    params.set("q", query.q.trim());
+  }
+  if (query.genre) {
+    params.set("genre", query.genre);
+  }
+  if (query.sort) {
+    params.set("sort", query.sort);
+  }
+  if (query.limit !== undefined) {
+    params.set("limit", String(query.limit));
+  }
+  if (query.offset) {
+    params.set("offset", String(query.offset));
+  }
+
+  const search = params.toString();
+  const response = await apiFetch(`/api/stories${search ? `?${search}` : ""}`);
   if (!response.ok) {
     throw new Error("加载故事列表失败");
   }
-  const data = (await response.json()) as { stories: ShelfStory[] };
-  return data.stories;
+  return (await response.json()) as ShelfPage;
 }
+
 
 export async function listMyStories(): Promise<StorySummary[]> {
   const response = await apiFetch("/api/me/stories");
@@ -186,18 +215,6 @@ export async function listMyStories(): Promise<StorySummary[]> {
 export async function listMyStoryDetails(): Promise<StoryDetail[]> {
   const stories = await listMyStories();
   return Promise.all(stories.map((story) => getStoryDetail(story.id)));
-}
-
-/** Reader counts for the public shelf. Safe for any signed-in reader to see. */
-export async function listStoryInsights(): Promise<StoryReadingInsight[]> {
-  const response = await apiFetch("/api/stories/insights");
-
-  if (!response.ok) {
-    throw new Error("读取故事阅读情况失败");
-  }
-
-  const data = (await response.json()) as { insights: StoryReadingInsight[] };
-  return data.insights;
 }
 
 /** Reader counts for the author's own stories. Empty when they have no stories. */

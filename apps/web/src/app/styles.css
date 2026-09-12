@@ -212,6 +212,28 @@ a {
   }
 }
 
+/* Under the grid and centred: the shelf is paged now, and the next page is
+   something the reader asks for rather than something scrolling triggers. */
+.shelf-more {
+  display: flex;
+  justify-content: center;
+  margin-block-start: 16px;
+}
+
+/* Same treatment as a refused form: the shelf comes from the network now, and a
+   failed search that quietly kept the old cards would read as "matched everything". */
+.shelf-status {
+  margin: 0 0 16px;
+  padding: 9px 12px;
+  border: 1px solid color-mix(in oklab, var(--accent-strong) 45%, transparent);
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--accent-strong) 10%, transparent);
+  color: var(--accent-strong);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+
 .story-grid {
 
   display: grid;

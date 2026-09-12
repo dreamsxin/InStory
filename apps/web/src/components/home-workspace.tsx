@@ -1,13 +1,14 @@
 "use client";
 
 import { Avatar, Button, Card, Chip, Input, Label, ListBox, Select, TextArea, TextField } from "@heroui/react";
-import { useActionState, useEffect, useState, type ReactNode } from "react";
+import { useActionState, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type {
   CharacterProfile,
   ReaderProfile,
   ReaderSessionListItem,
-  ShelfStory,
+  ShelfPage,
+  ShelfSort,
   StoryAnchor,
   StoryDetail,
   StoryReadingInsight,
@@ -19,7 +20,7 @@ import { ReadingThemeSelect } from "@/components/reading-theme-select";
 import { DEFAULT_READING_THEME, parseReadingTheme } from "@/lib/reading-themes";
 import { QuotaExhaustedNote, StoryLauncher } from "@/components/story-launcher";
 
-import { createSession, formatQuotaReset } from "@/lib/api";
+import { createSession, formatQuotaReset, listShelf } from "@/lib/api";
 
 import {
   createReaderProfileAction,
@@ -51,8 +52,7 @@ export function HomeWorkspace({
   profiles,
   quota,
   sessions,
-  shelfInsights,
-  stories,
+  shelf,
   storyInsights
 }: {
   /** Rendered on the server and placed in the top bar, so it stays put while the
@@ -64,9 +64,8 @@ export function HomeWorkspace({
   quota: TurnQuota;
   sessions: ReaderSessionListItem[];
 
-  /** Reader counts for the public shelf, so a story can show it has been read. */
-  shelfInsights: StoryReadingInsight[];
-  stories: ShelfStory[];
+  /** The shelf's first page, already ordered, with the reader counts for it. */
+  shelf: ShelfPage;
   storyInsights: StoryReadingInsight[];
 }) {
   const [activeTab, setActiveTab] = useState<HomeTab>("stories");
@@ -118,7 +117,7 @@ export function HomeWorkspace({
         </div>
         <div className="hero-stat-grid" aria-label="InStory stats">
           <div>
-            <strong>{stories.length}</strong>
+            <strong>{shelf.publicTotal}</strong>
             <span>故事世界</span>
           </div>
           <div>
@@ -138,11 +137,10 @@ export function HomeWorkspace({
       <section className="mobile-tab-panel">
         {activeTab === "stories" ? (
           <StoriesView
-            insights={shelfInsights}
+            initialShelf={shelf}
             profiles={profiles}
             quota={quota}
             sessions={sessions}
-            stories={stories}
             onCreateStory={() => setActiveTab("create")}
           />
         ) : null}
@@ -178,11 +176,9 @@ export function HomeWorkspace({
 /**
  * The shelf is ordered by what a reader would ask for, not by story id. "最近有人读"
  * is the default because a shelf sorted alphabetically silently buries everything
- * after the first screen - and the reader counts were already being computed and
- * shown on the cards without ever being used to order them.
+ * after the first screen. The labels live here; the order itself is applied by the
+ * server, which is the only side that can see the whole shelf now that it is paged.
  */
-type ShelfSort = "recent" | "readers" | "title";
-
 const SHELF_SORTS: Array<{ id: ShelfSort; label: string }> = [
   { id: "recent", label: "最近有人读" },
   { id: "readers", label: "读者最多" },
@@ -193,39 +189,81 @@ const SHELF_SORTS: Array<{ id: ShelfSort; label: string }> = [
 const ALL_GENRES = "__all__";
 
 function StoriesView({
-  insights,
+  initialShelf,
   onCreateStory,
   profiles,
   quota,
-  sessions,
-  stories
+  sessions
 }: {
-  insights: StoryReadingInsight[];
+  /** Rendered on the server, so the first screen is a shelf and not a spinner. */
+  initialShelf: ShelfPage;
   onCreateStory: () => void;
   profiles: ReaderProfile[];
   quota: TurnQuota;
   sessions: ReaderSessionListItem[];
-  stories: ShelfStory[];
 }) {
 
   const [query, setQuery] = useState("");
   const [genre, setGenre] = useState<string>(ALL_GENRES);
   const [sort, setSort] = useState<ShelfSort>("recent");
+  const [shelf, setShelf] = useState(initialShelf);
+  const [pending, setPending] = useState(false);
+  const [failed, setFailed] = useState(false);
+  /** The server already rendered the page these criteria ask for. */
+  const serverRendered = useRef(true);
   const sessionsByStoryId = new Map(sessions.map((session) => [session.storyId, session]));
-  const insightsByStoryId = new Map(insights.map((insight) => [insight.storyId, insight]));
-
-  const genres = [...new Set(stories.map((story) => story.genre))].sort((left, right) =>
-    left.localeCompare(right, "zh-CN")
-  );
-  const keyword = query.trim().toLowerCase();
-  const visible = [...stories]
-    .filter((story) => genre === ALL_GENRES || story.genre === genre)
-    .filter(
-      (story) =>
-        !keyword || `${story.title} ${story.tagline} ${story.genre}`.toLowerCase().includes(keyword)
-    )
-    .sort((left, right) => compareForShelf(left, right, sort, insightsByStoryId));
+  const insightsByStoryId = new Map(shelf.insights.map((insight) => [insight.storyId, insight]));
+  const keyword = query.trim();
   const filtering = keyword.length > 0 || genre !== ALL_GENRES;
+  const selectedGenre = genre === ALL_GENRES ? undefined : genre;
+
+  useEffect(() => {
+    if (serverRendered.current) {
+      serverRendered.current = false;
+      return;
+    }
+
+    let cancelled = false;
+    // Typing arrives a keystroke at a time. The wait keeps the shelf from asking for
+    // a page per character, and `cancelled` drops a superseded answer instead of
+    // painting whichever request happened to come back last.
+    const timer = setTimeout(async () => {
+      setPending(true);
+      setFailed(false);
+      try {
+        const next = await listShelf({ q: keyword, genre: selectedGenre, sort });
+        if (!cancelled) {
+          setShelf(next);
+        }
+      } catch {
+        if (!cancelled) {
+          setFailed(true);
+        }
+      } finally {
+        if (!cancelled) {
+          setPending(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [keyword, selectedGenre, sort]);
+
+  async function loadMore() {
+    setPending(true);
+    setFailed(false);
+    try {
+      const next = await listShelf({ q: keyword, genre: selectedGenre, sort, offset: shelf.stories.length });
+      setShelf((current) => appendShelfPage(current, next));
+    } catch {
+      setFailed(true);
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
     <div className="app-section">
@@ -235,14 +273,14 @@ function StoriesView({
           <h2 className="section-title">探索故事</h2>
         </div>
         <Chip size="sm" variant="soft">
-          {stories.length === 0
+          {shelf.publicTotal === 0
             ? "暂无公开故事"
             : filtering
-              ? `筛出 ${visible.length} / 共 ${stories.length}`
+              ? `筛出 ${shelf.total} / 共 ${shelf.publicTotal}`
               : "所有可进入的故事"}
         </Chip>
       </div>
-      {stories.length ? (
+      {shelf.publicTotal ? (
         <>
           <div className="shelf-filters">
             <TextField aria-label="搜索故事" value={query} onChange={setQuery}>
@@ -264,7 +302,9 @@ function StoriesView({
                     全部类型
                     <ListBox.ItemIndicator />
                   </ListBox.Item>
-                  {genres.map((name) => (
+                  {/* Every public genre, not this page's: the point of the filter is
+                      to reach the ones that are not on screen. */}
+                  {shelf.genres.map((name) => (
                     <ListBox.Item id={name} key={name} textValue={name}>
                       {name}
                       <ListBox.ItemIndicator />
@@ -294,20 +334,37 @@ function StoriesView({
               </Select.Popover>
             </Select>
           </div>
-          {visible.length ? (
-            <div className="story-grid">
-              {visible.map((story) => (
-                <StoryLauncher
-                  existingSession={sessionsByStoryId.get(story.id)}
-                  insight={insightsByStoryId.get(story.id)}
-                  key={story.id}
-                  profiles={profiles}
-                  quota={quota}
-                  story={story}
-                />
+          {/* Said out loud, because the shelf now comes from the network: a failed
+              search that silently kept the old cards would look like a shelf where
+              the keyword matched everything. */}
+          {failed ? (
+            <p className="shelf-status" role="alert">
+              没能取到故事列表，可能是网络断了。改一下条件会重试。
+            </p>
+          ) : null}
+          {shelf.stories.length ? (
+            <>
+              <div className="story-grid" aria-busy={pending}>
+                {shelf.stories.map((story) => (
+                  <StoryLauncher
+                    existingSession={sessionsByStoryId.get(story.id)}
+                    insight={insightsByStoryId.get(story.id)}
+                    key={story.id}
+                    profiles={profiles}
+                    quota={quota}
+                    story={story}
+                  />
 
-              ))}
-            </div>
+                ))}
+              </div>
+              {shelf.stories.length < shelf.total ? (
+                <div className="shelf-more">
+                  <Button isDisabled={pending} type="button" variant="outline" onPress={loadMore}>
+                    {pending ? "正在加载…" : `再看 ${shelf.total - shelf.stories.length} 个`}
+                  </Button>
+                </div>
+              ) : null}
+            </>
           ) : (
             /* Deliberately not the "nothing is public yet" panel: telling someone to go
                create a story when they merely mistyped a search would be a lie. */
@@ -354,32 +411,23 @@ function parseShelfSort(key: unknown): ShelfSort {
 }
 
 /**
- * Never-read stories sort last rather than first: a missing lastReadAt means "nobody
- * has been here", which is the opposite of recent. Ties fall back to the title so the
- * order is stable instead of depending on how the rows came out of the database.
+ * The next page, appended. Ids already on screen are dropped: a story published
+ * between the two requests shifts the window, and without this the card that moved
+ * across the boundary would appear twice while another never appeared at all. The
+ * newer page's totals win - they are the more recent count of the same shelf.
  */
-function compareForShelf(
-  left: StorySummary,
-  right: StorySummary,
-  sort: ShelfSort,
-  insights: Map<string, StoryReadingInsight>
-): number {
-  const byTitle = left.title.localeCompare(right.title, "zh-CN");
-  if (sort === "title") {
-    return byTitle;
-  }
+function appendShelfPage(current: ShelfPage, next: ShelfPage): ShelfPage {
+  const known = new Set(current.stories.map((story) => story.id));
+  const added = next.stories.filter((story) => !known.has(story.id));
+  const addedIds = new Set(added.map((story) => story.id));
 
-  const leftInsight = insights.get(left.id);
-  const rightInsight = insights.get(right.id);
-
-  if (sort === "readers") {
-    return (rightInsight?.readers ?? 0) - (leftInsight?.readers ?? 0) || byTitle;
-  }
-
-  const leftRead = leftInsight?.lastReadAt ? Date.parse(leftInsight.lastReadAt) : 0;
-  const rightRead = rightInsight?.lastReadAt ? Date.parse(rightInsight.lastReadAt) : 0;
-  return rightRead - leftRead || byTitle;
+  return {
+    ...next,
+    stories: [...current.stories, ...added],
+    insights: [...current.insights, ...next.insights.filter((insight) => addedIds.has(insight.storyId))]
+  };
 }
+
 
 
 function ContinueView({ quota, sessions }: { quota: TurnQuota; sessions: ReaderSessionListItem[] }) {

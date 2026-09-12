@@ -10,6 +10,7 @@ import {
   createTurnRequestSchema,
   loginRequestSchema,
   registerRequestSchema,
+  shelfQuerySchema,
   storySummarySchema,
   updateStoryAnchorsRequestSchema,
   updateStoryCharacterRequestSchema,
@@ -34,6 +35,7 @@ import type {
   ReaderProfile,
   SegmentLengthPreset,
   SessionTurn,
+  ShelfSort,
   StoryDetail,
   StorySession,
   StorySummary,
@@ -1044,37 +1046,65 @@ export async function buildApp(options: BuildAppOptions) {
 
 
   /**
-   * The public shelf. Each entry carries the two figures a reader needs to judge
-   * "how long is this" - how many beats the author planned, and how many words a
-   * passage is written to - and neither of them exposes the outline itself.
+   * The public shelf, one page at a time. Searching, filtering and ordering are all
+   * decided here: they used to happen in the browser, which meant every visitor was
+   * sent every public story - and every story's reader counts - just so a keyword
+   * could be typed into a text box.
+   *
+   * The reader counts come back with the page instead of from a second endpoint. Two
+   * endpoints each deciding what "public" means is how a card ends up carrying a
+   * number that was computed for a different set of stories than the one it is in.
+   *
+   * Each entry carries the two figures a reader needs to judge "how long is this" -
+   * how many beats the author planned, and how many words a passage is written to -
+   * and neither of them exposes the outline itself.
    */
-  app.get("/api/stories", async () => {
+  app.get("/api/stories", async (request, reply) => {
+    const query = shelfQuerySchema.safeParse(request.query ?? {});
+
+    // Refused rather than defaulted: a shelf that quietly ignores the sort it was
+    // asked for shows an order nobody chose, and looks like the sort is broken.
+    if (!query.success) {
+      return reply.code(400).send({
+        error: "书架查询参数不对：sort 只能是 recent / readers / title，limit 为 1-60，offset 不能为负。"
+      });
+    }
+
+    const { q, genre, sort, limit, offset } = query.data;
+    const matched = options.storyCatalog.searchPublicStories({ q, genre });
+    // Only fetched for the orders that need reading history; 按标题 is decided by the
+    // stories alone, and asking the sessions table would be work nobody reads.
+    const orderKeys =
+      sort === "title"
+        ? new Map<string, { readers: number; lastReadAt: string | null }>()
+        : options.sessionStore.summarizeStoryOrderKeys();
+    const page = [...matched]
+      .sort((left, right) => compareForShelf(left, right, sort, orderKeys))
+      .slice(offset, offset + limit);
     const beats = options.storyCatalog.countPlannedBeats();
 
     return {
-      stories: options.storyCatalog.listPublicStories().map((story) => ({
+      stories: page.map((story) => ({
         ...story,
         plannedBeats: beats.get(story.id) ?? 0,
         segmentTargetWords: SEGMENT_LENGTH_GUIDES[story.defaultSegmentLength].targetWords
-      }))
-    };
-  });
-
-
-  /**
-   * How far each public story has carried readers, for the explore shelf. Aggregates
-   * only, and each story's own author is excluded, so the number means "other people
-   * read this" rather than "the author opened it".
-   */
-  app.get("/api/stories/insights", async () => {
-    const stories = options.storyCatalog.listPublicStories();
-
-    return {
+      })),
+      /**
+       * How far each story on this page has carried readers. Aggregates only, and
+       * each story's own author is excluded, so the number means "other people read
+       * this" rather than "the author opened it".
+       */
       insights: options.sessionStore.summarizeStories(
-        stories.map((story) => ({ storyId: story.id, ownerId: story.ownerId }))
-      )
+        page.map((story) => ({ storyId: story.id, ownerId: story.ownerId }))
+      ),
+      total: matched.length,
+      publicTotal: options.storyCatalog.countPublicStories(),
+      genres: options.storyCatalog.listPublicGenres(),
+      limit,
+      offset
     };
   });
+
 
 
   app.get("/api/me/stories", async (request, reply) => {
@@ -2055,6 +2085,37 @@ function createReaderSessionListItem(
 function isAuthorTrial(ownerId: string | null | undefined, viewerId: string): boolean {
   return ownerId != null && ownerId === viewerId;
 }
+
+/**
+ * The shelf's order. Never-read stories sort last rather than first: a missing
+ * lastReadAt means "nobody has been here", which is the opposite of recent. Ties fall
+ * back to the title so the order is stable instead of depending on how the rows came
+ * out of the database - with paging, an unstable order would show the same story on
+ * two pages and hide another entirely.
+ */
+function compareForShelf(
+  left: StorySummary,
+  right: StorySummary,
+  sort: ShelfSort,
+  orderKeys: Map<string, { readers: number; lastReadAt: string | null }>
+): number {
+  const byTitle = left.title.localeCompare(right.title, "zh-CN");
+  if (sort === "title") {
+    return byTitle;
+  }
+
+  const leftKey = orderKeys.get(left.id);
+  const rightKey = orderKeys.get(right.id);
+
+  if (sort === "readers") {
+    return (rightKey?.readers ?? 0) - (leftKey?.readers ?? 0) || byTitle;
+  }
+
+  const leftRead = leftKey?.lastReadAt ? Date.parse(leftKey.lastReadAt) : 0;
+  const rightRead = rightKey?.lastReadAt ? Date.parse(rightKey.lastReadAt) : 0;
+  return rightRead - leftRead || byTitle;
+}
+
 
 
 

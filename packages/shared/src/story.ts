@@ -85,6 +85,39 @@ export interface ShelfStory extends StorySummary {
   segmentTargetWords: number;
 }
 
+/**
+ * How the shelf is ordered. Decided on the server, because the order depends on
+ * reading history the browser is no longer handed in full: once the shelf is paged,
+ * sorting in the client could only order the page it happens to hold, which is a
+ * different shelf than the one the reader asked for.
+ */
+export type ShelfSort = "recent" | "readers" | "title";
+
+/**
+ * One page of the public shelf, plus what the page needs to describe itself. The
+ * reader counts travel with the stories instead of coming from a second endpoint:
+ * two endpoints each deciding what "public" means is how a card ends up showing
+ * numbers computed for a different set than the one it is part of.
+ */
+export interface ShelfPage {
+  stories: ShelfStory[];
+  /** Reader counts for exactly the stories on this page. */
+  insights: StoryReadingInsight[];
+  /** How many public stories match the query - not how many this page holds. */
+  total: number;
+  /**
+   * How many public stories exist at all, ignoring the query. This is what tells
+   * "nobody has published anything yet" apart from "your keyword matched nothing",
+   * and those two need different words on screen.
+   */
+  publicTotal: number;
+  /** Every genre on the public shelf, so the filter offers more than this page's. */
+  genres: string[];
+  /** The window as the server actually applied it, after clamping. */
+  limit: number;
+  offset: number;
+}
+
 export interface CreateStoryRequest {
   id: string;
   title: string;

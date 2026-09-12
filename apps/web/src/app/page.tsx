@@ -8,8 +8,7 @@ import {
   listMyStoryInsights,
   listReaderProfiles,
   listReaderSessions,
-  listStories,
-  listStoryInsights
+  listShelf
 } from "@/lib/api";
 
 export default async function HomePage() {
@@ -18,13 +17,15 @@ export default async function HomePage() {
     redirect("/login");
   }
 
-  const [stories, profiles, myStoryDetails, sessions, storyInsights, shelfInsights, quota] = await Promise.all([
-    listStories(),
+  // The shelf's first page, in the default order. Filtering and further pages are
+  // fetched by the client from the same endpoint, so what the first screen shows and
+  // what a keyword returns are decided in one place.
+  const [shelf, profiles, myStoryDetails, sessions, storyInsights, quota] = await Promise.all([
+    listShelf(),
     listReaderProfiles(),
     listMyStoryDetails(),
     listReaderSessions(),
     listMyStoryInsights(),
-    listStoryInsights(),
     getMyQuota()
   ]);
 
@@ -35,11 +36,11 @@ export default async function HomePage() {
       profiles={profiles}
       quota={quota}
       sessions={sessions}
-      shelfInsights={shelfInsights}
-      stories={stories}
+      shelf={shelf}
       storyInsights={storyInsights}
     />
   );
 }
+
 
 

@@ -397,6 +397,35 @@ export class SessionStore {
     });
   }
 
+  /**
+   * Just the two figures the shelf orders by, for every story that has been read, in
+   * one query. `summarizeStories` answers the same question in more detail, but it
+   * builds one OR clause per story id, so ordering a shelf of a few hundred stories
+   * through it would mean a few hundred clauses to compute numbers that are then
+   * thrown away for everything outside the page. Ordering needs the keys for the
+   * whole matched set; the details are only needed for the page that is shown.
+   *
+   * The author exclusion joins the story's own payload rather than taking a viewer
+   * id, so it stays per story - a public shelf mixes stories with different authors,
+   * and an author opening their own draft is not an audience for it.
+   */
+  summarizeStoryOrderKeys(): Map<string, { readers: number; lastReadAt: string | null }> {
+    const rows = this.database.db
+      .prepare(
+        `SELECT s.story_id AS storyId,
+                COUNT(DISTINCT s.user_id) AS readers,
+                MAX(s.updated_at) AS lastReadAt
+           FROM reader_sessions s
+           JOIN stories st ON st.id = s.story_id
+          WHERE s.user_id <> COALESCE(json_extract(st.payload, '$.ownerId'), '')
+          GROUP BY s.story_id`
+      )
+      .all() as Array<{ storyId: string; readers: number; lastReadAt: string | null }>;
+
+    return new Map(rows.map((row) => [row.storyId, { readers: row.readers, lastReadAt: row.lastReadAt ?? null }]));
+  }
+
+
 
 
 

@@ -52,6 +52,76 @@ describe("StoryStore", () => {
     }
   });
 
+  it("keeps a story written before visibility existed on the public shelf", () => {
+    const dir = mkdtempSync(join(tmpdir(), "instory-story-store-"));
+    const database = new AppDatabase(join(dir, "story.sqlite"));
+    const store = new StoryStore(database);
+
+    try {
+      const seed = loadSeed();
+      // The shelf query filters in SQL, so it has to reach the same verdict as
+      // normalizeStorySummary does in TypeScript: a payload with no `visibility` and
+      // no owner is the platform's own story, and it belongs on the shelf.
+      const legacy = { ...seed.stories[0]!, ownerId: null } as Record<string, unknown>;
+      delete legacy.visibility;
+      store.seedIfEmpty({ ...seed, stories: [legacy as unknown as (typeof seed.stories)[number]] });
+
+      expect(store.searchPublicStories().map((story) => story.id)).toEqual(["rain-mansion"]);
+      expect(store.countPublicStories()).toBe(1);
+      expect(store.listPublicGenres()).toEqual(["悬疑"]);
+    } finally {
+      database.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("matches a shelf keyword against title, tagline and genre, wildcards included", () => {
+    const dir = mkdtempSync(join(tmpdir(), "instory-story-store-"));
+    const database = new AppDatabase(join(dir, "story.sqlite"));
+    const store = new StoryStore(database);
+
+    try {
+      store.seedIfEmpty(loadSeed());
+      const base: Omit<CreateStoryRequest, "id" | "title" | "tagline" | "genre"> = {
+        coverUrl: null,
+        premise: "共用的前提。",
+        openingLocationName: "起点",
+        openingLocationDescription: "灯还没点。",
+        worldRules: [],
+        visibility: "public",
+        aiFreedom: "medium",
+        experienceMode: "coauthored",
+        defaultSegmentLength: "standard"
+      };
+      store.createStory({ ...base, id: "half-off", title: "五折之夜", tagline: "写作 50% 的那一夜。", genre: "都市" }, [], "author-1");
+      store.createStory({ ...base, id: "under_score", title: "下划线", tagline: "一条线。", genre: "都市" }, [], "author-1");
+      store.createStory(
+        { ...base, visibility: "private", id: "sealed", title: "封存", tagline: "不公开。", genre: "都市" },
+        [],
+        "author-1"
+      );
+
+      expect(store.searchPublicStories({ q: "五折" }).map((story) => story.id)).toEqual(["half-off"]);
+      // The tagline and the genre are searched too: a reader types whichever of the
+      // three they remember.
+      expect(store.searchPublicStories({ q: "一条线" }).map((story) => story.id)).toEqual(["under_score"]);
+      expect(store.searchPublicStories({ q: "都市" })).toHaveLength(2);
+      // `%` and `_` are LIKE wildcards, and a reader who types them means the
+      // characters: `%` would otherwise match every story on the shelf.
+      expect(store.searchPublicStories({ q: "%" }).map((story) => story.id)).toEqual(["half-off"]);
+      expect(store.searchPublicStories({ q: "_" })).toEqual([]);
+      // A private story is not on the shelf, so it is not in the shelf's answers.
+      expect(store.searchPublicStories({ q: "封存" })).toEqual([]);
+      expect(store.searchPublicStories({ genre: "都市" }).map((story) => story.id)).toEqual([
+        "half-off",
+        "under_score"
+      ]);
+    } finally {
+      database.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("gives stories written before themes existed the plain book page", () => {
     const dir = mkdtempSync(join(tmpdir(), "instory-story-store-"));
     const database = new AppDatabase(join(dir, "story.sqlite"));

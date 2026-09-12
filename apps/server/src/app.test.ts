@@ -8,6 +8,7 @@ import type {
   PublicStoryDetail,
   ReaderSessionListItem,
   SessionTurn,
+  ShelfPage,
   StoryAnchor,
   StoryDetail,
   StoryReadingInsight,
@@ -2839,9 +2840,9 @@ describe("authentication", () => {
       payload: { entryMode: "existing_character", characterId: null }
     });
 
-    const beforeReaders = await authApp.inject({ method: "GET", url: "/api/stories/insights" });
+    const beforeReaders = await authApp.inject({ method: "GET", url: "/api/stories" });
     expect(beforeReaders.statusCode).toBe(200);
-    const beforeList = beforeReaders.json<{ insights: StoryReadingInsight[] }>().insights;
+    const beforeList = beforeReaders.json<ShelfPage>().insights;
     expect(beforeList).toContainEqual(expect.objectContaining({ storyId: "lantern-ferry", readers: 0 }));
     // A private story is not on the shelf, so it has no business on the shelf's numbers.
     expect(beforeList).not.toContainEqual(expect.objectContaining({ storyId: "hidden-ferry" }));
@@ -2869,8 +2870,8 @@ describe("authentication", () => {
       payload: { inputType: "read_continue", content: "继续阅读" }
     });
 
-    const afterReaders = await authApp.inject({ method: "GET", url: "/api/stories/insights" });
-    expect(afterReaders.json<{ insights: StoryReadingInsight[] }>().insights).toContainEqual(
+    const afterReaders = await authApp.inject({ method: "GET", url: "/api/stories" });
+    expect(afterReaders.json<ShelfPage>().insights).toContainEqual(
       expect.objectContaining({ storyId: "lantern-ferry", readers: 1, deepestTurns: 2 })
     );
 
@@ -2880,7 +2881,101 @@ describe("authentication", () => {
       expect.objectContaining({ storyId: "lantern-ferry", isAuthorTrial: false })
     ]);
   });
+
+  it("searches, filters and pages the shelf on the server", async () => {
+    await buildAuthApp(false);
+    const author = await register("shelf-query@example.com", "作者");
+    const asAuthor = { authorization: `Bearer ${author}` };
+    const base = {
+      coverUrl: null,
+      premise: "同一批测试故事共用的世界前提。",
+      openingLocationName: "起点",
+      openingLocationDescription: "灯还没点。",
+      worldRules: [],
+      aiFreedom: "medium" as const,
+      experienceMode: "coauthored" as const,
+      defaultSegmentLength: "standard" as const
+    };
+
+    for (const [id, title, genre, tagline, visibility] of [
+      ["dawn-market", "拂晓集市", "市井奇谈", "天亮前的最后一笔生意。", "public"],
+      ["night-post", "夜行邮车", "公路惊魂", "邮车只在午夜出发。", "public"],
+      ["silent-well", "静井", "市井奇谈", "井里的回声比人先开口。", "public"],
+      ["locked-draft", "未完稿", "私藏体裁", "还没写完。", "private"]
+    ] as const) {
+      const created = await authApp.inject({
+        method: "POST",
+        url: "/api/stories",
+        headers: asAuthor,
+        payload: { id, title, genre, tagline, visibility, ...base }
+      });
+      expect(created.statusCode).toBe(201);
+    }
+
+    // The seed story plus the three public ones; the private draft is on neither count.
+    const whole = (await authApp.inject({ method: "GET", url: "/api/stories" })).json<ShelfPage>();
+    expect(whole.publicTotal).toBe(4);
+    expect(whole.total).toBe(4);
+    expect(whole.stories).toHaveLength(4);
+    // Genres describe the whole public shelf rather than this page, so the filter can
+    // reach a genre that is not on screen. The private story's genre is not one.
+    expect(whole.genres).toHaveLength(3);
+    expect(whole.genres).toContain("市井奇谈");
+    expect(whole.genres).not.toContain("私藏体裁");
+
+    // Two windows over the same order: nothing on both pages, nothing missing from
+    // either. That is the property paging can actually break.
+    const first = (
+      await authApp.inject({ method: "GET", url: "/api/stories?sort=title&limit=2" })
+    ).json<ShelfPage>();
+    const second = (
+      await authApp.inject({ method: "GET", url: "/api/stories?sort=title&limit=2&offset=2" })
+    ).json<ShelfPage>();
+    expect(first.stories).toHaveLength(2);
+    expect(second.stories).toHaveLength(2);
+    expect(second.offset).toBe(2);
+    expect(first.total).toBe(4);
+    const paged = [...first.stories, ...second.stories];
+    expect(new Set(paged.map((story) => story.id)).size).toBe(4);
+    const titles = paged.map((story) => story.title);
+    expect(titles).toEqual([...titles].sort((left, right) => left.localeCompare(right, "zh-CN")));
+
+    // Reader counts belong to the page they came with, not to the whole shelf.
+    expect(first.insights.map((insight) => insight.storyId)).toEqual(first.stories.map((story) => story.id));
+
+    // The keyword covers title, tagline and genre - whichever of the three the reader
+    // remembers - and a private story matches none of them, not even its own title.
+    const byTitle = (await authApp.inject({ method: "GET", url: "/api/stories?q=邮车" })).json<ShelfPage>();
+    expect(byTitle.stories.map((story) => story.id)).toEqual(["night-post"]);
+    const byGenre = (await authApp.inject({ method: "GET", url: "/api/stories?q=市井" })).json<ShelfPage>();
+    expect(byGenre.total).toBe(2);
+    const hidden = (await authApp.inject({ method: "GET", url: "/api/stories?q=未完稿" })).json<ShelfPage>();
+    expect(hidden.total).toBe(0);
+    expect(hidden.stories).toEqual([]);
+    // Still 4 public stories: a keyword that matches nothing is not an empty shelf,
+    // and the two numbers are what the page needs to say which of the two it is.
+    expect(hidden.publicTotal).toBe(4);
+
+    // A reader typing a LIKE wildcard means the character.
+    const wildcard = (
+      await authApp.inject({ method: "GET", url: `/api/stories?q=${encodeURIComponent("%")}` })
+    ).json<ShelfPage>();
+    expect(wildcard.total).toBe(0);
+
+    const filtered = (
+      await authApp.inject({ method: "GET", url: `/api/stories?genre=${encodeURIComponent("市井奇谈")}` })
+    ).json<ShelfPage>();
+    expect(filtered.stories.map((story) => story.id).sort()).toEqual(["dawn-market", "silent-well"]);
+
+    // Refused rather than defaulted: a shelf that quietly ignores the sort it was
+    // asked for shows an order nobody chose, and reads as a broken sort control.
+    for (const query of ["sort=按标题", "limit=0", "limit=500", "offset=-1"]) {
+      const refused = await authApp.inject({ method: "GET", url: `/api/stories?${query}` });
+      expect(refused.statusCode).toBe(400);
+    }
+  });
 });
+
 
 
 

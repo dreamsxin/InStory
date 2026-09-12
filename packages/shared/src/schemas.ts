@@ -226,3 +226,22 @@ export const storySeedSchema = z.object({
   characters: z.array(characterProfileSchema),
   anchors: z.array(storyAnchorSchema)
 });
+
+/**
+ * The public shelf's query. Everything is optional - an unadorned `GET /api/stories`
+ * is the default shelf - but nothing is guessed: a `sort` or `limit` the server
+ * cannot read is refused rather than quietly replaced by the default, because a
+ * shelf that silently ignores what it was asked for is the same kind of lie as a
+ * card that invents a number.
+ *
+ * `limit` is capped because it is the only knob a caller could use to ask for the
+ * whole shelf at once, which is exactly what paging exists to stop.
+ */
+export const shelfQuerySchema = z.object({
+  q: z.string().max(80).optional(),
+  genre: z.string().max(80).optional(),
+  sort: z.enum(["recent", "readers", "title"]).default("recent"),
+  limit: z.coerce.number().int().min(1).max(60).default(24),
+  offset: z.coerce.number().int().min(0).default(0)
+});
+

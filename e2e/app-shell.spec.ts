@@ -174,11 +174,15 @@ test.describe("app-like shell", () => {
     await expect(page.locator(".story-card")).toHaveCount(3);
 
     // Sorting by title is the one order that does not depend on reading history, so
-    // it is the one that can be asserted exactly.
+    // it is the one that can be asserted exactly. The order now comes from the server,
+    // so this waits for the answer instead of reading whatever order is still on
+    // screen - the default 最近有人读 puts the seeded story first, which is what a
+    // non-retrying read of the DOM used to catch.
+    const shelved = await page.locator(".story-card h2").allInnerTexts();
+    const byTitle = [...shelved].sort((left, right) => left.localeCompare(right, "zh-CN"));
     await page.getByLabel("排序").click();
     await page.getByRole("option", { name: "按标题" }).click();
-    const titles = await page.locator(".story-card h2").allInnerTexts();
-    expect(titles).toEqual([...titles].sort((left, right) => left.localeCompare(right, "zh-CN")));
+    await expect(page.locator(".story-card h2")).toHaveText(byTitle);
 
     for (const storyId of created) {
       const removed = await request.delete(`${API_BASE}/api/me/stories/${storyId}`, {

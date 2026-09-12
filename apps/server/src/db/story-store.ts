@@ -86,6 +86,70 @@ export class StoryStore {
     return this.listStories().filter((story) => story.visibility === "public");
   }
 
+  /**
+   * The public stories matching a shelf query, still unpaged: the caller orders them
+   * by reading history (which lives in another table) and then takes its window.
+   * Filtering is here rather than in the route because the alternative - and what
+   * this replaced - was handing the whole shelf to the browser and letting it filter.
+   *
+   * The keyword covers title, tagline and genre: a reader looking for a story types
+   * whichever of the three they remember. LIKE is case-insensitive for ASCII only,
+   * which is all the case there is to fold - the rest of the text is Chinese.
+   */
+  searchPublicStories(filter: { q?: string; genre?: string } = {}): StorySummary[] {
+    const conditions = [PUBLIC_VISIBILITY_SQL];
+    const params: string[] = [];
+
+    if (filter.genre) {
+      conditions.push(`json_extract(payload, '$.genre') = ?`);
+      params.push(filter.genre);
+    }
+
+    const keyword = filter.q?.trim();
+    if (keyword) {
+      conditions.push(
+        `(lower(json_extract(payload, '$.title')) LIKE ? ESCAPE '\\'
+          OR lower(json_extract(payload, '$.tagline')) LIKE ? ESCAPE '\\'
+          OR lower(json_extract(payload, '$.genre')) LIKE ? ESCAPE '\\')`
+      );
+      const pattern = `%${escapeLikePattern(keyword.toLowerCase())}%`;
+      params.push(pattern, pattern, pattern);
+    }
+
+    const rows = this.database.db
+      .prepare(`SELECT payload FROM stories WHERE ${conditions.join(" AND ")} ORDER BY id ASC`)
+      .all(...params) as Array<{ payload: string }>;
+    return rows.map((row) => normalizeStorySummary(JSON.parse(row.payload) as StorySummary));
+  }
+
+  /** How many stories are public at all, ignoring any query. */
+  countPublicStories(): number {
+    const row = this.database.db
+      .prepare(`SELECT COUNT(*) AS count FROM stories WHERE ${PUBLIC_VISIBILITY_SQL}`)
+      .get() as { count: number };
+    return row.count;
+  }
+
+  /**
+   * Every genre on the public shelf, deliberately ignoring the current filters: the
+   * dropdown has to offer the genre a reader wants to switch to, not only the ones
+   * left after the switch they already made.
+   */
+  listPublicGenres(): string[] {
+    const rows = this.database.db
+      .prepare(
+        `SELECT DISTINCT json_extract(payload, '$.genre') AS genre
+           FROM stories
+          WHERE ${PUBLIC_VISIBILITY_SQL}`
+      )
+      .all() as Array<{ genre: string | null }>;
+
+    return rows
+      .map((row) => row.genre)
+      .filter((genre): genre is string => Boolean(genre))
+      .sort((left, right) => left.localeCompare(right, "zh-CN"));
+  }
+
   listStoriesByOwner(ownerId: string): StorySummary[] {
     return this.listStories().filter((story) => story.ownerId === ownerId);
   }
@@ -410,6 +474,22 @@ export class StoryStore {
     return rows.map((row) => JSON.parse(row.payload) as StoryAnchor);
   }
 
+}
+
+/**
+ * "This story is on the public shelf", in SQL. It has to repeat what
+ * normalizeStorySummary decides in TypeScript, because rows written before
+ * `visibility` existed have no such field and a plain `= 'public'` would drop the
+ * platform's own seed stories from the shelf. Change one of the two and change both.
+ */
+const PUBLIC_VISIBILITY_SQL = `COALESCE(
+  json_extract(payload, '$.visibility'),
+  CASE WHEN json_extract(payload, '$.ownerId') IS NULL THEN 'public' ELSE 'private' END
+) = 'public'`;
+
+/** `%` and `_` are wildcards in LIKE; a reader typing them means the characters. */
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (character) => `\\${character}`);
 }
 
 function normalizeCharacter(character: CharacterProfile): CharacterProfile {

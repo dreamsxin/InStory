@@ -709,7 +709,7 @@ PUT /api/me/stories/:storyId
 DELETE /api/me/stories/:storyId
 ```
 
-`GET /api/me/stories` 只返回当前用户创建的故事，用于客户端 `创作 -> 我的故事`。`GET /api/stories` 是探索入口，只返回平台示例故事或 `visibility = "public"` 的用户故事。
+`GET /api/me/stories` 只返回当前用户创建的故事，用于客户端 `创作 -> 我的故事`。`GET /api/stories` 是探索入口，只返回平台示例故事或 `visibility = "public"` 的用户故事，并且是分页的：`?q&genre&sort&limit&offset`（`sort` 为 `recent` / `readers` / `title`，`limit` 上限 60），响应里除故事本身还带这一页的读者数聚合、匹配总数 `total`、公开故事总数 `publicTotal` 和整张公开书架的 `genres`。参数读不懂返回 400，不退回默认值。
 
 创建故事请求不包含 `ownerId`，由服务端按当前用户写入：
 

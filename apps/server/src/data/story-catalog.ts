@@ -39,6 +39,20 @@ export class StoryCatalog {
     return this.store.listPublicStories();
   }
 
+  /** Public stories matching a shelf query, unpaged; the route orders and slices. */
+  searchPublicStories(filter: { q?: string; genre?: string } = {}): StorySummary[] {
+    return this.store.searchPublicStories(filter);
+  }
+
+  countPublicStories(): number {
+    return this.store.countPublicStories();
+  }
+
+  listPublicGenres(): string[] {
+    return this.store.listPublicGenres();
+  }
+
+
   listStoriesByOwner(ownerId: string): StorySummary[] {
     return this.store.listStoriesByOwner(ownerId);
   }
