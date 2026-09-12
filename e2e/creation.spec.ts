@@ -242,7 +242,8 @@ test.describe("creation console", () => {
     await page.locator(".app-topbar").getByRole("button", { name: "创作" }).click();
 
     const panel = page.locator(".create-story-panel");
-    await panel.getByLabel("故事 ID").fill(`e2e-tide-script-${Date.now()}`);
+    const storyId = `e2e-tide-script-${Date.now()}`;
+    await panel.getByLabel("故事 ID").fill(storyId);
     await panel.getByLabel("标题").fill("潮信");
     await panel.getByLabel("类型").fill("民国旧事");
     await panel.getByLabel("一句话钩子").fill("信在潮水里泡了三天。");
@@ -306,7 +307,33 @@ test.describe("creation console", () => {
     await expect(card.locator(".story-expectation")).toContainText("作者写好 1 段共");
     await expect(card.locator(".story-expectation")).toContainText("之后由 AI 接着写");
     await expect(card).not.toContainText(PASSAGE);
+
+    // Someone else reads that passage. The author's own trial does not count, so until
+    // now the row said nothing - which is why the story had to be published first.
+    const registered = await request.post(`${API_BASE}/api/auth/register`, {
+      data: { email: `e2e-passage-reader-${Date.now()}@example.com`, displayName: "E2E 读者", password: PASSWORD }
+    });
+    const asReader = { authorization: `Bearer ${(await registered.json()).token as string}` };
+    const session = await request.post(`${API_BASE}/api/stories/${storyId}/sessions`, {
+      headers: asReader,
+      data: { entryMode: "existing_character", characterId: null }
+    });
+    const advanced = await request.post(
+      `${API_BASE}/api/sessions/${(await session.json()).session.id as string}/turns`,
+      { headers: asReader, data: { inputType: "read_continue", content: "继续阅读" } }
+    );
+    expect(advanced.ok()).toBe(true);
+
+    // The author can now see how far anyone got through what they wrote by hand, beside
+    // the passage they would rewrite. Writing it was one thing; knowing whether readers
+    // reach it is the part the text alone cannot tell them.
+    await page.goto("/");
+    await page.locator(".app-topbar").getByRole("button", { name: "创作" }).click();
+    const reopened = page.locator(".story-management-list .management-details");
+    await reopened.locator("summary").click();
+    await expect(reopened.locator(".segments-form .anchor-row-reach")).toHaveText("1 位读者读到这一段");
   });
+
 
 
 

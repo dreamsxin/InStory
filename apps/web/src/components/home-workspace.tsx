@@ -1046,7 +1046,7 @@ function StoryEditForm({
             )}
           </p>
         </div>
-        <SegmentsEditForm detail={detail} />
+        <SegmentsEditForm detail={detail} insight={insight} />
       </section>
       {detail.characters.length ? (
         <section className="cast-editor">
@@ -1212,7 +1212,7 @@ interface AnchorDraft {
  * readers reached; the list only offers beats that already exist, since a passage
  * pointing at a beat the author has not written would be dropped on save anyway.
  */
-function SegmentsEditForm({ detail }: { detail: StoryDetail }) {
+function SegmentsEditForm({ detail, insight }: { detail: StoryDetail; insight?: StoryReadingInsight }) {
   const [result, action, pending] = useActionState(updateStorySegmentsAction, IDLE_FORM);
   const [rows, setRows] = useState<SegmentDraft[]>(() =>
     detail.segments.map((segment, index) => ({
@@ -1224,6 +1224,12 @@ function SegmentsEditForm({ detail }: { detail: StoryDetail }) {
     }))
   );
   const [nextKey, setNextKey] = useState(0);
+
+  // Silent until someone other than the author has read the story, for the same reason
+  // the anchors are: "nobody got here" is true of every unread story and reads like a
+  // verdict on the writing.
+  const readersBySegmentId =
+    insight && insight.readers > 0 ? new Map(insight.passageReach.map((row) => [row.segmentId, row.readers])) : null;
 
   function update(key: string, patch: Partial<SegmentDraft>) {
     setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)));
@@ -1283,6 +1289,7 @@ function SegmentsEditForm({ detail }: { detail: StoryDetail }) {
               <Label>正文</Label>
               <TextArea maxLength={8000} placeholder="读者会一字不改地读到这一段。" rows={6} />
             </TextField>
+            <SegmentRowReach readers={row.id ? readersBySegmentId?.get(row.id) ?? 0 : null} />
             <Button
               className="danger-button"
               size="sm"
@@ -1320,6 +1327,31 @@ function SegmentsEditForm({ detail }: { detail: StoryDetail }) {
 
 /** Sentinel for "not tied to a beat"; a real anchor id is a random string. */
 const NO_ANCHOR = "__none__";
+
+/**
+ * How many readers were served this one passage. Unlike the beat counts there is no
+ * "the model may not have reported it" caveat: the server chose which passage to hand
+ * over, so this is exactly how many people read it.
+ *
+ * `readers` is null when there is nothing to say - nobody has read the story yet, or
+ * the row was added in this session and has no id to count against. A zero is worth
+ * printing here, though: a passage nobody reached is a passage readers stopped before,
+ * which is the one thing an author cannot see from the text.
+ */
+function SegmentRowReach({ readers }: { readers: number | null }) {
+  if (readers === null) {
+    return null;
+  }
+
+  return readers === 0 ? (
+    <span className="anchor-row-reach muted">还没有人读到这一段</span>
+  ) : (
+    <span className="anchor-row-reach" title="服务端按顺序发出的段落，不是模型上报，所以这是准数">
+      {readers} 位读者读到这一段
+    </span>
+  );
+}
+
 
 interface SegmentDraft {
   key: string;

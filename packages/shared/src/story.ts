@@ -500,6 +500,14 @@ export interface StoryReadingInsight {
    * beat without saying so is missing from it.
    */
   anchorReach: Array<{ anchorId: string; readers: number }>;
+  /**
+   * How many readers were served each preset passage, by the same exclusion. Only
+   * passages someone reached appear here, so the author's own list fills in the rest as
+   * "nobody yet". Unlike `anchorReach` this is not a claim by the model: the server
+   * decided which passage to hand over, so these counts are ground truth about the
+   * hand-written part - and reading down the list is reading where people stopped.
+   */
+  passageReach: Array<{ segmentId: string; readers: number }>;
 }
 
 

@@ -3106,10 +3106,20 @@ describe("authentication", () => {
 
     // A passage that carries a beat counts in the author's report like a reported one.
     const insights = await authApp.inject({ method: "GET", url: "/api/me/story-insights", headers: asAuthor });
-    expect(
-      insights.json<{ insights: StoryReadingInsight[] }>().insights.find((row) => row.storyId === "lantern-script")
-        ?.anchorReach
-    ).toContainEqual({ anchorId, readers: 1 });
+    const scriptedInsight = insights
+      .json<{ insights: StoryReadingInsight[] }>()
+      .insights.find((row) => row.storyId === "lantern-script");
+    expect(scriptedInsight?.anchorReach).toContainEqual({ anchorId, readers: 1 });
+
+    // And how far readers got through what the author wrote by hand: both passages,
+    // one reader each. Unlike the beat counts this is not a claim by the model - the
+    // server decided which passage to hand over.
+    expect(scriptedInsight?.passageReach).toEqual(
+      expect.arrayContaining([
+        { segmentId: segments[0]!.id, readers: 1 },
+        { segmentId: segments[1]!.id, readers: 1 }
+      ])
+    );
 
     // 即兴 promises the reader their actions can bend the story, so a passage written
     // before they acted is never served there - not even when the author wrote one.

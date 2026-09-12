@@ -353,7 +353,8 @@ export class SessionStore {
       turns: 0,
       deepestTurns: 0,
       lastReadAt: null,
-      anchorReach: []
+      anchorReach: [],
+      passageReach: []
     });
 
 
@@ -415,12 +416,38 @@ export class SessionStore {
       reachByStoryId.set(row.storyId, list);
     }
 
+    /**
+     * How far readers got through the passages the author wrote out, by the same
+     * per-story exclusion. Read in the author's own order by the caller; here it is
+     * one row per passage that at least one reader was served. The counts fall as the
+     * passages go on, which is the point: it is where readers stop.
+     */
+    const passageRows = this.database.db
+      .prepare(
+        `SELECT s.story_id AS storyId,
+                t.segment_id AS segmentId,
+                COUNT(DISTINCT s.user_id) AS readers
+           FROM session_turns t
+           JOIN reader_sessions s ON s.id = t.session_id
+          WHERE t.segment_id IS NOT NULL AND (${reachConditions})
+          GROUP BY s.story_id, t.segment_id`
+      )
+      .all(...params) as Array<{ storyId: string; segmentId: string; readers: number }>;
+
+    const passagesByStoryId = new Map<string, Array<{ segmentId: string; readers: number }>>();
+    for (const row of passageRows) {
+      const list = passagesByStoryId.get(row.storyId) ?? [];
+      list.push({ segmentId: row.segmentId, readers: row.readers });
+      passagesByStoryId.set(row.storyId, list);
+    }
+
     return entries.map((entry) => {
       const row = byStoryId.get(entry.storyId);
       const anchorReach = reachByStoryId.get(entry.storyId) ?? [];
+      const passageReach = passagesByStoryId.get(entry.storyId) ?? [];
       return row
-        ? { ...row, lastReadAt: row.lastReadAt ?? null, anchorReach }
-        : { ...empty(entry.storyId), anchorReach };
+        ? { ...row, lastReadAt: row.lastReadAt ?? null, anchorReach, passageReach }
+        : { ...empty(entry.storyId), anchorReach, passageReach };
     });
   }
 
