@@ -122,6 +122,74 @@ describe("StoryStore", () => {
     }
   });
 
+  it("keeps a preset passage's id across an edit, and drops it with the story", () => {
+    const dir = mkdtempSync(join(tmpdir(), "instory-story-store-"));
+    const database = new AppDatabase(join(dir, "story.sqlite"));
+    const store = new StoryStore(database);
+
+    try {
+      store.seedIfEmpty(loadSeed());
+      store.createStory(
+        {
+          id: "scripted-lane",
+          title: "巷子",
+          tagline: "只在雨夜开门。",
+          genre: "民国旧事",
+          coverUrl: null,
+          premise: "一条巷子。",
+          openingLocationName: "巷口",
+          openingLocationDescription: "雨还没停。",
+          worldRules: [],
+          visibility: "public",
+          aiFreedom: "low",
+          experienceMode: "scripted",
+          defaultSegmentLength: "standard"
+        },
+        [],
+        "author-1"
+      );
+
+      const written = store.replaceOwnedSegments("scripted-lane", "author-1", {
+        segments: [
+          { title: "第一段", narration: "灯亮了。" },
+          { title: "第二段", narration: "门开了。" },
+          { title: "第三段", narration: "人不见了。" }
+        ]
+      })!;
+      expect(written.map((segment) => segment.title)).toEqual(["第一段", "第二段", "第三段"]);
+
+      // Deleting the middle row and rewording another must not renumber anyone: a turn
+      // records the id of the passage it served, and a reused id would tell a reader
+      // they have read a passage they have not.
+      const edited = store.replaceOwnedSegments("scripted-lane", "author-1", {
+        segments: [
+          { id: written[0]!.id, title: "第一段", narration: "灯终于亮了。" },
+          { id: written[2]!.id, title: "第三段", narration: "人不见了。" }
+        ]
+      })!;
+      expect(edited.map((segment) => segment.id)).toEqual([written[0]!.id, written[2]!.id]);
+      expect(store.findStory("scripted-lane")?.segments.map((segment) => segment.narration)).toEqual([
+        "灯终于亮了。",
+        "人不见了。"
+      ]);
+
+      // Only the owner, and only a story that exists.
+      expect(store.replaceOwnedSegments("scripted-lane", "someone-else", { segments: [] })).toBeNull();
+      expect(store.replaceOwnedSegments("missing", "author-1", { segments: [] })).toBeNull();
+
+      store.deleteOwnedStory("scripted-lane", "author-1");
+      expect(store.findStory("scripted-lane")).toBeNull();
+      // The passages go with it: nothing else references them, and a story id can be
+      // taken by a new story later.
+      expect(
+        database.db.prepare("SELECT COUNT(*) AS count FROM story_segments WHERE story_id = ?").get("scripted-lane")
+      ).toEqual({ count: 0 });
+    } finally {
+      database.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("gives stories written before themes existed the plain book page", () => {
     const dir = mkdtempSync(join(tmpdir(), "instory-story-store-"));
     const database = new AppDatabase(join(dir, "story.sqlite"));

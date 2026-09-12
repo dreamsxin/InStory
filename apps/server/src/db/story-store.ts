@@ -3,10 +3,12 @@ import type {
   CreateStoryRequest,
   StoryAnchor,
   StoryDetail,
+  StorySegment,
   StorySummary,
   UpdateStoryAnchorsRequest,
   UpdateStoryCharacterRequest,
   UpdateStoryRequest,
+  UpdateStorySegmentsRequest,
   WorldProfile
 } from "@instory/shared";
 import { DEFAULT_READING_THEME } from "@instory/shared";
@@ -166,7 +168,8 @@ export class StoryStore {
       story,
       world,
       characters: this.findCharacters(storyId),
-      anchors: this.findAnchors(storyId)
+      anchors: this.findAnchors(storyId),
+      segments: this.findSegments(storyId)
     };
   }
 
@@ -238,7 +241,8 @@ export class StoryStore {
       story,
       world,
       characters,
-      anchors: []
+      anchors: [],
+      segments: []
     };
   }
 
@@ -289,7 +293,8 @@ export class StoryStore {
       story,
       world,
       characters: current.characters,
-      anchors: current.anchors
+      anchors: current.anchors,
+      segments: current.segments
     };
   }
 
@@ -301,6 +306,7 @@ export class StoryStore {
 
     this.database.db.exec("BEGIN");
     try {
+      this.database.db.prepare("DELETE FROM story_segments WHERE story_id = ?").run(storyId);
       this.database.db.prepare("DELETE FROM story_anchors WHERE story_id = ?").run(storyId);
       this.database.db.prepare("DELETE FROM characters WHERE story_id = ?").run(storyId);
       this.database.db.prepare("DELETE FROM worlds WHERE story_id = ?").run(storyId);
@@ -414,6 +420,61 @@ export class StoryStore {
     return anchors;
   }
 
+  /**
+   * The story's preset passages, replaced as a whole set. Ids are kept the same way
+   * anchors keep theirs, and for a sharper reason: a turn records which passage it
+   * served, so a reused id would tell a reader who branched away that they have
+   * already read a passage they have not.
+   *
+   * `anchorId` is only kept when it really is one of this story's anchors. A passage
+   * claiming a beat that does not exist would put a node the author never wrote into
+   * their own reach report - the same rule the model's reported anchor goes through.
+   */
+  replaceOwnedSegments(
+    storyId: string,
+    ownerId: string,
+    input: UpdateStorySegmentsRequest
+  ): StorySegment[] | null {
+    const story = this.findStorySummary(storyId);
+    if (!story || story.ownerId !== ownerId) {
+      return null;
+    }
+
+    const anchorIds = new Set(this.findAnchors(storyId).map((anchor) => anchor.id));
+    const existingIds = new Set(this.findSegments(storyId).map((segment) => segment.id));
+    const keptIds = new Set<string>();
+    const segments: StorySegment[] = input.segments.map((segment) => {
+      const reusable = segment.id && existingIds.has(segment.id) && !keptIds.has(segment.id);
+      const id = reusable ? segment.id! : `${storyId}-segment-${crypto.randomUUID().slice(0, 8)}`;
+      keptIds.add(id);
+
+      return {
+        id,
+        storyId,
+        title: segment.title,
+        narration: segment.narration,
+        anchorId: segment.anchorId && anchorIds.has(segment.anchorId) ? segment.anchorId : null
+      };
+    });
+
+    this.database.db.exec("BEGIN");
+    try {
+      this.database.db.prepare("DELETE FROM story_segments WHERE story_id = ?").run(storyId);
+      segments.forEach((segment, index) => {
+        this.database.db
+          .prepare("INSERT INTO story_segments (id, story_id, payload, seq) VALUES (?, ?, ?, ?)")
+          .run(segment.id, storyId, JSON.stringify(segment), index);
+      });
+      this.database.db.exec("COMMIT");
+    } catch (error) {
+      this.database.db.exec("ROLLBACK");
+      throw error;
+    }
+
+    return segments;
+  }
+
+
 
 
   countStories(): number {
@@ -474,6 +535,14 @@ export class StoryStore {
     return rows.map((row) => JSON.parse(row.payload) as StoryAnchor);
   }
 
+  /** The author's passages in the order they are served. Same seq rule as anchors. */
+  private findSegments(storyId: string): StorySegment[] {
+    const rows = this.database.db
+      .prepare("SELECT payload FROM story_segments WHERE story_id = ? ORDER BY seq ASC, id ASC")
+      .all(storyId) as Array<{ payload: string }>;
+    return rows.map((row) => normalizeSegment(JSON.parse(row.payload) as StorySegment));
+  }
+
 }
 
 /**
@@ -490,6 +559,11 @@ const PUBLIC_VISIBILITY_SQL = `COALESCE(
 /** `%` and `_` are wildcards in LIKE; a reader typing them means the characters. */
 function escapeLikePattern(value: string): string {
   return value.replace(/[\\%_]/g, (character) => `\\${character}`);
+}
+
+/** Passages stored before `anchorId` existed carry no beat, which is what null means. */
+function normalizeSegment(segment: StorySegment): StorySegment {
+  return { ...segment, anchorId: segment.anchorId ?? null };
 }
 
 function normalizeCharacter(character: CharacterProfile): CharacterProfile {

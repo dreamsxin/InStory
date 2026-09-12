@@ -758,7 +758,10 @@ a {
 
 
 
-/* Plot anchors: the author's hard constraints on the AI, edited as a small table. */
+/* Plot anchors: the author's hard constraints on the AI, edited as a small table.
+   The preset-passage editor below it is the same kind of table, so it shares the
+   frame - and keeps its own class, because a test that means one of the two must be
+   able to say which. */
 .anchors-editor {
   display: grid;
   gap: 14px;
@@ -772,14 +775,16 @@ a {
   margin: 4px 0 0;
 }
 
-.anchors-form {
+.anchors-form,
+.segments-form {
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--panel);
 }
 
-.anchor-row {
+.anchor-row,
+.segment-row {
   display: grid;
   gap: 10px;
   justify-items: start;
@@ -787,7 +792,8 @@ a {
   border-bottom: 1px dashed var(--line);
 }
 
-.anchor-row:last-of-type {
+.anchor-row:last-of-type,
+.segment-row:last-of-type {
   border-bottom: 0;
   padding-bottom: 0;
 }

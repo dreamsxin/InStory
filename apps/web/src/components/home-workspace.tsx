@@ -31,7 +31,8 @@ import {
   updateReaderProfileAction,
   updateStoryAction,
   updateStoryAnchorsAction,
-  updateStoryCharacterAction
+  updateStoryCharacterAction,
+  updateStorySegmentsAction
 } from "@/app/actions";
 import { IDLE_FORM, kept, submitted, type FormResult } from "@/lib/form-result";
 
@@ -1029,6 +1030,24 @@ function StoryEditForm({
         </div>
         <AnchorsEditForm detail={detail} insight={insight} />
       </section>
+      <section className="anchors-editor">
+        <div>
+          <span className="eyebrow">Passages</span>
+          <h3>预设正文</h3>
+          <p className="muted">
+            自己写好的小节，读者点「继续阅读」时按顺序原样读到，不经过 AI，也不消耗读者的每日次数。
+            {detail.story.experienceMode === "scripted" ? (
+              <>写完之后，AI 只负责读者岔开主线时的衔接段落。</>
+            ) : (
+              <>
+                <strong>但这个故事现在是「{experienceModeLabel(detail.story.experienceMode)}」，预设正文不会发给读者</strong>
+                ——只有「剧本」模式才按顺序发，因为另两档已经答应读者可以改主线。
+              </>
+            )}
+          </p>
+        </div>
+        <SegmentsEditForm detail={detail} />
+      </section>
       {detail.characters.length ? (
         <section className="cast-editor">
           <div>
@@ -1182,6 +1201,135 @@ interface AnchorDraft {
   type: StoryAnchor["type"];
   description: string;
 }
+
+/**
+ * The passages the author writes themselves. Same shape as the anchors editor - rows in
+ * client state, one hidden JSON field, saved on its own - because it has the same
+ * hazard: re-aligning repeated fields by index would put a passage under another
+ * passage's title.
+ *
+ * A passage can name the beat it carries, so a scripted story still reports which beats
+ * readers reached; the list only offers beats that already exist, since a passage
+ * pointing at a beat the author has not written would be dropped on save anyway.
+ */
+function SegmentsEditForm({ detail }: { detail: StoryDetail }) {
+  const [result, action, pending] = useActionState(updateStorySegmentsAction, IDLE_FORM);
+  const [rows, setRows] = useState<SegmentDraft[]>(() =>
+    detail.segments.map((segment, index) => ({
+      key: `${segment.id}_${index}`,
+      id: segment.id,
+      title: segment.title,
+      narration: segment.narration,
+      anchorId: segment.anchorId
+    }))
+  );
+  const [nextKey, setNextKey] = useState(0);
+
+  function update(key: string, patch: Partial<SegmentDraft>) {
+    setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+  }
+
+  return (
+    <form className="profile-form embedded segments-form" action={action}>
+      <input name="storyId" type="hidden" value={detail.story.id} />
+      <input
+        name="segments"
+        type="hidden"
+        value={JSON.stringify(
+          rows.map((row) => ({
+            id: row.id,
+            title: row.title,
+            narration: row.narration,
+            anchorId: row.anchorId
+          }))
+        )}
+      />
+      {rows.length ? (
+        rows.map((row, index) => (
+          <div className="segment-row" key={row.key}>
+            <div className="form-grid">
+              <TextField value={row.title} onChange={(title) => update(row.key, { title })}>
+                <Label>第 {index + 1} 段</Label>
+                <Input maxLength={80} placeholder="雨夜叩门" />
+              </TextField>
+              <Select
+                selectedKey={row.anchorId ?? NO_ANCHOR}
+                onSelectionChange={(key) =>
+                  update(row.key, { anchorId: typeof key === "string" && key !== NO_ANCHOR ? key : null })
+                }
+              >
+                <Label>对应锚点</Label>
+                <Select.Trigger>
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    <ListBox.Item id={NO_ANCHOR} textValue="不绑定">
+                      不绑定
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                    {detail.anchors.map((anchor) => (
+                      <ListBox.Item id={anchor.id} key={anchor.id} textValue={anchor.title}>
+                        {anchor.title}
+                        <ListBox.ItemIndicator />
+                      </ListBox.Item>
+                    ))}
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+            </div>
+            <TextField value={row.narration} onChange={(narration) => update(row.key, { narration })}>
+              <Label>正文</Label>
+              <TextArea maxLength={8000} placeholder="读者会一字不改地读到这一段。" rows={6} />
+            </TextField>
+            <Button
+              className="danger-button"
+              size="sm"
+              type="button"
+              variant="outline"
+              onPress={() => setRows((current) => current.filter((item) => item.key !== row.key))}
+            >
+              删除这段
+            </Button>
+          </div>
+        ))
+      ) : (
+        <p className="muted">还没有预设正文。读者的每一段都由 AI 现写，受世界规则和锚点约束。</p>
+      )}
+      <div className="management-actions">
+        <Button
+          size="sm"
+          type="button"
+          variant="outline"
+          onPress={() => {
+            setRows((current) => [...current, { key: `draft_${nextKey}`, title: "", narration: "", anchorId: null }]);
+            setNextKey((key) => key + 1);
+          }}
+        >
+          添加一段
+        </Button>
+        <Button isDisabled={pending} type="submit">
+          {pending ? "保存中…" : "保存预设正文"}
+        </Button>
+        <FormFeedback result={result} />
+      </div>
+    </form>
+  );
+}
+
+/** Sentinel for "not tied to a beat"; a real anchor id is a random string. */
+const NO_ANCHOR = "__none__";
+
+interface SegmentDraft {
+  key: string;
+  /** The stored passage's id, absent for a row added in this session. */
+  id?: string;
+  title: string;
+  narration: string;
+  anchorId: string | null;
+}
+
 
 
 /**

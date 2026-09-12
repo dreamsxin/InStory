@@ -41,7 +41,7 @@ InStory 是一个开源的 AI 互动叙事项目，目标是让读者不再只�
 | --- | --- |
 | Web 客户端 | 首页工作台（故事 / 继续 / 创作，创作里含「我的角色」）、阅读器、Admin 控制台 |
 | 服务端 API | 账号、故事、会话、回合（含 SSE 流式）、回溯、创作编辑、阅读数据、Admin API |
-| 存储 | SQLite（`node:sqlite`），本地默认 `data/instory.sqlite`，schema 由 `apps/server/src/db/migrations.ts` 的 14 条迁移决定 |
+| 存储 | SQLite（`node:sqlite`），本地默认 `data/instory.sqlite`，schema 由 `apps/server/src/db/migrations.ts` 的 16 条迁移决定 |
 | AI | 默认 Mock，可切换 OpenAI-compatible，并在 Admin 控制台验证 |
 | 测试 | `npm run test` 单元测试 + `npm run test:e2e` Playwright 端到端 |
 | 进度与下一步 | 见 [docs/PROGRESS.md](docs/PROGRESS.md) |

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { parseReadingTheme } from "@/lib/reading-themes";
 import type { FormResult } from "@/lib/form-result";
-import type { UpdateStoryAnchorsRequest } from "@instory/shared";
+import type { UpdateStoryAnchorsRequest, UpdateStorySegmentsRequest } from "@instory/shared";
 import {
   createReaderProfile,
   createStory,
@@ -13,6 +13,7 @@ import {
   updateMyStory,
   updateMyStoryAnchors,
   updateMyStoryCharacter,
+  updateMyStorySegments,
   updateReaderProfile
 } from "@/lib/api";
 
@@ -260,6 +261,40 @@ export async function updateStoryAnchorsAction(_state: FormResult, formData: For
   return {
     status: "ok",
     message: filled.length ? `已保存 ${filled.length} 条剧情锚点。` : "已清空剧情锚点。"
+  };
+}
+
+/**
+ * Replaces the story's preset passages. Same single-JSON-field channel as the anchors,
+ * for the same reason: the rows live in client state, and re-aligning repeated form
+ * fields by index on every add and remove is how a passage ends up under the wrong
+ * title.
+ */
+export async function updateStorySegmentsAction(_state: FormResult, formData: FormData): Promise<FormResult> {
+  const storyId = String(formData.get("storyId") ?? "").trim();
+
+  let segments: UpdateStorySegmentsRequest["segments"];
+  try {
+    segments = JSON.parse(String(formData.get("segments") ?? "[]")) as UpdateStorySegmentsRequest["segments"];
+  } catch {
+    return { status: "error", message: "预设正文无法解析，请刷新后重试。" };
+  }
+
+  const filled = segments.filter((segment) => segment.title.trim() && segment.narration.trim());
+  if (filled.length !== segments.length) {
+    return { status: "error", message: "每段预设正文都要有小节名和正文。" };
+  }
+
+  try {
+    await updateMyStorySegments(storyId, { segments: filled });
+  } catch (error) {
+    return failed(error, "保存预设正文失败，请稍后重试。");
+  }
+
+  revalidatePath("/");
+  return {
+    status: "ok",
+    message: filled.length ? `已保存 ${filled.length} 段预设正文。` : "已清空预设正文。"
   };
 }
 

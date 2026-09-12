@@ -245,7 +245,7 @@ export class OpenAICompatibleNarrativeProvider implements LLMProvider {
       messages: [
         {
           role: "system",
-          content: buildSystemPrompt(input.story?.story)
+          content: buildSystemPrompt(input.story?.story, (input.story?.segments?.length ?? 0) > 0)
         },
         {
           role: "user",
@@ -313,8 +313,13 @@ function isRetryableStatus(status: number): boolean {
  * until now they were only sent along inside the story summary with nothing saying what
  * they mean - so a story marked 剧本 read exactly like one marked 即兴, while the shelf
  * card told readers otherwise. They are spelled out here instead of left to inference.
+ *
+ * `hasPresetPassages` says the author wrote the main line out in full. The passages
+ * themselves are deliberately not in the prompt: they are handed to the reader
+ * directly, and sending them here would pay for the same words twice and invite the
+ * model to write the next one early.
  */
-export function buildSystemPrompt(story?: StorySummary): string {
+export function buildSystemPrompt(story?: StorySummary, hasPresetPassages = false): string {
   return [
     "你是 InStory 的 AI 叙事编排器，负责生成受控的互动小说下一回合。",
     "必须使用第二人称“你”推进故事，保持悬疑感和明确行动压力。",
@@ -333,8 +338,18 @@ export function buildSystemPrompt(story?: StorySummary): string {
     "choices 必须包含 2 到 4 个选项，每个选项有 id、text、risk，risk 只能是 low、medium、high。",
     "stateDelta 只能描述本回合变化，不能凭空清空已有状态。",
     "玩家行为超出当前世界能力时，给出合理失败或代价，不要直接满足。",
-    ...(story ? [experienceModeRule(story.experienceMode), aiFreedomRule(story.aiFreedom)] : [])
+    ...(story ? [experienceModeRule(story.experienceMode), aiFreedomRule(story.aiFreedom)] : []),
+    ...(story && hasPresetPassages && story.experienceMode === "scripted" ? [presetPassageRule()] : [])
   ].join("\n");
+}
+
+/**
+ * Only in 剧本 mode, because that is the only mode where the author's passages are
+ * served. Saying this to a story whose passages never reach a reader would tell the
+ * model to defer to text that is not part of the reading.
+ */
+function presetPassageRule(): string {
+  return "本故事的主线正文由作者预先写好，并在读者点击“继续阅读”时按顺序原样发给他；你这一次生成的是读者岔开主线时的衔接段落：回应他刚做的事，用情节把他带回作者写的那条线，不要改写或复述作者的段落，也不要提前把后面还没发布的内容写出来。";
 }
 
 /** How much the reader's own actions may bend the main line. */

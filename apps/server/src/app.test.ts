@@ -12,6 +12,7 @@ import type {
   StoryAnchor,
   StoryDetail,
   StoryReadingInsight,
+  StorySegment,
   StorySession,
   TurnQuota
 } from "@instory/shared";
@@ -2974,7 +2975,307 @@ describe("authentication", () => {
       expect(refused.statusCode).toBe(400);
     }
   });
+
+  it("hands a scripted story's own passages to the reader, and charges nothing for them", async () => {
+    await buildAuthApp(false);
+    const author = await register("preset-author@example.com", "作者");
+    const reader = await register("preset-reader@example.com", "读者");
+    const asAuthor = { authorization: `Bearer ${author}` };
+    const asReader = { authorization: `Bearer ${reader}` };
+    const base = {
+      tagline: "灯下有人等你。",
+      genre: "民国旧事",
+      coverUrl: null,
+      premise: "一条只在雨夜开门的巷子。",
+      openingLocationName: "巷口",
+      openingLocationDescription: "雨还没停。",
+      worldRules: [],
+      aiFreedom: "low" as const,
+      defaultSegmentLength: "standard" as const
+    };
+
+    for (const [id, title, experienceMode] of [
+      ["lantern-script", "提灯人", "scripted"],
+      ["lantern-jam", "提灯人（即兴）", "improvised"]
+    ] as const) {
+      const created = await authApp.inject({
+        method: "POST",
+        url: "/api/stories",
+        headers: asAuthor,
+        payload: { id, title, visibility: "public", experienceMode, ...base }
+      });
+      expect(created.statusCode).toBe(201);
+    }
+
+    const anchors = await authApp.inject({
+      method: "PUT",
+      url: "/api/me/stories/lantern-script/anchors",
+      headers: asAuthor,
+      payload: { anchors: [{ title: "提灯人现身", type: "required", description: "他在巷口点亮灯。" }] }
+    });
+    const anchorId = anchors.json<{ anchors: StoryAnchor[] }>().anchors[0]!.id;
+
+    const FIRST = "雨在瓦上敲了很久，巷口那盏灯才亮起来。";
+    const SECOND = "他把灯递过来，说这条巷子今夜只走一趟。";
+    const saved = await authApp.inject({
+      method: "PUT",
+      url: "/api/me/stories/lantern-script/segments",
+      headers: asAuthor,
+      payload: {
+        segments: [
+          { title: "第一段", narration: FIRST, anchorId },
+          // Deliberately claims a beat this story does not have: it must come back
+          // untied rather than putting a node the author never wrote in their report.
+          { title: "第二段", narration: SECOND, anchorId: "someone-elses-anchor" }
+        ]
+      }
+    });
+    expect(saved.statusCode).toBe(200);
+    const segments = saved.json<{ segments: StorySegment[] }>().segments;
+    expect(segments.map((segment) => segment.anchorId)).toEqual([anchorId, null]);
+
+    // Ids survive an edit, so a reading that has served a passage keeps knowing which.
+    const resaved = await authApp.inject({
+      method: "PUT",
+      url: "/api/me/stories/lantern-script/segments",
+      headers: asAuthor,
+      payload: {
+        segments: [
+          { id: segments[0]!.id, title: "第一段", narration: FIRST, anchorId },
+          { id: segments[1]!.id, title: "第二段", narration: SECOND, anchorId: null }
+        ]
+      }
+    });
+    expect(resaved.json<{ segments: StorySegment[] }>().segments.map((segment) => segment.id)).toEqual(
+      segments.map((segment) => segment.id)
+    );
+
+    // The passages are the story's text ahead of the reader, so they are as much the
+    // author's own view as the anchors are.
+    const asSeenByReader = await authApp.inject({
+      method: "GET",
+      url: "/api/stories/lantern-script",
+      headers: asReader
+    });
+    expect(asSeenByReader.body).not.toContain(FIRST);
+    expect(asSeenByReader.json<Record<string, unknown>>().segments).toBeUndefined();
+
+    const session = await authApp.inject({
+      method: "POST",
+      url: "/api/stories/lantern-script/sessions",
+      headers: asReader,
+      payload: { entryMode: "existing_character", characterId: null }
+    });
+    const sessionId = session.json<CreateSessionResponse>().session.id;
+
+    const first = await authApp.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/turns`,
+      headers: asReader,
+      payload: { inputType: "read_continue", content: "继续阅读" }
+    });
+    const firstTurn = first.json<CreateTurnResponse>();
+    expect(firstTurn.turn.narration).toBe(FIRST);
+    // No model ran, so nothing was spent: the quota rations generations, and the author
+    // wrote this passage themselves.
+    expect(firstTurn.quota.usedToday).toBe(0);
+    // Nothing is invented around the author's text either.
+    expect(firstTurn.turn.choices).toEqual([]);
+    expect(firstTurn.turn.dialogues).toEqual([]);
+
+    const second = await authApp.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/turns`,
+      headers: asReader,
+      payload: { inputType: "read_continue", content: "继续阅读" }
+    });
+    expect(second.json<CreateTurnResponse>().turn.narration).toBe(SECOND);
+    expect(second.json<CreateTurnResponse>().quota.usedToday).toBe(0);
+
+    // Out of passages: the story goes on, generated, from where the author stopped.
+    const third = await authApp.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/turns`,
+      headers: asReader,
+      payload: { inputType: "read_continue", content: "继续阅读" }
+    });
+    const thirdTurn = third.json<CreateTurnResponse>();
+    expect(thirdTurn.turn.narration).not.toBe(FIRST);
+    expect(thirdTurn.turn.narration).not.toBe(SECOND);
+    expect(thirdTurn.quota.usedToday).toBe(1);
+
+    // A passage that carries a beat counts in the author's report like a reported one.
+    const insights = await authApp.inject({ method: "GET", url: "/api/me/story-insights", headers: asAuthor });
+    expect(
+      insights.json<{ insights: StoryReadingInsight[] }>().insights.find((row) => row.storyId === "lantern-script")
+        ?.anchorReach
+    ).toContainEqual({ anchorId, readers: 1 });
+
+    // 即兴 promises the reader their actions can bend the story, so a passage written
+    // before they acted is never served there - not even when the author wrote one.
+    const jamSegments = await authApp.inject({
+      method: "PUT",
+      url: "/api/me/stories/lantern-jam/segments",
+      headers: asAuthor,
+      payload: { segments: [{ title: "第一段", narration: FIRST }] }
+    });
+    expect(jamSegments.statusCode).toBe(200);
+    const jamSession = await authApp.inject({
+      method: "POST",
+      url: "/api/stories/lantern-jam/sessions",
+      headers: asReader,
+      payload: { entryMode: "existing_character", characterId: null }
+    });
+    const jamTurn = await authApp.inject({
+      method: "POST",
+      url: `/api/sessions/${jamSession.json<CreateSessionResponse>().session.id}/turns`,
+      headers: asReader,
+      payload: { inputType: "read_continue", content: "继续阅读" }
+    });
+    expect(jamTurn.json<CreateTurnResponse>().turn.narration).not.toBe(FIRST);
+  });
+
+  it("answers a reader's own action with the model, even in a scripted story", async () => {
+    await buildAuthApp(false);
+    const author = await register("preset-action-author@example.com", "作者");
+    const reader = await register("preset-action-reader@example.com", "读者");
+    const asAuthor = { authorization: `Bearer ${author}` };
+    const asReader = { authorization: `Bearer ${reader}` };
+    const PASSAGE = "钟敲三下，门自己开了。";
+
+    const created = await authApp.inject({
+      method: "POST",
+      url: "/api/stories",
+      headers: asAuthor,
+      payload: {
+        id: "clock-tower",
+        title: "钟楼",
+        tagline: "三下之后门会开。",
+        genre: "民国旧事",
+        coverUrl: null,
+        premise: "一座只在午夜准时的钟楼。",
+        openingLocationName: "钟楼下",
+        openingLocationDescription: "风停了。",
+        worldRules: [],
+        visibility: "public",
+        aiFreedom: "low",
+        experienceMode: "scripted",
+        defaultSegmentLength: "standard"
+      }
+    });
+    expect(created.statusCode).toBe(201);
+    await authApp.inject({
+      method: "PUT",
+      url: "/api/me/stories/clock-tower/segments",
+      headers: asAuthor,
+      payload: { segments: [{ title: "第一段", narration: PASSAGE }] }
+    });
+
+    const session = await authApp.inject({
+      method: "POST",
+      url: "/api/stories/clock-tower/sessions",
+      headers: asReader,
+      payload: { entryMode: "existing_character", characterId: null }
+    });
+    const sessionId = session.json<CreateSessionResponse>().session.id;
+
+    // A reader who wrote something expects it answered. A passage written yesterday
+    // cannot answer it, so the model does - and the passage is still waiting.
+    const acted = await authApp.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/turns`,
+      headers: asReader,
+      payload: { inputType: "free_text", content: "我推开那扇门。" }
+    });
+    const actedTurn = acted.json<CreateTurnResponse>();
+    expect(actedTurn.turn.narration).not.toBe(PASSAGE);
+    expect(actedTurn.quota.usedToday).toBe(1);
+
+    const read = await authApp.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/turns`,
+      headers: asReader,
+      payload: { inputType: "read_continue", content: "继续阅读" }
+    });
+    expect(read.json<CreateTurnResponse>().turn.narration).toBe(PASSAGE);
+    expect(read.json<CreateTurnResponse>().quota.usedToday).toBe(1);
+  });
+
+  it("serves a preset passage over the streaming endpoint too", async () => {
+    await buildAuthApp(false);
+    const author = await register("preset-stream-author@example.com", "作者");
+    const reader = await register("preset-stream-reader@example.com", "读者");
+    const asAuthor = { authorization: `Bearer ${author}` };
+    const asReader = { authorization: `Bearer ${reader}` };
+    const PASSAGE = "船靠岸的时候，码头上一个人也没有。";
+
+    await authApp.inject({
+      method: "POST",
+      url: "/api/stories",
+      headers: asAuthor,
+      payload: {
+        id: "empty-pier",
+        title: "空码头",
+        tagline: "船到了，人没来。",
+        genre: "民国旧事",
+        coverUrl: null,
+        premise: "一个只在退潮时露出来的码头。",
+        openingLocationName: "码头",
+        openingLocationDescription: "水退了。",
+        worldRules: [],
+        visibility: "public",
+        aiFreedom: "low",
+        experienceMode: "scripted",
+        defaultSegmentLength: "standard"
+      }
+    });
+    await authApp.inject({
+      method: "PUT",
+      url: "/api/me/stories/empty-pier/segments",
+      headers: asAuthor,
+      payload: { segments: [{ title: "第一段", narration: PASSAGE }] }
+    });
+
+    const session = await authApp.inject({
+      method: "POST",
+      url: "/api/stories/empty-pier/sessions",
+      headers: asReader,
+      payload: { entryMode: "existing_character", characterId: null }
+    });
+    const sessionId = session.json<CreateSessionResponse>().session.id;
+
+    // The reader's client asks for a stream, so it gets one - the whole passage in a
+    // single delta, because there is nothing being generated to pace it against.
+    const response = await authApp.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/turns/stream`,
+      headers: asReader,
+      payload: { inputType: "read_continue", content: "继续阅读" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/event-stream");
+    const events = parseSseEvents(response.body);
+    expect(events.filter((event) => event.event === "narration_delta").map((event) => (event.data as { text: string }).text)).toEqual([
+      PASSAGE
+    ]);
+    expect(events.at(-1)?.event).toBe("complete");
+    const completed = events.at(-1)!.data as CreateTurnResponse;
+    expect(completed.turn.narration).toBe(PASSAGE);
+    expect(completed.quota.usedToday).toBe(0);
+
+    // Written down once, like a generated one, and not served a second time.
+    const again = await authApp.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/turns`,
+      headers: asReader,
+      payload: { inputType: "read_continue", content: "继续阅读" }
+    });
+    expect(again.json<CreateTurnResponse>().turn.narration).not.toBe(PASSAGE);
+  });
 });
+
+
 
 
 

@@ -8,8 +8,8 @@
 
 - **存储是 SQLite，不是 PostgreSQL。** 服务端用 Node 内置 `node:sqlite` 的 `DatabaseSync`（`apps/server/src/db/app-database.ts`），默认落在 `data/instory.sqlite`。结构化状态存 JSON 文本列，读取时归一化，不是 JSONB。
 - **没有 Redis、没有任务队列、没有 ORM。** 第 3.1 节提到的 Redis / BullMQ / Prisma 都未引入，也不在近期计划里。SQL 手写在各 store 里。
-- **没有 migrations 目录，只有一个追加式数组。** schema 的唯一事实来源是 `apps/server/src/db/migrations.ts` 里按顺序排列的 14 条迁移：`initial_schema`、`session_and_story_lookup_indexes`、`normalize_session_turns_and_timeline`、`add_users_and_auth_sessions`、`attach_reader_sessions_to_users`、`add_generation_usage`、`add_moderation_events`、`add_turn_intervention`、`snapshot_story_title_on_sessions`、`add_admin_actions`、`add_user_disabled_at`、`add_usage_author_trial`、`add_turn_anchor`、`add_anchor_seq`。每次启动都跑一遍，只能往后追加，不能改历史条目。清单以 `migrations.ts` 为准，这里的条数会落后。
-- **第 6 节的表清单是愿望。** 实际存在的表由上面这组迁移决定，`story_versions`、`character_constraints`、`memory_events`、`entitlements` 等尚未落地；而计划里划到“商业化阶段”的 `generation_usage` 已经存在，每日额度就是从它推导的。
+- **没有 migrations 目录，只有一个追加式数组。** schema 的唯一事实来源是 `apps/server/src/db/migrations.ts` 里按顺序排列的 16 条迁移：`initial_schema`、`session_and_story_lookup_indexes`、`normalize_session_turns_and_timeline`、`add_users_and_auth_sessions`、`attach_reader_sessions_to_users`、`add_generation_usage`、`add_moderation_events`、`add_turn_intervention`、`snapshot_story_title_on_sessions`、`add_admin_actions`、`add_user_disabled_at`、`add_usage_author_trial`、`add_turn_anchor`、`add_anchor_seq`、`add_story_segments`、`add_turn_segment`。每次启动都跑一遍，只能往后追加，不能改历史条目。清单以 `migrations.ts` 为准，这里的条数会落后。
+- **第 6 节的表清单是愿望。** 实际存在的表由上面这组迁移决定，`story_versions`、`character_constraints`、`memory_events`、`entitlements` 等尚未落地；而计划里划到“商业化阶段”的 `generation_usage` 已经存在，每日额度就是从它推导的。作者预设正文落在 `story_segments`，不是第 6 节设想的 `story_segments` + `story_versions` 组合——没有版本维度。
 - **服务端目录不是 `routes/` + `modules/`。** 所有路由都注册在 `apps/server/src/app.ts` 的 `buildApp` 里，数据访问集中在 `apps/server/src/db/*-store.ts`，审核在 `apps/server/src/moderation/checker.ts`，限流在 `apps/server/src/security/rate-limiter.ts`。没有 `packages/safety`，workspace 只有 `shared`、`story-engine`、`ai-orchestrator`。
 - **SSE 流式已经实现，但是并行的第二条路径。** 第 3.2 节“当前实现风险”里说的同步阻塞不是唯一形态：`POST /api/sessions/:sessionId/turns/stream` 以 `text/event-stream` 逐段推送正文，Provider 没实现 `streamNarrative` 时回落到非流式的 `POST /api/sessions/:sessionId/turns`。两条路径共用同一段提交逻辑，产出相同的状态、id 和时间线节点。
 - **`read`/`interventions` 两个端点没有拆。** 仍然是 `POST /api/sessions/:sessionId/turns` 用 `inputType` 区分阅读推进和入戏，第 5.4 节的兼容性说明才是现状。
@@ -181,6 +181,8 @@ MVP 实现边界：
 1. 命中作者预设小节或选择后的预设后续，直接读取预设正文。
 2. 命中当前用户会话中已经生成过的 segment，直接读取持久化结果。
 3. 需要用户角色个性化、自由行动回写或预设分支缺失时，再调用 AI 生成。
+
+实现状态（2026-09-12）：第 1 级已落地——`story_segments` 存作者写的小节，`session_turns.segment_id` 记这一回合发的是哪一段，命中条件是「`scripted` 模式 + `read_continue` + 本局还没发过的第一段」，命中时不调模型、不写 `generation_usage`、不扣配额。第 2 级还没有：同一处走第二遍仍然重新生成（见 `PROGRESS.md` 的下一步）。第 3 级是默认路径。
 
 不同体验模式下，上述优先级的执行方式不同：
 
@@ -707,7 +709,11 @@ GET /api/me/stories
 POST /api/stories
 PUT /api/me/stories/:storyId
 DELETE /api/me/stories/:storyId
+PUT /api/me/stories/:storyId/anchors
+PUT /api/me/stories/:storyId/segments
 ```
+
+后两个都是整组替换：锚点是作者对生成的硬约束，`segments` 是作者亲手写的正文小节（剧本模式下按顺序原样发给读者）。两者的行都可以带上已有的 `id` 提交回来以保留身份——锚点上挂着到达人数，小节上挂着"这一局读到第几段"。
 
 `GET /api/me/stories` 只返回当前用户创建的故事，用于客户端 `创作 -> 我的故事`。`GET /api/stories` 是探索入口，只返回平台示例故事或 `visibility = "public"` 的用户故事，并且是分页的：`?q&genre&sort&limit&offset`（`sort` 为 `recent` / `readers` / `title`，`limit` 上限 60），响应里除故事本身还带这一页的读者数聚合、匹配总数 `total`、公开故事总数 `publicTotal` 和整张公开书架的 `genres`。参数读不懂返回 400，不退回默认值。
 

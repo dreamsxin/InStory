@@ -214,6 +214,49 @@ export interface UpdateStoryAnchorsRequest {
 
 
 
+/**
+ * A passage the author wrote themselves, to be handed to the reader word for word
+ * instead of generated. This is the first level of `ARCHITECTURE.md`'s three-level
+ * priority (预设 → 已生成 → 现生成), which until now had no data behind it: an author
+ * could only write anchors, which are constraints on generation, not the text.
+ *
+ * Passages are an ordered list per story and are served in that order, one per
+ * 继续阅读, only while the story is in 剧本 mode - see `experienceMode`. A passage that
+ * is served costs no model call, so it also costs the reader nothing from the daily
+ * quota.
+ */
+export interface StorySegment {
+  id: string;
+  storyId: string;
+  /** The author's own label for this passage. Never shown to a reader. */
+  title: string;
+  /** The passage as the reader will read it, unchanged. */
+  narration: string;
+  /**
+   * The beat this passage carries, if the author tied it to one. Kept so a preset
+   * passage counts in the author's beat report the same way a generated one does -
+   * without it, a fully scripted story would report that nobody reached any beat.
+   */
+  anchorId: string | null;
+}
+
+/**
+ * The preset passages of one story, replaced as a whole, like the anchors. An
+ * existing row sends its `id` back so it keeps its identity: turns record which
+ * passage they served, and reusing an id positionally would let a reader who
+ * branched away be served a passage they already read.
+ */
+export interface UpdateStorySegmentsRequest {
+  segments: Array<{
+    /** The existing passage's id, or omitted for a row the author just added. */
+    id?: string | null;
+    title: string;
+    narration: string;
+    /** An anchor id of this same story, or null for "not tied to a beat". */
+    anchorId?: string | null;
+  }>;
+}
+
 export interface WorldProfile {
   storyId: string;
   premise: string;
@@ -230,6 +273,8 @@ export interface StoryDetail {
   world: WorldProfile;
   characters: CharacterProfile[];
   anchors: StoryAnchor[];
+  /** Passages the author wrote out in full. Author view only, like the anchors. */
+  segments: StorySegment[];
 }
 
 /**

@@ -9,10 +9,12 @@ import type {
   CreateStoryRequest,
   StoryAnchor,
   StoryDetail,
+  StorySegment,
   StorySummary,
   UpdateStoryAnchorsRequest,
   UpdateStoryCharacterRequest,
   UpdateStoryRequest,
+  UpdateStorySegmentsRequest,
   WorldProfile
 } from "@instory/shared";
 
@@ -106,6 +108,11 @@ export class StoryCatalog {
 
   replaceOwnedAnchors(storyId: string, ownerId: string, input: UpdateStoryAnchorsRequest): StoryAnchor[] | null {
     return this.store.replaceOwnedAnchors(storyId, ownerId, input);
+  }
+
+  /** The author's preset passages, replaced as a whole set. */
+  replaceOwnedSegments(storyId: string, ownerId: string, input: UpdateStorySegmentsRequest): StorySegment[] | null {
+    return this.store.replaceOwnedSegments(storyId, ownerId, input);
   }
 }
 

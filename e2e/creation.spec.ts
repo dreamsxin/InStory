@@ -233,6 +233,65 @@ test.describe("creation console", () => {
     await expect(reopened.locator(".anchors-form").getByLabel("锚点 1")).toHaveValue("潮水回来");
   });
 
+  test("writes a passage itself, and the reader gets it word for word without spending a turn", async ({
+    page,
+    request
+  }) => {
+    await signIn(page, request, "e2e-segments@example.com");
+    await page.goto("/");
+    await page.locator(".app-topbar").getByRole("button", { name: "创作" }).click();
+
+    const panel = page.locator(".create-story-panel");
+    await panel.getByLabel("故事 ID").fill(`e2e-tide-script-${Date.now()}`);
+    await panel.getByLabel("标题").fill("潮信");
+    await panel.getByLabel("类型").fill("民国旧事");
+    await panel.getByLabel("一句话钩子").fill("信在潮水里泡了三天。");
+    await panel.getByLabel("世界前提").fill("一座靠潮水送信的港城。");
+    await panel.getByLabel("起点地点").fill("码头");
+    await panel.getByLabel("起点场景").fill("水退了，信箱露出来。");
+    // Preset passages are only served in 剧本 mode, so this is the one dial the test
+    // has to change: the other two promise the reader their actions bend the story.
+    await panel.getByLabel("入戏体验").click();
+    await page.getByRole("option", { name: "剧本入戏" }).click();
+    await panel.getByRole("button", { name: "创建故事" }).click();
+    await expect(panel.locator(".form-feedback")).toHaveClass(/is-ok/);
+
+    const editor = page.locator(".story-management-list .management-details");
+    await editor.locator("summary").click();
+
+    const PASSAGE = "潮水退到最低的时候，信箱从泥里露出半个铁角，锁孔里塞着一撮头发。";
+    const segments = editor.locator(".segments-form");
+    await expect(segments).toContainText("还没有预设正文");
+    await segments.getByRole("button", { name: "添加一段" }).click();
+    await segments.getByLabel("第 1 段").fill("信箱露出来");
+    await segments.getByLabel("正文").fill(PASSAGE);
+    await segments.getByRole("button", { name: "保存预设正文" }).click();
+    await expect(segments.locator(".form-feedback")).toHaveClass(/is-ok/);
+    await expect(segments.locator(".form-feedback")).toContainText("1 段");
+
+    await editor.getByRole("button", { name: "试玩故事" }).click();
+    await expect(page).toHaveURL(/\/story\//);
+    const quota = page.locator(".quota-chip");
+    await expect(quota).toContainText("今日剩余 20/20");
+
+    await page.getByRole("button", { name: /继续阅读/ }).click();
+
+    // Word for word: this is the author's text, not a prompt about it.
+    await expect(page.locator(".turn").last()).toContainText(PASSAGE);
+    // And nothing was spent, because no model ran. The daily budget rations
+    // generations, and this passage was written by hand.
+    await expect(quota).toContainText("今日剩余 20/20");
+
+    // Kept, like any other passage, and not served twice.
+    await page.reload();
+    await expect(page.locator(".turn").last()).toContainText(PASSAGE);
+    await page.getByRole("button", { name: /继续阅读/ }).click();
+    await expect(page.locator(".turn-streaming")).toBeHidden();
+    await expect(page.locator(".turn", { hasText: PASSAGE })).toHaveCount(1);
+    await expect(quota).toContainText("今日剩余 19/20");
+  });
+
+
   test("tells the author whether anyone has read the story", async ({ page, request }) => {
     await signIn(page, request, "e2e-insight-author@example.com");
     await page.goto("/");

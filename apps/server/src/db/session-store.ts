@@ -39,6 +39,13 @@ export interface AppendTurnInput {
    * and the anchor list is the author's outline.
    */
   anchorId?: string | null;
+  /**
+   * The author's preset passage this turn served, when it served one instead of
+   * calling the model. Also beside the turn rather than on `SessionTurn`: which
+   * passage of the outline a reader is on is the author's business, and it is what
+   * tells the next 继续阅读 where the reading has got to.
+   */
+  segmentId?: string | null;
 }
 
 
@@ -116,7 +123,7 @@ export class SessionStore {
     this.database.db.exec("BEGIN");
     try {
       const turnSeq = this.nextSeq("session_turns", sessionId);
-      this.insertTurn(sessionId, input.turn, turnSeq, input.anchorId ?? null);
+      this.insertTurn(sessionId, input.turn, turnSeq, input.anchorId ?? null, input.segmentId ?? null);
 
 
       if (input.timelineNode) {
@@ -135,21 +142,41 @@ export class SessionStore {
   }
 
   /**
-   * Carries the beat markers of copied turns onto a branch, matching on turn id.
-   * A rewind copies the passages themselves, so leaving their `anchor_id` null would
-   * let the author's reach report lose a beat the surviving transcript still shows:
-   * the record would live only in the session the reader branched away from, and
-   * disappear the moment they delete it. Never overwrites a marker already there.
+   * Carries the markers of copied turns onto a branch, matching on turn id. A rewind
+   * copies the passages themselves, so leaving these null would lose what the
+   * surviving transcript still shows:
+   *
+   * - `anchor_id`: the author's reach report would keep the beat only in the session
+   *   the reader branched away from, and lose it the moment they delete that one.
+   * - `segment_id`: the branch would look as if it had read none of the author's
+   *   preset passages, so 继续阅读 would serve the first one again - the reader would
+   *   be handed a passage they have already read.
+   *
+   * Never overwrites a marker already there.
    */
-  copyTurnAnchors(fromSessionId: string, toSessionId: string): void {
+  copyTurnMarkers(fromSessionId: string, toSessionId: string): void {
     this.database.db
       .prepare(
         `UPDATE session_turns
-            SET anchor_id = (SELECT source.anchor_id FROM session_turns AS source
-                              WHERE source.session_id = ? AND source.id = session_turns.id)
-          WHERE session_id = ? AND anchor_id IS NULL`
+            SET anchor_id = COALESCE(anchor_id, (SELECT source.anchor_id FROM session_turns AS source
+                              WHERE source.session_id = ? AND source.id = session_turns.id)),
+                segment_id = COALESCE(segment_id, (SELECT source.segment_id FROM session_turns AS source
+                              WHERE source.session_id = ? AND source.id = session_turns.id))
+          WHERE session_id = ?`
       )
-      .run(fromSessionId, toSessionId);
+      .run(fromSessionId, fromSessionId, toSessionId);
+  }
+
+  /**
+   * Which of the author's preset passages this reading has already been served. The
+   * next 继续阅读 takes the first passage of the story that is not in here, so a
+   * rewind that dropped a passage lets it be read again - which is what a rewind is.
+   */
+  listServedSegmentIds(sessionId: string): Set<string> {
+    const rows = this.database.db
+      .prepare("SELECT segment_id AS segmentId FROM session_turns WHERE session_id = ? AND segment_id IS NOT NULL")
+      .all(sessionId) as Array<{ segmentId: string }>;
+    return new Set(rows.map((row) => row.segmentId));
   }
 
   /**
@@ -539,12 +566,18 @@ export class SessionStore {
     return row.nextSeq;
   }
 
-  private insertTurn(sessionId: string, turn: SessionTurn, seq: number, anchorId: string | null = null): void {
+  private insertTurn(
+    sessionId: string,
+    turn: SessionTurn,
+    seq: number,
+    anchorId: string | null = null,
+    segmentId: string | null = null
+  ): void {
     this.database.db
       .prepare(
         `INSERT INTO session_turns
-           (session_id, id, seq, input_type, input, narration, dialogues, choices, state_snapshot, intervention, anchor_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           (session_id, id, seq, input_type, input, narration, dialogues, choices, state_snapshot, intervention, anchor_id, segment_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(session_id, id) DO UPDATE SET
            seq = excluded.seq,
            input_type = excluded.input_type,
@@ -557,6 +590,9 @@ export class SessionStore {
            -- Rewriting a session (rewind, reset) re-inserts the turns it keeps without
            -- knowing their beats, so a missing value must not erase what was reported.
            anchor_id = COALESCE(excluded.anchor_id, session_turns.anchor_id),
+           -- Same for the preset passage a turn served: erasing it would let the reader
+           -- be served a passage they have already read.
+           segment_id = COALESCE(excluded.segment_id, session_turns.segment_id),
            created_at = excluded.created_at`
       )
       .run(
@@ -573,6 +609,7 @@ export class SessionStore {
         // should say so without a reader having to parse it.
         turn.intervention ? JSON.stringify(turn.intervention) : null,
         anchorId,
+        segmentId,
         turn.createdAt
 
       );

@@ -207,6 +207,34 @@ export const updateStoryAnchorsRequestSchema = z.object({
 
 
 
+export const storySegmentSchema = z.object({
+  id: z.string().min(1),
+  storyId: z.string().min(1),
+  title: z.string().min(1),
+  narration: z.string().min(1),
+  anchorId: z.string().nullable()
+});
+
+/**
+ * The author's own passages, replaced as a whole set like the anchors. `narration` is
+ * capped well above a long passage (the 详细 preset asks the model for ~1600 字) but
+ * not unbounded: this text is handed to a reader verbatim and stored per story.
+ */
+export const updateStorySegmentsRequestSchema = z.object({
+  segments: z
+    .array(
+      z.object({
+        // Sent back for a row that already exists, so a reader who branched away is
+        // not served a passage they have already read.
+        id: z.string().min(1).max(200).nullish(),
+        title: z.string().min(1).max(80),
+        narration: z.string().min(1).max(8000),
+        anchorId: z.string().min(1).max(200).nullish()
+      })
+    )
+    .max(50)
+});
+
 export const worldProfileSchema = z.object({
   storyId: z.string().min(1),
   premise: z.string().min(1),

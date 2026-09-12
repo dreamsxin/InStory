@@ -13,12 +13,14 @@ import type {
   StoryAnchor,
   StoryDetail,
   StoryReadingInsight,
+  StorySegment,
   StorySession,
   StorySummary,
   TurnQuota,
   UpdateStoryAnchorsRequest,
   UpdateStoryCharacterRequest,
-  UpdateStoryRequest
+  UpdateStoryRequest,
+  UpdateStorySegmentsRequest
 } from "@instory/shared";
 
 /**
@@ -445,6 +447,28 @@ export async function updateMyStoryAnchors(
 
   const data = (await response.json()) as { anchors: StoryAnchor[] };
   return data.anchors;
+}
+
+/** Replaces the preset passages of the author's own story. */
+export async function updateMyStorySegments(
+  storyId: string,
+  input: UpdateStorySegmentsRequest
+): Promise<StorySegment[]> {
+  const response = await apiFetch(`/api/me/stories/${storyId}/segments`, {
+    method: "PUT",
+    body: JSON.stringify(input)
+  });
+
+  if (response.status === 401) {
+    throw new UnauthenticatedError();
+  }
+
+  if (!response.ok) {
+    throw await readFormError(response, "保存预设正文失败");
+  }
+
+  const data = (await response.json()) as { segments: StorySegment[] };
+  return data.segments;
 }
 
 export async function deleteMyStory(storyId: string): Promise<void> {

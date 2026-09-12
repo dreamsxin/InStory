@@ -14,7 +14,8 @@ import {
   storySummarySchema,
   updateStoryAnchorsRequestSchema,
   updateStoryCharacterRequestSchema,
-  updateStoryRequestSchema
+  updateStoryRequestSchema,
+  updateStorySegmentsRequestSchema
 } from "@instory/shared";
 import {
   applyStateDelta,
@@ -37,6 +38,7 @@ import type {
   SessionTurn,
   ShelfSort,
   StoryDetail,
+  StorySegment,
   StorySession,
   StorySummary,
   TimelineNode,
@@ -214,6 +216,12 @@ function commitTurn(params: {
    * counts as a node they never wrote.
    */
   anchorIds?: string[];
+  /**
+   * The author's preset passage this turn served, when the passage came from the story
+   * instead of the model. Recorded so the next 继续阅读 knows where the reading has got
+   * to, and so the accounting can tell a turn that cost nothing from one that did.
+   */
+  segmentId?: string | null;
 }): CreateTurnResponse {
 
   const { session, sessionId, result } = params;
@@ -266,7 +274,8 @@ function commitTurn(params: {
     timelineNode,
     updatedAt: now,
     anchorId:
-      result.anchorId && params.anchorIds?.includes(result.anchorId) ? result.anchorId : null
+      result.anchorId && params.anchorIds?.includes(result.anchorId) ? result.anchorId : null,
+    segmentId: params.segmentId ?? null
   });
 
 
@@ -1245,6 +1254,44 @@ export async function buildApp(options: BuildAppOptions) {
     return { anchors };
   });
 
+  /**
+   * The story's preset passages, replaced as a whole set. Screened here rather than at
+   * reading time: an author's passage that crosses a line should be refused while they
+   * are writing it, not thrown at a reader in the middle of a chapter.
+   */
+  app.put("/api/me/stories/:storyId/segments", async (request, reply) => {
+    const { storyId } = request.params as { storyId: string };
+    const parsed = updateStorySegmentsRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
+    }
+
+    if (!request.authUser) {
+      return reply.code(401).send({ error: "请先登录" });
+    }
+
+    for (const segment of parsed.data.segments) {
+      const verdict = await screen({
+        surface: "story_config",
+        text: `${segment.title}\n${segment.narration}`,
+        userId: request.authUser.id,
+        storyId
+      });
+
+      if (verdict.action !== "allowed") {
+        return reply.code(422).send({ error: `预设正文「${segment.title}」没有通过内容审核，请修改后再保存。` });
+      }
+    }
+
+    const segments = options.storyCatalog.replaceOwnedSegments(storyId, request.authUser.id, parsed.data);
+    if (!segments) {
+      return reply.code(404).send({ error: "Story not found" });
+    }
+
+    return { segments };
+  });
+
+
   app.delete("/api/me/stories/:storyId", async (request, reply) => {
     const { storyId } = request.params as { storyId: string };
     if (!request.authUser) {
@@ -1612,6 +1659,29 @@ export async function buildApp(options: BuildAppOptions) {
       return reply.code(422).send({ error: inputVerdict.detail ?? "这段输入无法提交。", moderated: true });
     }
 
+    const storyDetail = options.storyCatalog.findStory(session.storyId) ?? undefined;
+
+    // Before the quota and the burst limiter, because both exist to ration model calls
+    // and this path makes none: the author already wrote this passage.
+    const preset = findPresetPassage({
+      story: storyDetail,
+      inputType: parsed.data.inputType,
+      servedSegmentIds: options.sessionStore.listServedSegmentIds(sessionId)
+    });
+    if (preset) {
+      return commitTurn({
+        session,
+        sessionId,
+        inputType: parsed.data.inputType,
+        input: parsed.data.content,
+        result: presetPassageResult(preset),
+        sessionStore: options.sessionStore,
+        anchorIds: storyDetail?.anchors.map((anchor) => anchor.id),
+        quota: resolveQuota(options.usageStore, request.authUser.id, dailyTurnQuota),
+        segmentId: preset.id
+      });
+    }
+
     const quotaBefore = resolveQuota(options.usageStore, request.authUser.id, dailyTurnQuota);
     if (quotaBefore.remainingTurnsToday <= 0) {
       // No "come back tomorrow": the day is a UTC day, so the reader's tomorrow may
@@ -1625,7 +1695,6 @@ export async function buildApp(options: BuildAppOptions) {
       return reply;
     }
 
-    const storyDetail = options.storyCatalog.findStory(session.storyId) ?? undefined;
     const intent = parsed.data.inputType === "read_continue" ? "read_segment" : "reader_action";
     const modelConfig = options.modelRuntime.getPublicConfig();
     const startedAt = Date.now();
@@ -1737,6 +1806,36 @@ export async function buildApp(options: BuildAppOptions) {
       return reply.code(422).send({ error: inputVerdict.detail ?? "这段输入无法提交。", moderated: true });
     }
 
+    const storyDetail = options.storyCatalog.findStory(session.storyId) ?? undefined;
+
+    // Same rule as the non-streaming path, and before the quota and the limiter for the
+    // same reason: the author already wrote this passage, so no model runs. It is still
+    // answered as a stream, because that is what the client asked for - the whole
+    // passage simply arrives in one delta instead of at the model's pace.
+    const preset = findPresetPassage({
+      story: storyDetail,
+      inputType: parsed.data.inputType,
+      servedSegmentIds: options.sessionStore.listServedSegmentIds(sessionId)
+    });
+    if (preset) {
+      const served = commitTurn({
+        session,
+        sessionId,
+        inputType: parsed.data.inputType,
+        input: parsed.data.content,
+        result: presetPassageResult(preset),
+        sessionStore: options.sessionStore,
+        anchorIds: storyDetail?.anchors.map((anchor) => anchor.id),
+        quota: resolveQuota(options.usageStore, request.authUser.id, dailyTurnQuota),
+        segmentId: preset.id
+      });
+      const write = openEventStream(reply);
+      write("narration_delta", { text: preset.narration });
+      write("complete", served);
+      reply.raw.end();
+      return reply;
+    }
+
     const quotaBefore = resolveQuota(options.usageStore, request.authUser.id, dailyTurnQuota);
     if (quotaBefore.remainingTurnsToday <= 0) {
       // Refused before opening the stream, so the client gets a normal JSON error.
@@ -1752,7 +1851,6 @@ export async function buildApp(options: BuildAppOptions) {
     }
 
 
-    const storyDetail = options.storyCatalog.findStory(session.storyId) ?? undefined;
     const intent = (parsed.data.inputType === "read_continue" ? "read_segment" : "reader_action") as
       | "read_segment"
       | "reader_action";
@@ -1769,17 +1867,7 @@ export async function buildApp(options: BuildAppOptions) {
     const authorTrial = isAuthorTrial(storyDetail?.story.ownerId, authUserId);
 
 
-    reply.raw.writeHead(200, {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      // Stops nginx and friends from buffering the whole response.
-      "X-Accel-Buffering": "no"
-    });
-
-    const send = (event: string, data: unknown): void => {
-      reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-    };
+    const send = openEventStream(reply);
 
     /**
      * The reader pressing 停止生成 aborts their request, and a closed socket is the
@@ -1934,7 +2022,7 @@ export async function buildApp(options: BuildAppOptions) {
 
     options.sessionStore.create(branch, request.authUser.id, options.sessionStore.findStoryTitle(sessionId) ?? "");
     // The branch keeps the passages, so it keeps which beat each one advanced.
-    options.sessionStore.copyTurnAnchors(sessionId, branch.id);
+    options.sessionStore.copyTurnMarkers(sessionId, branch.id);
     // The reader was told these turns are discarded and it cannot be undone. Keeping
     // the old session would make that false twice over: the shelf lists only the newest
     // session per story, so it would sit there unreachable, while its turns kept
@@ -2085,6 +2173,77 @@ function createReaderSessionListItem(
 function isAuthorTrial(ownerId: string | null | undefined, viewerId: string): boolean {
   return ownerId != null && ownerId === viewerId;
 }
+
+/**
+ * The author's next unwritten-by-the-model passage, or null when this turn should be
+ * generated. Three conditions, each of them a decision rather than a detail:
+ *
+ * - 剧本 mode only. That dial already promises the reader's actions do not change the
+ *   main line, which is the only promise a pre-written passage can keep. In 共创 and
+ *   即兴 the reader is told their actions can bend the story, so handing them text
+ *   written before they acted would be the shelf card lying.
+ * - 继续阅读 only. A reader who wrote an action expects it answered; a passage written
+ *   yesterday cannot answer it, so the model does, still bound by the scripted rule
+ *   and the anchors.
+ * - Only a passage this reading has not been served. Order is the author's order, and
+ *   "not served" is read from the turns, so a rewind that dropped a passage lets it be
+ *   read again - which is what a rewind is.
+ *
+ * Running out of passages is not an error: the story continues, generated, from where
+ * the author stopped writing.
+ */
+function findPresetPassage(params: {
+  story: StoryDetail | undefined;
+  inputType: TurnInputType;
+  servedSegmentIds: Set<string>;
+}): StorySegment | null {
+  const { story } = params;
+  if (!story || story.story.experienceMode !== "scripted" || params.inputType !== "read_continue") {
+    return null;
+  }
+
+  return story.segments.find((segment) => !params.servedSegmentIds.has(segment.id)) ?? null;
+}
+
+/**
+ * A preset passage in the shape the rest of the turn path already handles. Nothing is
+ * invented around the author's text: no dialogues, no state change, and no suggested
+ * actions - making up three choices for a passage the author wrote would be the
+ * platform putting words in their mouth. 继续阅读 and 入戏行动 still work, and the
+ * anchor is the one the author tied the passage to, so it counts in their beat report
+ * exactly like a reported one.
+ */
+function presetPassageResult(segment: StorySegment): NarrativeResult {
+  return {
+    narration: segment.narration,
+    dialogues: [],
+    choices: [],
+    stateDelta: {},
+    memoryEvents: [],
+    intervention: null,
+    anchorId: segment.anchorId
+  };
+}
+
+/**
+ * Opens a server-sent-event response and returns the writer for it. Shared by the two
+ * paths that answer as a stream - a generated passage and a preset one - so both send
+ * the same head, and a change to it cannot reach only one of them.
+ */
+function openEventStream(reply: FastifyReply): (event: string, data: unknown) => void {
+  reply.raw.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    // Stops nginx and friends from buffering the whole response.
+    "X-Accel-Buffering": "no"
+  });
+
+  return (event: string, data: unknown): void => {
+    reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+}
+
 
 /**
  * The shelf's order. Never-read stories sort last rather than first: a missing
