@@ -23,8 +23,18 @@ describe("parseReadingPrefs", () => {
     expect(prefs).toEqual({
       fontScale: "large",
       lineHeight: DEFAULT_READING_PREFS.lineHeight,
-      measure: DEFAULT_READING_PREFS.measure
+      measure: DEFAULT_READING_PREFS.measure,
+      sound: DEFAULT_READING_PREFS.sound
     });
+  });
+
+  it("leaves sound off unless it was really turned on", () => {
+    // A choice stored before sound existed, and a hand-edited nonsense value, both mean
+    // "nobody asked for sound here".
+    expect(parseReadingPrefs(JSON.stringify({ fontScale: "large" })).sound).toBe("off");
+    expect(parseReadingPrefs(JSON.stringify({ sound: "loud" })).sound).toBe("off");
+    expect(parseReadingPrefs(JSON.stringify({ sound: true })).sound).toBe("off");
+    expect(parseReadingPrefs(JSON.stringify({ sound: "on" })).sound).toBe("on");
   });
 
   it("rejects raw numbers, so an old format cannot produce unreadable type", () => {
@@ -36,7 +46,7 @@ describe("parseReadingPrefs", () => {
 
 describe("readingPrefsVars", () => {
   it("maps a choice onto the custom properties the surface reads", () => {
-    const vars = readingPrefsVars({ fontScale: "xlarge", lineHeight: "loose", measure: "narrow" });
+    const vars = readingPrefsVars({ fontScale: "xlarge", lineHeight: "loose", measure: "narrow", sound: "on" });
 
     expect(vars).toEqual({
       "--reader-font-scale": "1.3",

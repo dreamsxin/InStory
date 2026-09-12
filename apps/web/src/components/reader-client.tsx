@@ -32,8 +32,11 @@ import {
   MEASURE_OPTIONS,
   readingPrefsVars,
   saveReadingPrefs,
-  type ReadingPrefs
+  SOUND_OPTIONS,
+  type ReadingPrefs,
+  type SoundId
 } from "@/lib/reading-prefs";
+import { cueForPassage, playSoundCue } from "@/lib/reading-sounds";
 import { useEffect, useRef, useState, Fragment, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -101,6 +104,16 @@ export function ReaderClient({
       saveReadingPrefs(next);
       return next;
     });
+  }
+
+  function setSound(next: SoundId) {
+    changePrefs({ sound: next });
+    // Played only on the way in. The press that turns sound on is also the gesture
+    // browsers require before audio may start, and hearing the cue once is how the
+    // reader knows what they just agreed to. Turning it off is silent, obviously.
+    if (next === "on") {
+      playSoundCue("passage");
+    }
   }
 
 
@@ -220,6 +233,12 @@ export function ReaderClient({
         updatedAt: new Date().toISOString()
       }));
       setQuota(response.quota);
+      // One sound per finished passage, and only if the reader turned sound on. A key
+      // node gets its own cue instead of the page-turn: it is the more specific thing
+      // to say about this passage.
+      if (prefs.sound === "on") {
+        playSoundCue(cueForPassage(response.turn.intervention?.kind));
+      }
       // Keep the counter honest, otherwise it drifts behind as the story grows.
       setHistory((current) => ({
         ...current,
@@ -390,7 +409,7 @@ export function ReaderClient({
               />
             ) : null}
             {activePanel === "display" ? (
-              <DisplayPanel prefs={prefs} onChange={changePrefs} />
+              <DisplayPanel prefs={prefs} onChange={changePrefs} onSound={setSound} />
             ) : null}
             {activePanel === "action" && latestTurn ? (
               <ActionPanel
@@ -422,6 +441,18 @@ export function ReaderClient({
           </Button>
           <Button className="w-full min-w-0 sm:w-auto" size="sm" variant={activePanel === "display" ? "secondary" : "outline"} onPress={() => setActivePanel((panel) => (panel === "display" ? null : "display"))}>
             版式
+          </Button>
+          {/* In the dock rather than only in the 版式 panel: the dock is the one strip
+              that stays put in 沉浸阅读, so muting is always one press away from
+              wherever the reader is. The panel explains what the cues are. */}
+          <Button
+            aria-pressed={prefs.sound === "on"}
+            className="w-full min-w-0 sm:w-auto"
+            size="sm"
+            variant={prefs.sound === "on" ? "secondary" : "outline"}
+            onPress={() => setSound(prefs.sound === "on" ? "off" : "on")}
+          >
+            {prefs.sound === "on" ? "关音效" : "开音效"}
           </Button>
           <Button
             aria-pressed={!chromeVisible}
@@ -491,9 +522,12 @@ function panelTitle(panel: Exclude<ReaderPanel, null>) {
  */
 function DisplayPanel({
   onChange,
+  onSound,
   prefs
 }: {
   onChange: (update: Partial<ReadingPrefs>) => void;
+  /** Separate from onChange: turning sound on also plays a cue, once. */
+  onSound: (id: SoundId) => void;
   prefs: ReadingPrefs;
 }) {
   return (
@@ -552,6 +586,27 @@ function DisplayPanel({
             ))}
           </div>
           <p className="muted display-group-note">窄屏上正文本来就是满宽，行宽只在大屏生效。</p>
+        </fieldset>
+
+        <fieldset className="display-group">
+          <legend>音效</legend>
+          <div className="display-options">
+            {SOUND_OPTIONS.map((option) => (
+              <button
+                aria-pressed={prefs.sound === option.id}
+                className={`display-option${prefs.sound === option.id ? " is-active" : ""}`}
+                key={option.id}
+                type="button"
+                onClick={() => onSound(option.id)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <p className="muted display-group-note">
+            每段读完一声轻响；停在关键节点时换一种——有人向你发问、危机逼近，和一般的推进不同声。
+            只跟着你自己的操作响，不会自动播放，也没有背景音乐。
+          </p>
         </fieldset>
       </Card.Content>
     </Card>

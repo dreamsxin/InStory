@@ -10,11 +10,14 @@
 export type FontScaleId = "small" | "medium" | "large" | "xlarge";
 export type LineHeightId = "tight" | "normal" | "loose";
 export type MeasureId = "narrow" | "standard" | "wide";
+export type SoundId = "on" | "off";
 
 export interface ReadingPrefs {
   fontScale: FontScaleId;
   lineHeight: LineHeightId;
   measure: MeasureId;
+  /** Whether the reading surface may make a sound. See lib/reading-sounds.ts. */
+  sound: SoundId;
 }
 
 export const FONT_SCALE_OPTIONS: Array<{ id: FontScaleId; label: string; scale: number }> = [
@@ -37,10 +40,20 @@ export const MEASURE_OPTIONS: Array<{ id: MeasureId; label: string; width: strin
   { id: "wide", label: "宽", width: "960px" }
 ];
 
+/**
+ * Sound is off until the reader asks for it. A story opened in a quiet room should
+ * stay quiet, and a cue nobody chose is an interruption rather than atmosphere.
+ */
+export const SOUND_OPTIONS: Array<{ id: SoundId; label: string }> = [
+  { id: "off", label: "关" },
+  { id: "on", label: "开" }
+];
+
 export const DEFAULT_READING_PREFS: ReadingPrefs = {
   fontScale: "medium",
   lineHeight: "normal",
-  measure: "standard"
+  measure: "standard",
+  sound: "off"
 };
 
 export const READING_PREFS_STORAGE_KEY = "instory.reading-prefs";
@@ -66,7 +79,10 @@ export function parseReadingPrefs(raw: string | null): ReadingPrefs {
   return {
     fontScale: pick(FONT_SCALE_OPTIONS, candidate.fontScale, DEFAULT_READING_PREFS.fontScale),
     lineHeight: pick(LINE_HEIGHT_OPTIONS, candidate.lineHeight, DEFAULT_READING_PREFS.lineHeight),
-    measure: pick(MEASURE_OPTIONS, candidate.measure, DEFAULT_READING_PREFS.measure)
+    measure: pick(MEASURE_OPTIONS, candidate.measure, DEFAULT_READING_PREFS.measure),
+    // A value written before sound existed lands on "off", which is the same answer
+    // as never having been asked.
+    sound: pick(SOUND_OPTIONS, candidate.sound, DEFAULT_READING_PREFS.sound)
   };
 }
 

@@ -157,6 +157,32 @@ test.describe("reader", () => {
     await expect.poll(fontSize).toBeCloseTo(enlarged, 1);
   });
 
+  test("starts silent, and remembers being told otherwise", async ({ page, request }) => {
+    const { token } = await signInViaApi(page, request, "e2e-sound@example.com", "E2E 音效");
+    const sessionId = await startSession(request, token);
+
+    await page.goto(`/story/${sessionId}`);
+
+    // Silent until asked: a story opened in a quiet room stays quiet, so the dock
+    // offers to turn sound on rather than announcing that it is already on.
+    const toggle = page.getByRole("button", { name: "开音效" });
+    await expect(toggle).toBeVisible();
+    await toggle.click();
+    await expect(page.getByRole("button", { name: "关音效" })).toBeVisible();
+
+    // Stored locally, like the type size: a setting that resets is not a setting.
+    await page.reload();
+    await expect(page.getByRole("button", { name: "关音效" })).toBeVisible();
+
+    // And the panel explains what the cues are, where the reader can also switch them
+    // off - the dock button is the shortcut, not the only door.
+    await page.getByRole("button", { name: "版式" }).click();
+    const panel = page.locator(".display-panel");
+    await expect(panel).toContainText("不会自动播放");
+    await panel.getByRole("button", { name: "关" }).click();
+    await expect(page.getByRole("button", { name: "开音效" })).toBeVisible();
+  });
+
   test("lays the action panel out as one titled sheet and submits free text", async ({
     page,
     request
