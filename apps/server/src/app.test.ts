@@ -3133,6 +3133,19 @@ describe("authentication", () => {
       payload: { inputType: "read_continue", content: "继续阅读" }
     });
     expect(jamTurn.json<CreateTurnResponse>().turn.narration).not.toBe(FIRST);
+
+    // The shelf counts what is already written rather than estimating it - but only for
+    // the story that really serves those passages. The 即兴 story has one stored and
+    // reports none, because none of it will ever reach a reader.
+    const shelfResponse = await authApp.inject({ method: "GET", url: "/api/stories" });
+    const shelf = shelfResponse.json<ShelfPage>();
+    const scripted = shelf.stories.find((story) => story.id === "lantern-script");
+    expect(scripted?.presetPassages).toBe(2);
+    expect(scripted?.presetWords).toBe(FIRST.length + SECOND.length);
+    expect(shelf.stories.find((story) => story.id === "lantern-jam")?.presetPassages).toBe(0);
+    // A count and a word count, never the text: the passages are the story ahead of
+    // the reader.
+    expect(shelfResponse.body).not.toContain(FIRST);
   });
 
   it("answers a reader's own action with the model, even in a scripted story", async () => {

@@ -170,15 +170,33 @@ function ReadCountLine({ insight }: { insight?: StoryReadingInsight }) {
 
 
 /**
- * How long this is, as far as anyone can honestly say. Two known figures: the beats
- * the author planned, and the words a passage is written to. The minutes are a floor,
- * not a promise - a reader can spend several passages on one beat, so the story is at
- * least this long and usually longer, which is why the label says 起.
+ * How long this is, as far as anyone can honestly say - and how much of it is already
+ * written. Three kinds of figure, never mixed up:
  *
- * A story with no planned beats gets no number at all. Inventing one for an
- * improvised story would be the same lie the shelf used to tell by saying nothing.
+ * - `presetPassages` / `presetWords` are **counted**: the author wrote those passages
+ *   out, and a 剧本 story hands them to the reader unchanged. Where they exist they are
+ *   the most honest thing on the card, so they replace the per-passage estimate.
+ * - `plannedBeats` × `segmentTargetWords` is a **floor**: a reader can spend several
+ *   passages on one beat, which is why that variant says 起.
+ * - A story with neither gets no number at all. Inventing one for an improvised story
+ *   would be the same lie the shelf used to tell by saying nothing.
  */
 function LengthExpectationLine({ story }: { story: ShelfStory }) {
+  // 400 characters a minute is a middling Chinese reading pace; the floor rounds up so
+  // a very short story never reads as "0 分钟".
+  const minutesFor = (words: number) => Math.max(1, Math.round(words / 400));
+
+  if (story.presetPassages > 0) {
+    const written = `作者写好 ${story.presetPassages} 段共 ${story.presetWords} 字（约 ${minutesFor(story.presetWords)} 分钟）`;
+
+    return (
+      <span className="story-expectation">
+        {story.plannedBeats > 0 ? `主线 ${story.plannedBeats} 个节点 · ` : ""}
+        {written} · 之后由 AI 接着写
+      </span>
+    );
+  }
+
   if (story.plannedBeats === 0) {
     return (
       <span className="story-expectation muted">
@@ -187,13 +205,10 @@ function LengthExpectationLine({ story }: { story: ShelfStory }) {
     );
   }
 
-  // 400 characters a minute is a middling Chinese reading pace; the floor rounds up so
-  // a very short story never reads as "0 分钟".
-  const minutes = Math.max(1, Math.round((story.plannedBeats * story.segmentTargetWords) / 400));
-
   return (
     <span className="story-expectation">
-      主线 {story.plannedBeats} 个节点 · 每段约 {story.segmentTargetWords} 字 · 约 {minutes} 分钟起
+      主线 {story.plannedBeats} 个节点 · 每段约 {story.segmentTargetWords} 字 · 约{" "}
+      {minutesFor(story.plannedBeats * story.segmentTargetWords)} 分钟起
     </span>
   );
 }

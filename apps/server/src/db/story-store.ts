@@ -505,6 +505,29 @@ export class StoryStore {
   }
 
 
+  /**
+   * How much of each story is already written, by story id: how many preset passages
+   * there are and how many characters they hold. `length()` counts characters rather
+   * than bytes, which is what "字" means for the text these stories are written in.
+   *
+   * Counts only, like `countPlannedBeats`: the passages themselves are the story ahead
+   * of the reader, and a shelf that shipped them would hand over the first chapters
+   * before anyone opened the book.
+   */
+  countPresetPassages(): Map<string, { passages: number; words: number }> {
+    const rows = this.database.db
+      .prepare(
+        `SELECT story_id AS storyId,
+                COUNT(*) AS passages,
+                COALESCE(SUM(length(json_extract(payload, '$.narration'))), 0) AS words
+           FROM story_segments
+          GROUP BY story_id`
+      )
+      .all() as Array<{ storyId: string; passages: number; words: number }>;
+
+    return new Map(rows.map((row) => [row.storyId, { passages: row.passages, words: row.words }]));
+  }
+
   private findStorySummary(storyId: string): StorySummary | null {
     const row = this.database.db.prepare("SELECT payload FROM stories WHERE id = ?").get(storyId) as
       | { payload: string }

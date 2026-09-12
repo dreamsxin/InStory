@@ -64,6 +64,12 @@ export class StoryCatalog {
     return this.store.countPlannedBeats();
   }
 
+  /** Preset-passage counts and word counts by story id, for the shelf. */
+  countPresetPassages(): Map<string, { passages: number; words: number }> {
+    return this.store.countPresetPassages();
+  }
+
+
 
   findStory(storyId: string): StoryDetail | null {
     return this.store.findStory(storyId);

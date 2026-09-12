@@ -289,7 +289,25 @@ test.describe("creation console", () => {
     await expect(page.locator(".turn-streaming")).toBeHidden();
     await expect(page.locator(".turn", { hasText: PASSAGE })).toHaveCount(1);
     await expect(quota).toContainText("今日剩余 19/20");
+
+    // Published, the shelf counts what is already written instead of estimating it -
+    // and still ships a count rather than the passage.
+    await page.goto("/");
+    await page.locator(".app-topbar").getByRole("button", { name: "创作" }).click();
+    const editorAgain = page.locator(".story-management-list .management-details");
+    await editorAgain.locator("summary").click();
+    await editorAgain.getByLabel("可见性").click();
+    await page.getByRole("option", { name: "公开到故事探索" }).click();
+    await editorAgain.getByRole("button", { name: "保存故事" }).click();
+    await expect(editorAgain.locator(".form-feedback").first()).toHaveClass(/is-ok/);
+
+    await page.locator(".app-topbar").getByRole("button", { name: "故事" }).click();
+    const card = page.locator(".story-card", { hasText: "潮信" });
+    await expect(card.locator(".story-expectation")).toContainText("作者写好 1 段共");
+    await expect(card.locator(".story-expectation")).toContainText("之后由 AI 接着写");
+    await expect(card).not.toContainText(PASSAGE);
   });
+
 
 
   test("tells the author whether anyone has read the story", async ({ page, request }) => {

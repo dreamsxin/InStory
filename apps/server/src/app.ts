@@ -1091,13 +1091,23 @@ export async function buildApp(options: BuildAppOptions) {
       .sort((left, right) => compareForShelf(left, right, sort, orderKeys))
       .slice(offset, offset + limit);
     const beats = options.storyCatalog.countPlannedBeats();
+    const written = options.storyCatalog.countPresetPassages();
 
     return {
-      stories: page.map((story) => ({
-        ...story,
-        plannedBeats: beats.get(story.id) ?? 0,
-        segmentTargetWords: SEGMENT_LENGTH_GUIDES[story.defaultSegmentLength].targetWords
-      })),
+      stories: page.map((story) => {
+        // Reported only for 剧本 stories, because they are the only ones that serve
+        // these passages. Counting them on a 共创 story would tell a reader the author
+        // wrote them two chapters when nothing of the sort will reach them.
+        const preset = story.experienceMode === "scripted" ? written.get(story.id) : undefined;
+
+        return {
+          ...story,
+          plannedBeats: beats.get(story.id) ?? 0,
+          segmentTargetWords: SEGMENT_LENGTH_GUIDES[story.defaultSegmentLength].targetWords,
+          presetPassages: preset?.passages ?? 0,
+          presetWords: preset?.words ?? 0
+        };
+      }),
       /**
        * How far each story on this page has carried readers. Aggregates only, and
        * each story's own author is excluded, so the number means "other people read

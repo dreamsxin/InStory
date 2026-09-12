@@ -83,6 +83,14 @@ export interface ShelfStory extends StorySummary {
   plannedBeats: number;
   /** Words the model is actually asked for per passage, from defaultSegmentLength. */
   segmentTargetWords: number;
+  /**
+   * Passages the author wrote out in full and that this story really hands to a
+   * reader - so 0 outside 剧本 mode, where they are stored but never served. Counted,
+   * not estimated: this is the one part of a story's length that is already written.
+   */
+  presetPassages: number;
+  /** Characters in those passages. A count of the text, never the text itself. */
+  presetWords: number;
 }
 
 /**
